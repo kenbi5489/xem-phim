@@ -86,7 +86,7 @@ export const Player: React.FC = () => {
             <ArrowLeftIcon className="w-6 h-6" />
           </button>
           <div>
-            <h2 className="text-white font-display font-bold text-lg">{movie?.title || slug?.replace(/-/g, ' ')}</h2>
+            <h2 className="text-white font-display font-bold text-lg">{movie?.name || slug?.replace(/-/g, ' ')}</h2>
             <p className="text-white/70 text-sm">Tập {episode}</p>
           </div>
         </div>

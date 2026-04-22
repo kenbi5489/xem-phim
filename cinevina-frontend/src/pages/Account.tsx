@@ -49,7 +49,7 @@ export const Account: React.FC = () => {
       <div>
         <Carousel title="Danh Sách Yêu Thích">
           {Array.from({ length: 8 }).map((_, i) => (
-            <MovieCard key={i} title={`Phim Yêu Thích ${i + 1}`} posterUrl={`https://picsum.photos/seed/fav${i}/300/450`} />
+            <MovieCard key={i} name={`Phim Yêu Thích ${i + 1}`} posterUrl={`https://picsum.photos/seed/fav${i}/300/450`} />
           ))}
         </Carousel>
       </div>

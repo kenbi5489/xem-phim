@@ -19,7 +19,7 @@ const groupMovies = (movies: MovieInfo[]) => {
   const groups: Record<string, MovieInfo[]> = {};
   for (const m of movies) {
     let key = (m.type || 'other').toLowerCase();
-    const isHoatHinh = key === 'hoathinh' || key === 'hoat-hinh' || m.category?.toLowerCase().includes('hoạt hình');
+    const isHoatHinh = key === 'hoathinh' || key === 'hoat-hinh' || m.categories?.toLowerCase().includes('hoạt hình');
     
     if (isHoatHinh) key = 'hoathinh';
     else if (key === 'series') key = 'series';
@@ -186,16 +186,16 @@ export const Search: React.FC = () => {
                     <MovieCard
                       key={m.id || m.slug}
                       slug={m.slug}
-                      title={m.title}
-                      poster_url={m.poster_url}
-                      thumb_url={m.thumb_url}
+                      name={m.name}
+                      posterUrl={m.posterUrl}
+                      thumbUrl={m.thumbUrl}
                       quality={m.quality}
                       lang={m.lang}
                       year={m.year}
                       description={m.description}
-                      isCinema={m.is_cinema}
-                      isStreamable={m.is_streamable}
-                      trailerUrl={m.trailer_url}
+                      isCinema={m.isCinema}
+                      isStreamable={m.isStreamable}
+                      trailerUrl={m.trailerUrl}
                       className="w-full"
                     />
                   ))}

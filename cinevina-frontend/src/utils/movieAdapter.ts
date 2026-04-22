@@ -43,29 +43,29 @@ export const getProxiedImageUrl = (url: string): string => {
 export const adaptMovieCard = (raw: any): MovieInfo => {
   if (!raw) return _emptyMovie();
   // Backend already returns proxied URLs — getProxiedImageUrl will pass them through
-  const poster = getProxiedImageUrl(raw?.poster_url || raw?.poster || '');
-  const thumb  = getProxiedImageUrl(raw?.thumb_url  || raw?.thumb  || '');
+  const posterUrl = getProxiedImageUrl(raw?.poster_url || raw?.poster || '');
+  const thumbUrl  = getProxiedImageUrl(raw?.thumb_url  || raw?.thumb  || '');
   return {
     id: raw?.id || raw?._id || '',
     slug: raw?.slug || '',
-    title: raw?.title || raw?.name || '',
-    original_title: raw?.original_title || raw?.origin_name || '',
-    poster_url: poster,
-    thumb_url:  thumb,
+    name: raw?.title || raw?.name || '',
+    originalName: raw?.original_title || raw?.origin_name || '',
+    posterUrl,
+    thumbUrl,
     description: '',
     year: raw?.year,
     quality: raw?.quality,
     lang: raw?.lang,
     type: raw?.type,
-    is_cinema:   !!raw?.is_cinema,
-    trailer_url: raw?.trailer_url || '',
-    category: raw?.category || '',
+    isCinema:   !!raw?.is_cinema,
+    trailerUrl: raw?.trailer_url || '',
+    categories: raw?.category || '',
     country:  raw?.country  || '',
     cast:     '',
     director: '',
     rating:   raw?.rating || '',
     totalEpisodes: raw?.totalEpisodes || '',
-    is_streamable: !!raw?.is_streamable,
+    isStreamable: !!raw?.is_streamable,
     episodes: [],
     servers: [],
   };
@@ -79,8 +79,8 @@ export const adaptMovieCard = (raw: any): MovieInfo => {
 export const adaptMovieDetail = (raw: any): MovieInfo => {
   if (!raw) return _emptyMovie();
 
-  const poster = getProxiedImageUrl(raw?.poster_url || raw?.poster || '');
-  const thumb  = getProxiedImageUrl(raw?.thumb_url  || raw?.thumb  || '');
+  const posterUrl = getProxiedImageUrl(raw?.poster_url || raw?.poster || '');
+  const thumbUrl  = getProxiedImageUrl(raw?.thumb_url  || raw?.thumb  || '');
 
   // Read full servers from backend response
   const servers = Array.isArray(raw?.servers) ? raw.servers : [];
@@ -90,10 +90,10 @@ export const adaptMovieDetail = (raw: any): MovieInfo => {
     Array.isArray(s?.server_data) &&
     s.server_data.some((ep: any) => ep?.link_m3u8 || ep?.link_embed)
   );
-  const is_streamable = computedStreamable || !!raw?.is_streamable;
+  const isStreamable = computedStreamable || !!raw?.is_streamable;
 
   // Normalize category — can be string or array from backend
-  const category = _toDisplayString(raw?.category, 'name');
+  const categories = _toDisplayString(raw?.category, 'name');
   const country  = _toDisplayString(raw?.country,  'name');
 
   // Normalize cast/director — can be comma string or array
@@ -103,24 +103,24 @@ export const adaptMovieDetail = (raw: any): MovieInfo => {
   return {
     id: raw?.id || raw?._id || '',
     slug: raw?.slug || '',
-    title: raw?.title || raw?.name || '',
-    original_title: raw?.original_title || raw?.origin_name || '',
-    poster_url: poster,
-    thumb_url:  thumb,
+    name: raw?.title || raw?.name || '',
+    originalName: raw?.original_title || raw?.origin_name || '',
+    posterUrl,
+    thumbUrl,
     description: raw?.description || raw?.content || '',
     year: raw?.year,
     quality: raw?.quality,
     lang: raw?.lang,
     type: raw?.type,
-    is_cinema:   !!raw?.is_cinema,
-    trailer_url: raw?.trailer_url || '',
-    category,
+    isCinema:   !!raw?.is_cinema,
+    trailerUrl: raw?.trailer_url || '',
+    categories,
     country,
     cast,
     director,
     rating: raw?.rating || (raw?.tmdb?.vote_average ? String(raw.tmdb.vote_average) : '') || '',
     totalEpisodes: raw?.totalEpisodes || raw?.episode_total || '',
-    is_streamable,
+    isStreamable,
     episodes: Array.isArray(raw?.episodes) ? raw.episodes : [],
     servers,
   };
@@ -144,9 +144,9 @@ function _toCommaSeparated(val: any): string {
 
 function _emptyMovie(): MovieInfo {
   return {
-    id: '', slug: '', title: '', original_title: '',
-    poster_url: '', thumb_url: '', description: '',
-    is_streamable: false, episodes: [], servers: [],
+    id: '', slug: '', name: '', originalName: '',
+    posterUrl: '', thumbUrl: '', description: '',
+    isStreamable: false, episodes: [], servers: [],
   };
 }
 

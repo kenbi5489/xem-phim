@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { movieApi, type MovieListParams } from '../services/api';
-import { adaptMovies, adaptMovieCard, adaptMovieDetail } from '../utils/movieAdapter';
+import { adaptMovieCard, adaptMovieDetail } from '../utils/movieAdapter';
 
 // ─── Debounce Hook ────────────────────────────────────────────────────────────
 export const useDebounce = <T>(value: T, delay = 300): T => {

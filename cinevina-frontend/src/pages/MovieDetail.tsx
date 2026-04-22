@@ -6,8 +6,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { PlayIcon as PlaySolid, FilmIcon } from '@heroicons/react/24/solid';
 import { useMovieDetail } from '../hooks/useMovies';
-import type { EpisodeData, ServerData } from '../services/api';
-import { getFirstStream, computeIsStreamable } from '../services/api';
+import type { ServerData } from '../services/api';
+import { computeIsStreamable } from '../services/api';
 
 // ── YouTube embed helper ───────────────────────────────────────────────────────
 const extractYouTubeId = (url: string): string | null => {
@@ -149,10 +149,9 @@ export const MovieDetail: React.FC = () => {
 
   // ── Derive playability from servers (source of truth) ─────────────────────
   const isStreamable = computeIsStreamable(movie);
-  const firstStream = getFirstStream(movie);
   const firstEpisodeSlug = movie.servers?.[0]?.server_data?.[0]?.slug || movie.episodes?.[0]?.slug || '';
-  const trailerYtId = extractYouTubeId(movie.trailer_url || '');
-  const isCinema = movie.is_cinema === true;
+  const trailerYtId = extractYouTubeId(movie.trailerUrl || '');
+  const isCinema = movie.isCinema === true;
 
   return (
     <div className="flex flex-col pb-12">
@@ -166,15 +165,15 @@ export const MovieDetail: React.FC = () => {
       <div className="relative w-full h-[50vh] md:h-[70vh] bg-[#0c0e14]">
         <div className="absolute inset-0">
           <img
-            src={movie.poster_url || movie.thumb_url || ""}
+            src={movie.posterUrl || movie.thumbUrl || ""}
             alt="Backdrop"
             className="w-full h-full object-cover opacity-25 blur-sm"
             onError={(e) => {
               const img = e.currentTarget;
               if (img.dataset.fallbackApplied === "true") return;
-              if (movie.thumb_url && img.src !== movie.thumb_url) {
+              if (movie.thumbUrl && img.src !== movie.thumbUrl) {
                 img.dataset.fallbackApplied = "true";
-                img.src = movie.thumb_url;
+                img.src = movie.thumbUrl;
                 return;
               }
               img.dataset.fallbackApplied = "true";
@@ -204,15 +203,15 @@ export const MovieDetail: React.FC = () => {
             {/* Poster */}
             <div className={`shrink-0 w-40 md:w-56 aspect-[2/3] rounded-2xl overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.6)] border ${isCinema ? 'border-yellow-500/40' : 'border-white/10'}`}>
               <img
-                src={movie.thumb_url || movie.poster_url || ""}
+                src={movie.thumbUrl || movie.posterUrl || ""}
                 alt="Poster"
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   const img = e.currentTarget;
                   if (img.dataset.fallbackApplied === "true") return;
-                  if (movie.poster_url && img.src !== movie.poster_url) {
+                  if (movie.posterUrl && img.src !== movie.posterUrl) {
                     img.dataset.fallbackApplied = "true";
-                    img.src = movie.poster_url;
+                    img.src = movie.posterUrl;
                     return;
                   }
                   img.dataset.fallbackApplied = "true";
@@ -246,10 +245,10 @@ export const MovieDetail: React.FC = () => {
 
               {/* Title */}
               <h1 className="font-display text-3xl md:text-5xl font-black text-white leading-tight">
-                {movie.title}
+                {movie.name}
               </h1>
-              {movie.original_title && (
-                <p className="text-white/50 text-sm italic">{movie.original_title}</p>
+              {movie.originalName && (
+                <p className="text-white/50 text-sm italic">{movie.originalName}</p>
               )}
 
               {/* CTA row — derived from actual stream data */}
@@ -355,7 +354,7 @@ export const MovieDetail: React.FC = () => {
         {/* Right col — Movie metadata */}
         <div className="flex flex-col gap-4 p-6 rounded-2xl bg-[#11131a] border border-white/8 h-fit">
           {[
-            ['Tên gốc',       movie.original_title],
+            ['Tên gốc',       movie.originalName],
             ['Năm sản xuất',  movie.year?.toString()],
             ['Quốc gia',      movie.country],
             ['Đạo diễn',      movie.director],
@@ -363,7 +362,7 @@ export const MovieDetail: React.FC = () => {
             ['Chất lượng',    isCinema ? 'Đang chiếu rạp' : movie.quality],
             ['Đánh giá',      movie.rating ? `${movie.rating} / 10` : ''],
             ['Ngôn ngữ',      movie.lang],
-            ['Thể loại',      movie.category],
+            ['Thể loại',      movie.categories],
             ['Tổng số tập',   movie.totalEpisodes],
             ['Loại phim',     isCinema ? 'Chiếu rạp' : movie.type],
           ].map(([label, value]) => value ? (

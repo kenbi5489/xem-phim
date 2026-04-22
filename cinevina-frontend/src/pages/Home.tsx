@@ -39,7 +39,7 @@ const HeroSlide: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, i
       <div 
         className="w-full h-full bg-cover bg-center transition-all duration-1000"
         style={{ 
-          backgroundImage: `url("${movie.poster_url || movie.thumb_url || ""}")`,
+          backgroundImage: `url("${movie.posterUrl || movie.thumbUrl || ""}")`,
           backgroundColor: '#0F1117'
         }}
       />
@@ -53,7 +53,7 @@ const HeroSlide: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, i
         <div className="flex-1 max-w-xl flex flex-col gap-3">
           {/* Badges */}
           <div className="flex flex-wrap gap-2">
-            {movie.is_cinema && (
+            {movie.isCinema && (
               <span className="flex items-center gap-1 bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-sm uppercase tracking-wider">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> ĐANG CHIẾU
               </span>
@@ -66,8 +66,8 @@ const HeroSlide: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, i
             </span>
           </div>
           {/* Title */}
-          <h1 className="font-display font-black text-4xl md:text-6xl text-white leading-tight drop-shadow-2xl">{movie.title}</h1>
-          {movie.original_title && <p className="text-white/50 text-sm -mt-1 italic">{movie.original_title}</p>}
+          <h1 className="font-display font-black text-4xl md:text-6xl text-white leading-tight drop-shadow-2xl">{movie.name}</h1>
+          {movie.originalName && <p className="text-white/50 text-sm -mt-1 italic">{movie.originalName}</p>}
           {/* Description */}
           <p className="text-white/65 text-sm md:text-base leading-relaxed line-clamp-2 max-w-lg">
             {movie.description
@@ -92,15 +92,15 @@ const HeroSlide: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, i
         {/* Sidebar poster (md+) */}
         <div className="hidden md:block shrink-0 w-32 aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border border-white/10">
           <img
-            src={movie.thumb_url || movie.poster_url || ""}
-            alt={movie.title}
+            src={movie.thumbUrl || movie.posterUrl || ""}
+            alt={movie.name}
             className="w-full h-full object-cover"
             onError={(e) => {
               const img = e.currentTarget;
               if (img.dataset.fallbackApplied === "true") return;
-              if (movie.poster_url && img.src !== movie.poster_url) {
+              if (movie.posterUrl && img.src !== movie.posterUrl) {
                 img.dataset.fallbackApplied = "true";
-                img.src = movie.poster_url;
+                img.src = movie.posterUrl;
                 return;
               }
               img.dataset.fallbackApplied = "true";
@@ -121,16 +121,16 @@ const Top10Card: React.FC<{ movie: MovieInfo; rank: number }> = ({ movie, rank }
     </span>
     <div className="ml-10 w-[130px] md:w-[148px] aspect-[2/3] rounded-xl overflow-hidden shrink-0 shadow-xl border border-white/10 group-hover:shadow-[0_0_25px_rgba(214,146,255,0.3)] transition-all duration-300">
       <img
-        src={movie.poster_url || movie.thumb_url || ""}
-        alt={movie.title}
+        src={movie.posterUrl || movie.thumbUrl || ""}
+        alt={movie.name}
         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         loading="lazy"
         onError={(e) => {
           const img = e.currentTarget;
           if (img.dataset.fallbackApplied === "true") return;
-          if (movie.thumb_url && img.src !== movie.thumb_url) {
+          if (movie.thumbUrl && img.src !== movie.thumbUrl) {
             img.dataset.fallbackApplied = "true";
-            img.src = movie.thumb_url;
+            img.src = movie.thumbUrl;
             return;
           }
           img.dataset.fallbackApplied = "true";
@@ -146,16 +146,16 @@ const CinemaCard: React.FC<{ movie: MovieInfo }> = ({ movie }) => (
     <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-yellow-500/30 group-hover:shadow-[0_0_20px_rgba(234,179,8,0.3)] transition-all duration-300"
       style={{ boxShadow: '0 0 0 1px rgba(234,179,8,0.15)' }}>
       <img
-        src={movie.poster_url || movie.thumb_url || ""}
-        alt={movie.title}
+        src={movie.posterUrl || movie.thumbUrl || ""}
+        alt={movie.name}
         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         loading="lazy"
         onError={(e) => {
           const img = e.currentTarget;
           if (img.dataset.fallbackApplied === "true") return;
-          if (movie.thumb_url && img.src !== movie.thumb_url) {
+          if (movie.thumbUrl && img.src !== movie.thumbUrl) {
             img.dataset.fallbackApplied = "true";
-            img.src = movie.thumb_url;
+            img.src = movie.thumbUrl;
             return;
           }
           img.dataset.fallbackApplied = "true";
@@ -169,7 +169,7 @@ const CinemaCard: React.FC<{ movie: MovieInfo }> = ({ movie }) => (
         </span>
       </div>
     </div>
-    <p className="mt-2 text-sm font-semibold text-white/90 line-clamp-2 leading-tight">{movie.title}</p>
+    <p className="mt-2 text-sm font-semibold text-white/90 line-clamp-2 leading-tight">{movie.name}</p>
     {movie.year && <p className="text-xs text-yellow-500/70 mt-0.5">{movie.year}</p>}
   </Link>
 );
@@ -216,16 +216,16 @@ const Rail: React.FC<RailProps> = ({ title, icon, isLoading, error, refetch, ite
         <MovieCard
           key={m.id || m.slug}
           slug={m.slug}
-          title={m.title}
-          poster_url={m.poster_url}
-          thumb_url={m.thumb_url}
+          name={m.name}
+          posterUrl={m.posterUrl}
+          thumbUrl={m.thumbUrl}
           quality={m.quality}
           lang={m.lang}
           year={m.year}
           description={m.description}
-          isCinema={m.is_cinema}
-          isStreamable={m.is_streamable}
-          trailerUrl={m.trailer_url}
+          isCinema={m.isCinema}
+          isStreamable={m.isStreamable}
+          trailerUrl={m.trailerUrl}
         />
       ))}
     </Carousel>

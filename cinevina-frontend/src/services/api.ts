@@ -26,26 +26,26 @@ export interface EpisodeInfo {
 export interface MovieInfo {
   id: string;
   slug: string;
-  title: string;
-  original_title: string;
-  poster_url: string;
-  thumb_url: string;
+  name: string;
+  originalName: string;
+  posterUrl: string;
+  thumbUrl: string;
   description: string;
   year?: number;
   quality?: string;
   lang?: string;
-  type?: string;        // 'single' | 'series' | 'hoathinh' | 'tvshows'
-  is_cinema?: boolean;
-  trailer_url?: string;
+  type?: string;
+  isCinema?: boolean;
+  trailerUrl?: string;
   rating?: string | number;
-  category?: string;    // display string: 'Hành động, Tình cảm'
+  categories?: string;
   country?: string;
   cast?: string;
   director?: string;
   totalEpisodes?: string | number;
-  is_streamable: boolean;
-  episodes: EpisodeInfo[];          // flat list for navigation
-  servers: ServerData[];            // full server data with stream links
+  isStreamable: boolean;
+  episodes: EpisodeInfo[];
+  servers: ServerData[];
 }
 
 export interface StreamInfo {

@@ -7,16 +7,16 @@ import { cn } from './Button';
 // Fallback chain: poster_url → thumb_url → SVG placeholder
 const FALLBACK_IMG = '/fallback-poster.svg';
 
-function useImgSrc(poster_url?: string, thumb_url?: string) {
-  // Try poster_url first, then thumb_url, then fallback
-  const initial = poster_url || thumb_url || FALLBACK_IMG;
+function useImgSrc(posterUrl?: string, thumbUrl?: string) {
+  // Try posterUrl first, then thumbUrl, then fallback
+  const initial = posterUrl || thumbUrl || FALLBACK_IMG;
   const [src, setSrc] = useState(initial);
   const failedOnce = useRef(false);
 
   const handleError = () => {
-    if (!failedOnce.current && thumb_url && src !== thumb_url) {
+    if (!failedOnce.current && thumbUrl && src !== thumbUrl) {
       failedOnce.current = true;
-      setSrc(thumb_url);
+      setSrc(thumbUrl);
     } else {
       setSrc(FALLBACK_IMG);
     }
@@ -26,9 +26,9 @@ function useImgSrc(poster_url?: string, thumb_url?: string) {
 }
 
 export interface MovieCardProps {
-  title?: string;
-  poster_url?: string;   // Primary: poster_url from backend (already proxied)
-  thumb_url?: string;    // Fallback: thumb_url from backend (already proxied)
+  name?: string;
+  posterUrl?: string;   // Primary: posterUrl from backend (already proxied)
+  thumbUrl?: string;    // Fallback: thumbUrl from backend (already proxied)
   quality?: string;
   lang?: string;
   year?: number;
@@ -44,9 +44,9 @@ export interface MovieCardProps {
 
 export const MovieCard: React.FC<MovieCardProps> = (props) => {
   const {
-    title,
-    poster_url,
-    thumb_url,
+    name,
+    posterUrl,
+    thumbUrl,
     quality,
     lang,
     year,
@@ -61,7 +61,7 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
   } = props;
 
   const [hovered, setHovered] = useState(false);
-  const { src: imgSrc, handleError } = useImgSrc(poster_url, thumb_url);
+  const { src: imgSrc, handleError } = useImgSrc(posterUrl, thumbUrl);
 
   if (isLoading) {
     return (
@@ -115,7 +115,7 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
         >
           <img
             src={imgSrc}
-            alt={title || 'Movie poster'}
+            alt={name || 'Movie poster'}
             className="movie-card__image"
             onError={handleError}
             loading="lazy"
@@ -222,7 +222,7 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
           className="font-display text-sm font-semibold line-clamp-2 leading-tight transition-colors"
           style={{ color: hovered ? '#d692ff' : 'var(--color-on-surface)' }}
         >
-          {title}
+          {name}
         </h3>
         {year && (
           <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>{year}</p>

@@ -321,14 +321,14 @@ export const Browse: React.FC = () => {
                   <MovieCard
                     key={m.id || m.slug}
                     slug={m.slug}
-                    title={m.title}
-                    poster_url={m.poster_url}
-                    thumb_url={m.thumb_url}
+                    name={m.name}
+                    posterUrl={m.posterUrl}
+                    thumbUrl={m.thumbUrl}
                     quality={m.quality}
                     lang={m.lang}
                     year={m.year}
-                    isStreamable={m.is_streamable}
-                    trailerUrl={m.trailer_url}
+                    isStreamable={m.isStreamable}
+                    trailerUrl={m.trailerUrl}
                     className="w-full"
                   />
                 ))
