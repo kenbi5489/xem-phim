@@ -5,8 +5,6 @@ from ..base import BaseSourcePlugin, MovieInfo, EpisodeInfo, EpisodeData, Server
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-BACKEND_BASE = "http://localhost:8000/api"
-
 def _build_img(path: str) -> str:
     """
     Trả về URL ảnh đã được proxy qua backend (relative path).
@@ -24,8 +22,8 @@ def _build_img(path: str) -> str:
             path = f"https://phimimg.com/upload/{path}"
             
     from urllib.parse import quote
-    # Return relative path starting with /proxy (frontend will prepend /api)
-    return f"/proxy/image?url={quote(path, safe='')}"
+    # Return path starting with /api/proxy (frontend will prepend BACKEND_URL)
+    return f"/api/proxy/image?url={quote(path, safe='')}"
 
 
 def _map_listing_item(item: dict) -> MovieInfo:
