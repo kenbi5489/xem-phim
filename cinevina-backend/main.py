@@ -12,8 +12,13 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
-    allow_credentials=False,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://cinevina.vercel.app",  # Placeholder for frontend
+        "https://cinevina-frontend.vercel.app", # Another placeholder
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -26,8 +31,12 @@ app.include_router(live.router)
 def read_root():
     return {"status": "ok", "message": "Welcome to CINEVINA API"}
 
-@app.get("/health")
+@app.get("/api/health")
 def health_check():
+    return {"status": "healthy", "service": "cinevina-backend"}
+
+@app.get("/health")
+def health_check_legacy():
     return {"status": "healthy"}
 
 if __name__ == "__main__":

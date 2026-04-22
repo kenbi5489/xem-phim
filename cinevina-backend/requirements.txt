@@ -1,11 +1,11 @@
 fastapi
 uvicorn
-sqlalchemy
-alembic
 pydantic
 python-dotenv
 httpx
 requests
 beautifulsoup4
-pytest
+lxml
+aiohttp
+Pillow
 jinja2
