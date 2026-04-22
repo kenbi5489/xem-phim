@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+@theme {
+  /* Fonts */
+  --font-display: "Be Vietnam Pro", sans-serif;
+  --font-body: "Inter", sans-serif;
+
+  /* Colors based on Stitch Design System: Neon Auteur */
+  --color-background: #0c0e14;
+  --color-surface: #0c0e14;
+  --color-surface-container-low: #11131a;
+  --color-surface-container-high: #1d1f27;
+  --color-surface-container-highest: #23262e;
+  
+  --color-primary: #d692ff;
+  --color-primary-dim: #af25fe;
+  --color-primary-container: #ce7eff;
+  --color-on-primary-container: #3a005a;
+  
+  --color-secondary: #fe7e4f;
+  --color-secondary-dim: #f7794b;
+  --color-secondary-container: #8e2c01;
+  --color-on-secondary: #491300;
+  
+  --color-on-surface: #e5e4ed;
+  --color-on-surface-variant: #aaaab3;
+  
+  --color-outline: #74757d;
+  --color-outline-variant: #46484f;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
+    font-family: var(--font-body);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer components {
+  /* Neon Glow Effect */
+  .glow-primary {
+    box-shadow: 0px 0px 12px rgba(176, 38, 255, 0.3);
+  }
+  
+  /* Glassmorphism */
+  .glass {
+    background-color: color-mix(in srgb, var(--color-surface) 60%, transparent);
+    backdrop-filter: blur(24px);
+  }
+  
+  /* Ghost Border */
+  .ghost-border {
+    border: 1px solid color-mix(in srgb, var(--color-outline-variant) 15%, transparent);
+  }
+  
+  /* Gradient Primary Action */
+  .btn-primary {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dim));
+    color: white;
+    border-radius: 1.5rem; /* xl */
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-primary:hover {
+    transform: scale(1.05);
+    box-shadow: 0px 0px 12px rgba(176, 38, 255, 0.5);
+  }
+  
+  /* Outlined / Secondary Action */
+  .btn-secondary {
+    border: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
+    color: var(--color-primary);
+    border-radius: 1.5rem;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-secondary:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  }
+
+  /* Standardized Movie Card & Images */
+  .movie-card {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    overflow: hidden;
+    border-radius: 16px;
+    background: #0f172a;
+  }
+
+  .movie-card__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .movie-row .movie-card {
+    flex: 0 0 220px;
+  }
+
+  @media (max-width: 768px) {
+    .movie-row .movie-card {
+      flex: 0 0 150px;
+    }
+  }
+}
