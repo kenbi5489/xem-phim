@@ -91,7 +91,7 @@ export const Navbar: React.FC = () => {
 
   return (
     <>
-      <nav className={`fixed top-0 w-full max-w-[1920px] left-1/2 -translate-x-1/2 z-[60] transition-all duration-500 ${
+      <nav className={`fixed top-0 w-full max-w-[1920px] left-1/2 -translate-x-1/2 z-[60] transition-all duration-500 pt-[env(safe-area-inset-top)] ${
         scrolled
           ? 'bg-[#0c0e14]/95 backdrop-blur-2xl shadow-2xl border-b border-white/5 py-2'
           : 'bg-gradient-to-b from-black/90 via-black/40 to-transparent py-4'
@@ -101,8 +101,8 @@ export const Navbar: React.FC = () => {
           {/* Left: Logo + Desktop Menu */}
           <div className="flex items-center gap-10">
             <Link to="/" className="shrink-0 flex items-center gap-2 group focus:outline-none focus-visible:ring-4 focus-visible:ring-primary rounded-lg p-1">
-              <FilmSolid className="w-8 h-8 text-purple-600 group-hover:text-purple-500 transition-colors" />
-              <span className="font-display font-black text-3xl tracking-tighter text-white group-hover:text-purple-500 transition-colors italic">
+              <FilmSolid className="w-6 h-6 md:w-8 md:h-8 text-purple-600 group-hover:text-purple-500 transition-colors" />
+              <span className="font-display font-black text-xl md:text-3xl tracking-tighter text-white group-hover:text-purple-500 transition-colors italic">
                 CINE<span className="text-purple-600">VINA</span>
               </span>
             </Link>
@@ -224,7 +224,7 @@ export const Navbar: React.FC = () => {
       </nav>
 
       {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[60] md:hidden bg-[#0c0e14]/95 backdrop-blur-2xl border-t border-white/5 px-2 py-1">
+      <nav className="fixed bottom-0 left-0 right-0 z-[60] md:hidden bg-[#0c0e14]/95 backdrop-blur-2xl border-t border-white/5 px-2 pt-1 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-around">
           {MOBILE_NAV.map(item => {
             const isActive = item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to);

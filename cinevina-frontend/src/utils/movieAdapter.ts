@@ -3,7 +3,13 @@ import type { MovieInfo } from '../services/api';
 // API base — must match VITE_API_URL in .env
 const getProxyBase = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (!envUrl) return 'http://localhost:8000/api';
+  // If no env var, use the known production backend URL for absolute reliability on mobile
+  if (!envUrl) {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:8000/api';
+    }
+    return 'https://cinevina-backend.vercel.app/api';
+  }
   
   if (envUrl.startsWith('http')) {
     const sanitized = envUrl.replace(/\/$/, '');
@@ -23,35 +29,33 @@ const PROXY_BASE = getProxyBase();
 export const getProxiedImageUrl = (url: string): string => {
   if (!url || url.trim() === '') return '';
   
-  // Case 1: Already a full proxied URL (absolute)
+  // Case 1: Already a full absolute proxied URL
   if (url.startsWith('http') && (url.includes('/proxy/image') || url.includes('/api/proxy/image'))) {
     return url;
   }
 
-  // Case 2: Relative proxied URL from backend (common in our FastAPI setup)
+  // Case 2: Relative proxied URL (e.g. from backend response)
+  // We want to ensure it starts with /api if we are on Vercel and PROXY_BASE is /api
   if (url.startsWith('/api/proxy/image') || url.startsWith('/proxy/image')) {
-    // Strip /api from PROXY_BASE if the url already starts with /api
-    const base = PROXY_BASE.endsWith('/api') ? PROXY_BASE.slice(0, -4) : PROXY_BASE;
-    const sanitizedBase = base.replace(/\/$/, '');
-    const sanitizedUrl = url.startsWith('/') ? url : `/${url}`;
+    const sanitizedUrl = url.startsWith('/api/') ? url : `/api${url.startsWith('/') ? '' : '/'}${url}`;
     
-    // If url starts with /api/proxy but base also ends with /api, avoid duplication
-    if (url.startsWith('/api/') && sanitizedBase.endsWith('/api')) {
-       return `${sanitizedBase.slice(0, -4)}${sanitizedUrl}`;
+    // If we are on local dev (localhost:8000), we might need the full domain.
+    // But on Vercel, a relative path /api/... works perfectly with rewrites.
+    if (PROXY_BASE.startsWith('http')) {
+      return `${PROXY_BASE.replace(/\/api$/, '')}${sanitizedUrl}`;
     }
-    return `${sanitizedBase}${sanitizedUrl}`;
+    return sanitizedUrl;
   }
 
-  // Case 3: Absolute external URL (phimimg, etc.) -> Wrap it
+  // Case 3: Absolute external URL (phimimg, etc.) -> Wrap it through our proxy
   if (url.startsWith('http')) {
-    const sanitizedBase = PROXY_BASE.replace(/\/$/, '');
+    const sanitizedBase = PROXY_BASE.startsWith('http') ? PROXY_BASE : '/api';
     return `${sanitizedBase}/proxy/image?url=${encodeURIComponent(url)}`;
   }
 
   // Case 4: Other relative paths
   if (url.startsWith('/')) {
-    const sanitizedBase = PROXY_BASE.replace(/\/$/, '');
-    return `${sanitizedBase}${url}`;
+    return `${PROXY_BASE.startsWith('http') ? PROXY_BASE : '/api'}${url}`;
   }
 
   return url;

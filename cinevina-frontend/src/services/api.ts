@@ -219,8 +219,9 @@ export const movieApi = {
       const res = await api.get('/movies/cinema', { params: { page, source } });
       return normalizePaginated(res.data);
     } catch (err) {
-      console.error(`[API] getCinemaMovies error:`, err);
-      throw err;
+      console.warn(`[API] getCinemaMovies failed, falling back to category:`, err);
+      // Fallback to generic movies with cinema category if specific route doesn't exist
+      return movieApi.getMovies({ category: 'phim-chieu-rap', page, source });
     }
   },
   
@@ -229,8 +230,14 @@ export const movieApi = {
       const res = await api.get('/movies/trending', { params: { limit, source } });
       return adaptMovies(res.data);
     } catch (err) {
-      console.error(`[API] getTrendingMovies error:`, err);
-      return [];
+      console.warn(`[API] getTrendingMovies failed, falling back to recent list:`, err);
+      // Fallback: use recent movies as trending if /trending doesn't exist yet
+      try {
+        const fallback = await movieApi.getMovies({ category: 'phim-moi-cap-nhat', page: 1, source });
+        return fallback.items.slice(0, limit);
+      } catch (innerErr) {
+        return [];
+      }
     }
   },
 };
