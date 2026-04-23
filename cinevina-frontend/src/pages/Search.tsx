@@ -6,8 +6,9 @@ import { useSearchMovies, useDebounce } from '../hooks/useMovies';
 import type { MovieInfo } from '../services/api';
 
 // ─── Group config ─────────────────────────────────────────────────────────────
-const GROUP_ORDER = ['series', 'single', 'hoathinh', 'tvshows', 'other'] as const;
+const GROUP_ORDER = ['live', 'series', 'single', 'hoathinh', 'tvshows', 'other'] as const;
 const GROUP_LABELS: Record<string, { label: string; emoji: string }> = {
+  live:     { label: 'Truyền Hình', emoji: '🔴' },
   series:   { label: 'Phim Bộ',    emoji: '📺' },
   single:   { label: 'Phim Lẻ',    emoji: '🎬' },
   hoathinh: { label: 'Anime',      emoji: '🌙' },
@@ -22,6 +23,7 @@ const groupMovies = (movies: MovieInfo[]) => {
     const isHoatHinh = key === 'hoathinh' || key === 'hoat-hinh' || m.categories?.toLowerCase().includes('hoạt hình');
     
     if (isHoatHinh) key = 'hoathinh';
+    else if (key === 'live') key = 'live';
     else if (key === 'series') key = 'series';
     else if (key === 'single') key = 'single';
     else if (key === 'tvshows' || key === 'tv-shows') key = 'tvshows';

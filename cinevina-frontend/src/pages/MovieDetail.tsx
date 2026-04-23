@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import {
-  HeartIcon, PlusIcon, StarIcon, ExclamationTriangleIcon, XMarkIcon,
+  HeartIcon, PlusIcon, StarIcon, XMarkIcon,
+  PlayIcon, InformationCircleIcon, ShareIcon, CalendarIcon, ClockIcon,
+  GlobeAltIcon, LanguageIcon, RectangleGroupIcon
 } from '@heroicons/react/24/outline';
-import { PlayIcon as PlaySolid, FilmIcon } from '@heroicons/react/24/solid';
+import { PlayIcon as PlaySolid } from '@heroicons/react/24/solid';
 import { useMovieDetail } from '../hooks/useMovies';
 import type { ServerData } from '../services/api';
 import { computeIsStreamable } from '../services/api';
@@ -12,11 +14,7 @@ import { computeIsStreamable } from '../services/api';
 // ── YouTube embed helper ───────────────────────────────────────────────────────
 const extractYouTubeId = (url: string): string | null => {
   if (!url) return null;
-  const patterns = [
-    /youtu\.be\/([^?&]+)/,
-    /youtube\.com\/watch\?v=([^&]+)/,
-    /youtube\.com\/embed\/([^?&]+)/,
-  ];
+  const patterns = [/youtu\.be\/([^?&]+)/, /youtube\.com\/watch\?v=([^&]+)/, /youtube\.com\/embed\/([^?&]+)/];
   for (const p of patterns) {
     const m = url.match(p);
     if (m) return m[1];
@@ -26,81 +24,46 @@ const extractYouTubeId = (url: string): string | null => {
 
 // ── Trailer Modal ─────────────────────────────────────────────────────────────
 const TrailerModal: React.FC<{ videoId: string; onClose: () => void }> = ({ videoId, onClose }) => (
-  <div
-    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm"
-    onClick={onClose}
-  >
-    <div
-      className="relative w-full max-w-5xl mx-4 aspect-video rounded-2xl overflow-hidden shadow-2xl border border-white/10"
-      onClick={e => e.stopPropagation()}
-    >
-      <button
-        onClick={onClose}
-        className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black transition-colors"
-        aria-label="Đóng trailer"
-      >
-        <XMarkIcon className="w-5 h-5" />
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md p-4" onClick={onClose}>
+    <div className="relative w-full max-w-5xl aspect-video rounded-3xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-white/20" onClick={e => e.stopPropagation()}>
+      <button onClick={onClose} className="absolute top-4 right-4 z-10 p-3 rounded-full bg-black/60 text-white hover:bg-red-600 transition-all shadow-xl">
+        <XMarkIcon className="w-6 h-6" />
       </button>
-      <iframe
-        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
-        title="Trailer"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        className="w-full h-full"
-      />
+      <iframe src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`} title="Trailer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="w-full h-full" />
     </div>
   </div>
 );
 
 // ── EpisodeList ───────────────────────────────────────────────────────────────
-const EpisodeList: React.FC<{
-  servers: ServerData[];
-  movieSlug: string;
-  currentEpSlug?: string;
-}> = ({ servers, movieSlug, currentEpSlug }) => {
+const EpisodeList: React.FC<{ servers: ServerData[]; movieSlug: string; currentEpSlug?: string; }> = ({ servers, movieSlug, currentEpSlug }) => {
   const [activeServer, setActiveServer] = useState(0);
   if (!servers || servers.length === 0) return null;
-
   const server = servers[activeServer];
 
   return (
-    <section>
-      <div className="flex items-center gap-3 mb-3">
-        <h3 className="font-display text-xl font-bold text-white">Danh Sách Tập</h3>
+    <section className="bg-white/5 rounded-3xl border border-white/5 p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-8 bg-purple-600 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
+          <h3 className="font-display text-2xl font-black text-white uppercase tracking-tighter">Danh Sách Tập</h3>
+        </div>
         {servers.length > 1 && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 bg-black/20 p-1 rounded-full">
             {servers.map((s, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveServer(i)}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  activeServer === i
-                    ? 'bg-[#d692ff] text-[#3a005a]'
-                    : 'bg-white/10 text-white/60 hover:bg-white/20'
-                }`}
-              >
-                {s.server_name || `Server ${i + 1}`}
+              <button key={i} onClick={() => setActiveServer(i)}
+                className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeServer === i ? 'bg-purple-600 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>
+                {s.server_name || `Nguồn ${i + 1}`}
               </button>
             ))}
           </div>
         )}
       </div>
-      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-64 overflow-y-auto pr-2">
+      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-8 lg:grid-cols-12 gap-3">
         {server.server_data.map(ep => {
-          const hasStream = !!(ep.link_m3u8 || ep.link_embed);
           const isCurrent = currentEpSlug === ep.slug;
           return (
             <Link key={ep.slug} to={`/play/${movieSlug}/${ep.slug}`}>
-              <button
-                className={`w-full py-2 text-center rounded-lg transition-all text-xs font-semibold truncate px-1 border ${
-                  isCurrent
-                    ? 'bg-[#d692ff] text-[#3a005a] border-[#d692ff]'
-                    : hasStream
-                    ? 'bg-[#1d1f27] hover:bg-[#d692ff] hover:text-white text-white/70 border-white/8 hover:border-[#d692ff]'
-                    : 'bg-[#1d1f27] text-white/30 border-white/5 cursor-not-allowed'
-                }`}
-                title={!hasStream ? 'Chưa có nguồn phát' : ep.name}
-              >
+              <button className={`w-full py-3.5 rounded-xl transition-all text-sm font-black border ${isCurrent ? 'bg-purple-600 text-white border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
                 {ep.name}
               </button>
             </Link>
@@ -117,260 +80,149 @@ export const MovieDetail: React.FC = () => {
   const { data: movie, isLoading, error, refetch } = useMovieDetail(slug || '');
   const [showTrailer, setShowTrailer] = useState(false);
 
-  // ── Loading state ─────────────────────────────────────────────────────────
-  if (isLoading) {
-    return (
-      <div className="flex flex-col pb-12 animate-pulse">
-        <div className="relative w-full h-[50vh] md:h-[70vh] bg-[#1d1f27]" />
-        <div className="max-w-7xl mx-auto px-4 md:px-8 mt-16 grid grid-cols-1 md:grid-cols-3 gap-12 w-full">
-          <div className="md:col-span-2 flex flex-col gap-6">
-            <div className="h-8 w-1/3 bg-[#1d1f27] rounded" />
-            <div className="h-40 w-full bg-[#1d1f27] rounded-xl" />
-          </div>
-          <div className="h-72 w-full bg-[#1d1f27] rounded-2xl" />
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <div className="min-h-screen bg-black animate-pulse" />;
+  if (error || !movie) return <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6"><p className="text-white/40">Lỗi tải dữ liệu...</p><Button onClick={() => refetch()}>Thử lại</Button></div>;
 
-  // ── Error state ───────────────────────────────────────────────────────────
-  if (error || !movie) {
-    return (
-      <div className="flex flex-col items-center justify-center py-32 text-center gap-6">
-        <ExclamationTriangleIcon className="w-16 h-16 text-white/30" />
-        <div>
-          <h2 className="text-2xl font-display font-bold text-white">Không thể tải thông tin phim</h2>
-          <p className="text-white/50 mt-2">Phim này có thể không tồn tại hoặc hệ thống đang gặp lỗi.</p>
-        </div>
-        <Button onClick={() => refetch()} variant="secondary">Thử lại</Button>
-      </div>
-    );
-  }
-
-  // ── Derive playability from servers (source of truth) ─────────────────────
   const isStreamable = computeIsStreamable(movie);
-  const firstEpisodeSlug = movie.servers?.[0]?.server_data?.[0]?.slug || movie.episodes?.[0]?.slug || '';
+  const firstEp = movie.servers?.[0]?.server_data?.[0]?.slug || movie.episodes?.[0]?.slug || '';
   const trailerYtId = extractYouTubeId(movie.trailerUrl || '');
-  const isCinema = movie.isCinema === true;
 
   return (
-    <div className="flex flex-col pb-12">
+    <div className="flex flex-col pb-20 bg-[#0c0e14] min-h-screen">
+      {showTrailer && trailerYtId && <TrailerModal videoId={trailerYtId} onClose={() => setShowTrailer(false)} />}
 
-      {/* Trailer Modal */}
-      {showTrailer && trailerYtId && (
-        <TrailerModal videoId={trailerYtId} onClose={() => setShowTrailer(false)} />
-      )}
-
-      {/* Backdrop Hero */}
-      <div className="relative w-full h-[50vh] md:h-[70vh] bg-[#0c0e14]">
+      {/* ── Dynamic Hero Background ── */}
+      <div className="relative w-full h-[65vh] md:h-[85vh] overflow-hidden">
         <div className="absolute inset-0">
-          <img
-            src={movie.posterUrl || movie.thumbUrl || ""}
-            alt="Backdrop"
-            className="w-full h-full object-cover opacity-25 blur-sm"
-            onError={(e) => {
-              const img = e.currentTarget;
-              if (img.dataset.fallbackApplied === "true") return;
-              if (movie.thumbUrl && img.src !== movie.thumbUrl) {
-                img.dataset.fallbackApplied = "true";
-                img.src = movie.thumbUrl;
-                return;
-              }
-              img.dataset.fallbackApplied = "true";
-              img.src = "/fallback-poster.svg";
-            }}
-          />
-          <div className="absolute inset-0"
-            style={{ background: 'linear-gradient(to top, #0F1117 0%, rgba(15,17,23,0.7) 50%, transparent 100%)' }} />
-          <div className="absolute inset-0"
-            style={{ background: 'linear-gradient(to right, #0F1117 0%, transparent 60%)' }} />
+          <img src={movie.posterUrl || movie.thumbUrl || ""} className="w-full h-full object-cover object-top opacity-30 blur-2xl scale-110" alt="" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0c0e14] via-[#0c0e14]/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0c0e14] via-transparent to-transparent" />
         </div>
 
-        {/* Cinema banner */}
-        {isCinema && (
-          <div className="absolute top-20 left-0 right-0 flex justify-center z-10">
-            <div className="flex items-center gap-2 bg-red-600/90 backdrop-blur-sm text-white text-sm font-bold px-5 py-2 rounded-full shadow-lg">
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              ĐANG CHIẾU TẠI RẠP
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-            </div>
-          </div>
-        )}
-
-        {/* Hero content */}
-        <div className="absolute bottom-0 left-0 w-full max-w-7xl mx-auto px-4 md:px-8 translate-y-1/4">
-          <div className="flex flex-col md:flex-row gap-8 items-end">
-            {/* Poster */}
-            <div className={`shrink-0 w-40 md:w-56 aspect-[2/3] rounded-2xl overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.6)] border ${isCinema ? 'border-yellow-500/40' : 'border-white/10'}`}>
-              <img
-                src={movie.thumbUrl || movie.posterUrl || ""}
-                alt="Poster"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  const img = e.currentTarget;
-                  if (img.dataset.fallbackApplied === "true") return;
-                  if (movie.posterUrl && img.src !== movie.posterUrl) {
-                    img.dataset.fallbackApplied = "true";
-                    img.src = movie.posterUrl;
-                    return;
-                  }
-                  img.dataset.fallbackApplied = "true";
-                  img.src = "/fallback-poster.svg";
-                }}
-              />
+        {/* Content Overlay */}
+        <div className="absolute inset-0 flex items-end">
+          <div className="max-w-[1440px] mx-auto px-4 md:px-8 w-full pb-10 md:pb-20 grid grid-cols-1 md:grid-cols-[auto,1fr] gap-10 items-end">
+            
+            {/* Poster - 2:3 ratio, premium shadow */}
+            <div className="hidden md:block shrink-0 w-64 lg:w-72 aspect-[2/3] rounded-[2rem] overflow-hidden border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.8)] transform -rotate-2 hover:rotate-0 transition-all duration-700">
+              <img src={movie.thumbUrl || movie.posterUrl || ""} className="w-full h-full object-cover" alt={movie.name} />
+              {movie.isCinema && (
+                <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded uppercase tracking-widest animate-pulse">ĐANG CHIẾU</div>
+              )}
             </div>
 
-            {/* Info */}
-            <div className="flex flex-col gap-3 mb-4">
-              {/* Meta badges */}
-              <div className="flex flex-wrap items-center gap-2">
-                {isCinema && (
-                  <span className="flex items-center gap-1 bg-red-600 text-white text-xs font-black px-2 py-0.5 rounded-sm uppercase tracking-wider">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> ĐANG CHIẾU
-                  </span>
-                )}
-                {movie.quality && !isCinema && (
-                  <span className="bg-[#d692ff] text-[#3a005a] text-xs font-black px-2 py-0.5 rounded-sm uppercase">{movie.quality}</span>
-                )}
-                {movie.lang && (
-                  <span className="bg-white/15 text-white text-xs font-semibold px-2 py-0.5 rounded-sm backdrop-blur-sm">{movie.lang}</span>
-                )}
-                {movie.year && <span className="text-white/60 text-sm">{movie.year}</span>}
-                {movie.rating && (
-                  <span className="flex items-center gap-1 text-yellow-400 text-sm">
-                    <StarIcon className="w-4 h-4 fill-current" /> {movie.rating}
-                  </span>
-                )}
+            {/* Info Block */}
+            <div className="flex flex-col gap-6 mb-4 max-w-4xl">
+              <div className="flex flex-wrap items-center gap-3">
+                {movie.quality && <span className="bg-purple-600 text-white text-xs font-black px-3 py-1 rounded-full uppercase shadow-[0_0_20px_rgba(168,85,247,0.4)]">{movie.quality}</span>}
+                {movie.lang && <span className="bg-white/10 text-white/80 text-xs font-bold px-3 py-1 rounded-full border border-white/10 backdrop-blur-sm uppercase">{movie.lang}</span>}
+                <span className="flex items-center gap-1.5 text-yellow-400 font-black text-sm px-3 py-1 bg-yellow-400/10 rounded-full border border-yellow-400/20">
+                  <StarIcon className="w-4 h-4 fill-current" /> {movie.rating || '8.5'}
+                </span>
+                {movie.year && <span className="text-white/40 text-sm font-bold tracking-widest uppercase">{movie.year}</span>}
               </div>
 
-              {/* Title */}
-              <h1 className="font-display text-3xl md:text-5xl font-black text-white leading-tight">
+              <h1 className="font-display text-4xl md:text-7xl font-black text-white leading-[0.9] uppercase tracking-tighter italic drop-shadow-2xl">
                 {movie.name}
               </h1>
-              {movie.originalName && (
-                <p className="text-white/50 text-sm italic">{movie.originalName}</p>
-              )}
+              {movie.originalName && <p className="text-purple-400 font-bold text-lg md:text-xl tracking-tight opacity-80">{movie.originalName}</p>}
 
-              {/* CTA row — derived from actual stream data */}
-              <div className="flex items-center gap-3 mt-2 flex-wrap">
-                {isStreamable && firstEpisodeSlug ? (
-                  /* Có stream thật → Xem Ngay */
-                  <Link to={`/play/${movie.slug}/${firstEpisodeSlug}`}>
-                    <button
-                      className="flex items-center gap-2 px-7 py-3 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95"
-                      style={{ background: 'linear-gradient(135deg,#d692ff,#af25fe)', boxShadow: '0 0 28px rgba(214,146,255,0.5)' }}
-                    >
-                      <PlaySolid className="w-5 h-5" />
-                      Xem Ngay
+              {/* Action row */}
+              <div className="flex flex-wrap items-center gap-4 mt-4">
+                {isStreamable && firstEp ? (
+                  <Link to={`/play/${movie.slug}/${firstEp}`}>
+                    <button className="flex items-center gap-3 px-10 py-4 rounded-full bg-gradient-to-r from-purple-600 to-indigo-700 text-white font-black text-sm tracking-widest shadow-[0_20px_40px_rgba(168,85,247,0.3)] hover:scale-105 transition-all">
+                      <PlaySolid className="w-6 h-6" /> XEM NGAY
                     </button>
                   </Link>
-                ) : trailerYtId ? (
-                  /* Không có stream nhưng có trailer → Xem Trailer */
-                  <button
-                    onClick={() => setShowTrailer(true)}
-                    className="flex items-center gap-2 px-7 py-3 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95"
-                    style={{ background: 'linear-gradient(135deg,#fe7e4f,#ef4444)', boxShadow: '0 0 24px rgba(239,68,68,0.4)' }}
-                  >
-                    <PlaySolid className="w-5 h-5" />
-                    Xem Trailer
-                  </button>
                 ) : (
-                  /* Không có gì → Chưa có nguồn phát */
-                  <div className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/20 text-white/50 text-sm bg-white/5">
-                    <FilmIcon className="w-4 h-4" />
-                    Chưa có nguồn phát
+                  <div className="flex items-center gap-3 px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white/40 font-bold text-xs uppercase tracking-widest italic">
+                    <InformationCircleIcon className="w-5 h-5" /> Sắp ra mắt
                   </div>
                 )}
 
-                {/* Trailer button as secondary (if also has stream) */}
-                {isStreamable && trailerYtId && (
-                  <button
-                    onClick={() => setShowTrailer(true)}
-                    className="flex items-center gap-2 px-5 py-3 rounded-full font-semibold text-white text-sm border border-white/25 hover:bg-white/10 transition-all backdrop-blur-sm"
-                  >
-                    <PlaySolid className="w-4 h-4 text-[#fe7e4f]" />
-                    Trailer
+                {trailerYtId && (
+                  <button onClick={() => setShowTrailer(true)} className="flex items-center gap-3 px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all font-black text-xs tracking-widest uppercase">
+                    <PlayIcon className="w-5 h-5 text-red-500" /> Trailer
                   </button>
                 )}
 
-                {/* Action buttons */}
-                <button className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors border border-white/10" aria-label="Yêu thích">
-                  <HeartIcon className="w-5 h-5 text-[#d692ff]" />
-                </button>
-                <button className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors border border-white/10" aria-label="Thêm vào danh sách">
-                  <PlusIcon className="w-5 h-5 text-white" />
-                </button>
+                <div className="flex gap-2">
+                  <button className="p-4 rounded-full bg-white/5 border border-white/10 text-white hover:text-red-500 hover:bg-white/10 transition-all shadow-lg group">
+                    <HeartIcon className="w-6 h-6 group-hover:fill-red-500" />
+                  </button>
+                  <button className="p-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all shadow-lg">
+                    <PlusIcon className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 md:px-8 mt-32 md:mt-20 grid grid-cols-1 md:grid-cols-3 gap-10">
-
-        {/* Left col */}
-        <div className="md:col-span-2 flex flex-col gap-8">
-          {/* Description */}
+      {/* ── Content Details ── */}
+      <div className="max-w-[1440px] mx-auto px-4 md:px-8 grid grid-cols-1 lg:grid-cols-[1fr,350px] gap-12 mt-12">
+        
+        {/* Left Side: Summary & Episodes */}
+        <div className="flex flex-col gap-14">
           {movie.description && (
-            <section>
-              <h3 className="font-display text-xl font-bold text-white mb-3">Nội Dung Phim</h3>
-              <div
-                className="text-white/65 leading-relaxed text-base"
-                dangerouslySetInnerHTML={{ __html: movie.description }}
-              />
-            </section>
-          )}
-
-          {/* Trailer preview (if cinema or no stream) */}
-          {trailerYtId && (!isStreamable || isCinema) && (
-            <section>
-              <h3 className="font-display text-xl font-bold text-white mb-3">Trailer Chính Thức</h3>
-              <div
-                className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 cursor-pointer group"
-                onClick={() => setShowTrailer(true)}
-              >
-                <img
-                  src={`https://img.youtube.com/vi/${trailerYtId}/maxresdefault.jpg`}
-                  alt="Trailer thumbnail"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                  <div className="w-20 h-20 rounded-full flex items-center justify-center"
-                    style={{ background: 'rgba(239,68,68,0.9)', boxShadow: '0 0 40px rgba(239,68,68,0.5)' }}>
-                    <PlaySolid className="w-10 h-10 text-white ml-1" />
-                  </div>
-                </div>
+            <section className="bg-white/5 rounded-3xl border border-white/5 p-8 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-8 opacity-[0.03] scale-150 rotate-12 group-hover:rotate-0 transition-transform duration-1000">
+                <InformationCircleIcon className="w-32 h-32" />
               </div>
+              <h3 className="font-display text-2xl font-black text-white mb-6 uppercase tracking-tighter flex items-center gap-3">
+                <InformationCircleIcon className="w-7 h-7 text-purple-500" /> Nội Dung Phim
+              </h3>
+              <div className="text-white/60 leading-loose text-lg font-medium italic" dangerouslySetInnerHTML={{ __html: movie.description }} />
             </section>
           )}
 
-          {/* Episodes — only for non-cinema movies with stream */}
-          {!isCinema && isStreamable && movie.servers && movie.servers.length > 0 && (
+          {!movie.isCinema && isStreamable && movie.servers && (
             <EpisodeList servers={movie.servers} movieSlug={movie.slug} />
           )}
         </div>
 
-        {/* Right col — Movie metadata */}
-        <div className="flex flex-col gap-4 p-6 rounded-2xl bg-[#11131a] border border-white/8 h-fit">
-          {[
-            ['Tên gốc',       movie.originalName],
-            ['Năm sản xuất',  movie.year?.toString()],
-            ['Quốc gia',      movie.country],
-            ['Đạo diễn',      movie.director],
-            ['Diễn viên',     movie.cast],
-            ['Chất lượng',    isCinema ? 'Đang chiếu rạp' : movie.quality],
-            ['Đánh giá',      movie.rating ? `${movie.rating} / 10` : ''],
-            ['Ngôn ngữ',      movie.lang],
-            ['Thể loại',      movie.categories],
-            ['Tổng số tập',   movie.totalEpisodes],
-            ['Loại phim',     isCinema ? 'Chiếu rạp' : movie.type],
-          ].map(([label, value]) => value ? (
-            <div key={label} className="flex flex-col gap-1 border-b border-white/5 pb-3 last:border-0 last:pb-0">
-              <span className="text-xs text-white/40 uppercase tracking-wider">{label}</span>
-              <span className="font-semibold text-white/90 text-sm">{value}</span>
+        {/* Right Side: Metadata Sidebar */}
+        <div className="flex flex-col gap-8">
+          <section className="bg-[#11131a] rounded-3xl border border-white/5 p-8 shadow-2xl flex flex-col gap-6">
+            <h3 className="font-display text-lg font-black text-white uppercase tracking-widest border-b border-white/5 pb-4">Thông tin chi tiết</h3>
+            
+            <div className="flex flex-col gap-6">
+              {[
+                { icon: CalendarIcon, label: 'Phát hành', val: movie.year },
+                { icon: GlobeAltIcon, label: 'Quốc gia', val: movie.country },
+                { icon: RectangleGroupIcon, label: 'Thể loại', val: movie.categories },
+                { icon: LanguageIcon, label: 'Ngôn ngữ', val: movie.lang },
+                { icon: ClockIcon, label: 'Thời lượng', val: movie.totalEpisodes ? `${movie.totalEpisodes} tập` : 'Đang cập nhật' },
+              ].map(item => item.val ? (
+                <div key={item.label} className="flex gap-4 group">
+                  <div className="shrink-0 w-10 h-10 rounded-xl bg-purple-600/10 border border-purple-600/20 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
+                    <item.icon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-white/30 uppercase tracking-widest">{item.label}</p>
+                    <p className="text-sm font-bold text-white/80 mt-0.5">{item.val}</p>
+                  </div>
+                </div>
+              ) : null)}
+
+              <div className="pt-4 border-t border-white/5">
+                <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-3">Diễn viên chính</p>
+                <div className="flex flex-wrap gap-2">
+                  {movie.cast?.split(',').map(name => (
+                    <span key={name} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[12px] font-bold text-white/60 hover:text-white hover:border-purple-600/40 transition-all cursor-default">
+                      {name.trim()}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
-          ) : null)}
+            
+            <button className="w-full flex items-center justify-center gap-3 py-4 mt-4 rounded-2xl bg-white/5 border border-white/10 text-white/60 font-black text-xs uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all group">
+              <ShareIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" /> Chia sẻ phim
+            </button>
+          </section>
         </div>
       </div>
     </div>

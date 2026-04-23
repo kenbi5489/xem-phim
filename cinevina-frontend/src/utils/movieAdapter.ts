@@ -1,7 +1,18 @@
 import type { MovieInfo } from '../services/api';
 
 // API base — must match VITE_API_URL in .env
-const PROXY_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api') as string;
+const getProxyBase = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (!envUrl) return 'http://localhost:8000/api';
+  
+  if (envUrl.startsWith('http')) {
+    const sanitized = envUrl.replace(/\/$/, '');
+    return sanitized.endsWith('/api') ? sanitized : `${sanitized}/api`;
+  }
+  return envUrl;
+};
+
+const PROXY_BASE = getProxyBase();
 
 /**
  * Wrap any image URL through the backend image proxy.
@@ -12,27 +23,38 @@ const PROXY_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api')
 export const getProxiedImageUrl = (url: string): string => {
   if (!url || url.trim() === '') return '';
   
-  // Ensure PROXY_BASE doesn't end with a slash for clean concatenation
-  const base = PROXY_BASE.endsWith('/') ? PROXY_BASE.slice(0, -1) : PROXY_BASE;
-
-  // Case 1: Backend returned /proxy/image... (Prepended with /api by PROXY_BASE)
-  if (url.startsWith('/proxy/')) {
-    return `${base}${url}`;
-  }
-
-  // Case 2: Backend returned /api/proxy/image... (We need to strip /api from base)
-  if (url.startsWith('/api/proxy/')) {
-    const host = base.endsWith('/api') ? base.slice(0, -4) : base;
-    return `${host}${url}`;
-  }
-
-  // Case 3: Already absolute proxied URL
-  if (url.includes('localhost:8000') || url.includes('127.0.0.1:8000')) {
+  // Case 1: Already a full proxied URL (absolute)
+  if (url.startsWith('http') && (url.includes('/proxy/image') || url.includes('/api/proxy/image'))) {
     return url;
   }
-  
-  // Case 4: Raw external URL (fallback)
-  return `${base}/proxy/image?url=${encodeURIComponent(url)}`;
+
+  // Case 2: Relative proxied URL from backend (common in our FastAPI setup)
+  if (url.startsWith('/api/proxy/image') || url.startsWith('/proxy/image')) {
+    // Strip /api from PROXY_BASE if the url already starts with /api
+    const base = PROXY_BASE.endsWith('/api') ? PROXY_BASE.slice(0, -4) : PROXY_BASE;
+    const sanitizedBase = base.replace(/\/$/, '');
+    const sanitizedUrl = url.startsWith('/') ? url : `/${url}`;
+    
+    // If url starts with /api/proxy but base also ends with /api, avoid duplication
+    if (url.startsWith('/api/') && sanitizedBase.endsWith('/api')) {
+       return `${sanitizedBase.slice(0, -4)}${sanitizedUrl}`;
+    }
+    return `${sanitizedBase}${sanitizedUrl}`;
+  }
+
+  // Case 3: Absolute external URL (phimimg, etc.) -> Wrap it
+  if (url.startsWith('http')) {
+    const sanitizedBase = PROXY_BASE.replace(/\/$/, '');
+    return `${sanitizedBase}/proxy/image?url=${encodeURIComponent(url)}`;
+  }
+
+  // Case 4: Other relative paths
+  if (url.startsWith('/')) {
+    const sanitizedBase = PROXY_BASE.replace(/\/$/, '');
+    return `${sanitizedBase}${url}`;
+  }
+
+  return url;
 };
 
 /**
@@ -42,9 +64,11 @@ export const getProxiedImageUrl = (url: string): string => {
  */
 export const adaptMovieCard = (raw: any): MovieInfo => {
   if (!raw) return _emptyMovie();
-  // Backend already returns proxied URLs — getProxiedImageUrl will pass them through
-  const posterUrl = getProxiedImageUrl(raw?.poster_url || raw?.poster || '');
-  const thumbUrl  = getProxiedImageUrl(raw?.thumb_url  || raw?.thumb  || '');
+  
+  // Robust image field detection
+  const posterUrl = getProxiedImageUrl(raw?.poster_url || raw?.poster || raw?.thumbnail || raw?.image || '');
+  const thumbUrl  = getProxiedImageUrl(raw?.thumb_url  || raw?.thumb  || raw?.thumbnail || raw?.image || '');
+  
   return {
     id: raw?.id || raw?._id || '',
     slug: raw?.slug || '',
@@ -52,7 +76,7 @@ export const adaptMovieCard = (raw: any): MovieInfo => {
     originalName: raw?.original_title || raw?.origin_name || '',
     posterUrl,
     thumbUrl,
-    description: '',
+    description: raw?.description || raw?.content || '',
     year: raw?.year,
     quality: raw?.quality,
     lang: raw?.lang,
@@ -79,8 +103,8 @@ export const adaptMovieCard = (raw: any): MovieInfo => {
 export const adaptMovieDetail = (raw: any): MovieInfo => {
   if (!raw) return _emptyMovie();
 
-  const posterUrl = getProxiedImageUrl(raw?.poster_url || raw?.poster || '');
-  const thumbUrl  = getProxiedImageUrl(raw?.thumb_url  || raw?.thumb  || '');
+  const posterUrl = getProxiedImageUrl(raw?.poster_url || raw?.poster || raw?.thumbnail || raw?.image || '');
+  const thumbUrl  = getProxiedImageUrl(raw?.thumb_url  || raw?.thumb  || raw?.thumbnail || raw?.image || '');
 
   // Read full servers from backend response
   const servers = Array.isArray(raw?.servers) ? raw.servers : [];
@@ -152,7 +176,36 @@ function _emptyMovie(): MovieInfo {
 
 // Backward-compat exports
 export const adaptMovie  = adaptMovieDetail;
-export const adaptMovies = (rawList: any[]): MovieInfo[] => {
-  if (!Array.isArray(rawList)) return [];
+
+/**
+ * Normalize any response into a flat array of MovieInfo objects.
+ * Handles:
+ * - Array directly: [...]
+ * - Object with items: { items: [...] }
+ * - Object with data.items: { data: { items: [...] } }
+ * - Object with data (as array): { data: [...] }
+ * - Object with results: { results: [...] }
+ */
+export const adaptMovies = (input: any): MovieInfo[] => {
+  if (!input) return [];
+  
+  let rawList: any[] = [];
+  
+  if (Array.isArray(input)) {
+    rawList = input;
+  } else if (input.items && Array.isArray(input.items)) {
+    rawList = input.items;
+  } else if (input.data && Array.isArray(input.data)) {
+    rawList = input.data;
+  } else if (input.data?.items && Array.isArray(input.data.items)) {
+    rawList = input.data.items;
+  } else if (input.results && Array.isArray(input.results)) {
+    rawList = input.results;
+  }
+
+  if (rawList.length === 0) {
+    console.warn('[adaptMovies] No valid movie list found in input:', input);
+  }
+
   return rawList.map(adaptMovieCard);
 };

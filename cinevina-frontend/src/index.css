@@ -34,10 +34,33 @@
     background-color: var(--color-background);
     color: var(--color-on-surface);
     font-family: var(--font-body);
+    /* Safe area padding for mobile/TV overscan */
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
   }
   
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
+  }
+
+  /* TV Navigation Focus Outlines */
+  *:focus-visible {
+    outline: 4px solid var(--color-primary);
+    outline-offset: 4px;
+    border-radius: 8px;
+    transition: outline-color 0.2s ease;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
   }
 }
 
@@ -87,14 +110,20 @@
     background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
   }
 
+  /* Utilities */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   /* Standardized Movie Card & Images */
   .movie-card {
     position: relative;
     width: 100%;
-    aspect-ratio: 2 / 3;
-    overflow: hidden;
-    border-radius: 16px;
-    background: #0f172a;
+    overflow: visible;
   }
 
   .movie-card__image {
@@ -102,15 +131,12 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    transition: transform 0.5s ease;
   }
+}
 
-  .movie-row .movie-card {
-    flex: 0 0 220px;
-  }
-
-  @media (max-width: 768px) {
-    .movie-row .movie-card {
-      flex: 0 0 150px;
-    }
+@layer utilities {
+  .text-shadow-premium {
+    text-shadow: 0 4px 8px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
   }
 }

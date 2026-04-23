@@ -1,365 +1,235 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { movieApi } from '../services/api';
 import { MovieCard } from '../components/ui/MovieCard';
-import { FunnelIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
-import { useMovies } from '../hooks/useMovies';
+import { FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
-// ─── Route → API params mapping ──────────────────────────────────────────────
-interface RouteParams {
-  category?: string;
-  country?: string;
-  source?: string;
-}
-
-const ROUTE_PARAMS: Record<string, RouteParams> = {
-  'phim-le':        { category: 'phim-le' },
-  'phim-bo':        { category: 'phim-bo' },
-  'hoat-hinh':      { category: 'hoat-hinh' },
-  'tv-shows':       { category: 'tv-shows' },
-  'phim-chieu-rap': { category: 'phim-chieu-rap' },
-  'phim-viet':      { country: 'viet-nam' },       // ← country, không phải category
-  'phim-han':       { country: 'han-quoc' },
-  'han-quoc':       { country: 'han-quoc' },
-  'trung-quoc':     { country: 'trung-quoc' },
-  'au-my':          { country: 'au-my' },
-  'nhat-ban':       { country: 'nhat-ban' },
-  'thai-lan':       { country: 'thai-lan' },
-  'the-thao':       { source: 'sport_live' },
-  'hanh-dong':      { category: 'phim-le', },
-  'tinh-cam':       { category: 'phim-le', },
-  'kinh-di':        { category: 'phim-le', },
-  'hai-huoc':       { category: 'phim-le', },
-  'tam-ly':         { category: 'phim-le', },
-  'tai-lieu':       { category: 'phim-le', },
-  'lich-su':        { category: 'phim-le', },
-  'co-trang':       { category: 'phim-le', },
-  'vien-tuong':     { category: 'phim-le', },
-  'vo-thuat':       { category: 'phim-le', },
-};
-
-// Genre slug map (for genre-route categories)
-const GENRE_ROUTE_SLUGS: Record<string, string> = {
-  'hanh-dong': 'hanh-dong', 'tinh-cam': 'tinh-cam', 'kinh-di': 'kinh-di',
-  'hai-huoc': 'hai-huoc', 'tam-ly': 'tam-ly', 'tai-lieu': 'tai-lieu',
-  'lich-su': 'lich-su', 'co-trang': 'co-trang', 'vien-tuong': 'vien-tuong', 'vo-thuat': 'vo-thuat',
-};
-
-const TYPE_TABS = [
-  { id: 'all', name: 'Tất cả' },
-  { id: 'phim-le', name: 'Phim lẻ' },
-  { id: 'phim-bo', name: 'Phim bộ' },
-  { id: 'hoat-hinh', name: 'Anime' },
-  { id: 'tv-shows', name: 'TV Show' },
+const COUNTRY_SLUGS = [
+  "han-quoc", "trung-quoc", "au-my", "nhat-ban",
+  "thai-lan", "viet-nam", "an-do", "hong-kong"
+];
+const CATEGORY_SLUGS = [
+  "phim-le", "phim-bo", "hoat-hinh", "tv-shows", "phim-chieu-rap"
 ];
 
-const GENRE_FILTERS = [
-  'Hành động', 'Tình cảm', 'Kinh dị', 'Hài hước', 'Tâm lý',
-  'Hoạt hình', 'Tài liệu', 'Lịch sử', 'Viễn tưởng', 'Võ thuật',
+const GENRE_OPTIONS = [
+  { slug: "hanh-dong", name: "Hành động" },
+  { slug: "tinh-cam", name: "Tình cảm" },
+  { slug: "hai-huoc", name: "Hài hước" },
+  { slug: "co-trang", name: "Cổ trang" },
+  { slug: "tam-ly", name: "Tâm lý" },
+  { slug: "hinh-su", name: "Hình sự" },
+  { slug: "chien-tranh", name: "Chiến tranh" },
+  { slug: "the-thao", name: "Thể thao" },
+  { slug: "vo-thuat", name: "Võ thuật" },
+  { slug: "vien-tuong", name: "Viễn tưởng" },
+  { slug: "phieu-luu", name: "Phiêu lưu" },
+  { slug: "khoa-hoc", name: "Khoa học" },
+  { slug: "kinh-di", name: "Kinh dị" },
+  { slug: "am-nhac", name: "Âm nhạc" },
+  { slug: "than-thoai", name: "Thần thoại" },
+  { slug: "gia-dinh", name: "Gia đình" }
 ];
 
-const COUNTRY_FILTERS = [
-  { id: 'all', name: 'Tất cả' },
-  { id: 'viet-nam', name: '🇻🇳 Việt Nam' },
-  { id: 'han-quoc', name: '🇰🇷 Hàn Quốc' },
-  { id: 'trung-quoc', name: '🇨🇳 Trung Quốc' },
-  { id: 'au-my', name: '🇺🇸 Âu Mỹ' },
-  { id: 'nhat-ban', name: '🇯🇵 Nhật Bản' },
-  { id: 'thai-lan', name: '🇹🇭 Thái Lan' },
+const COUNTRY_OPTIONS = [
+  { slug: "trung-quoc", name: "Trung Quốc" },
+  { slug: "han-quoc", name: "Hàn Quốc" },
+  { slug: "nhat-ban", name: "Nhật Bản" },
+  { slug: "thai-lan", name: "Thái Lan" },
+  { slug: "au-my", name: "Âu Mỹ" },
+  { slug: "viet-nam", name: "Việt Nam" },
+  { slug: "an-do", name: "Ấn Độ" },
+  { slug: "hong-kong", name: "Hồng Kông" },
+  { slug: "phap", name: "Pháp" },
+  { slug: "duc", name: "Đức" }
 ];
 
-const YEAR_FILTERS = [
-  { id: 'all', name: 'Tất cả năm' },
-  { id: '2026', name: '2026' },
-  { id: '2025', name: '2025' },
-  { id: '2024', name: '2024' },
-  { id: '2023', name: '2023' },
-  { id: 'older', name: 'Cũ hơn' },
-];
+const YEAR_OPTIONS = ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011", "2010"];
 
 const SORT_OPTIONS = [
-  { id: 'newest', name: 'Mới nhất' },
-  { id: 'rating', name: 'Đánh giá cao' },
-  { id: 'views', name: 'Xem nhiều nhất' },
+  { value: "modified.time", name: "Mới cập nhật" },
+  { value: "year", name: "Năm phát hành" },
+  { value: "_id", name: "Ngày đăng" }
 ];
 
-interface FilterState {
-  type: string;
-  genres: string[];
-  country: string;
-  year: string;
-  sort: string;
-}
-
-const DEFAULT_FILTERS: FilterState = {
-  type: 'all',
-  genres: [],
-  country: 'all',
-  year: 'all',
-  sort: 'newest',
-};
-
-const FilterDropdown: React.FC<{
-  label: string;
-  value: string;
-  options: { id: string; name: string }[];
-  onChange: (v: string) => void;
-}> = ({ label, value, options, onChange }) => {
-  const [open, setOpen] = useState(false);
-  const current = options.find(o => o.id === value);
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-          value !== 'all' && value !== 'newest'
-            ? 'bg-[#d692ff]/20 text-[#d692ff] border border-[#d692ff]/30'
-            : 'bg-[#1d1f27] text-white/70 hover:text-white hover:bg-[#23262e] border border-white/8'
-        }`}
-      >
-        {current?.name || label}
-        <ChevronDownIcon className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-2 w-44 bg-[#1d1f27] border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-30">
-          {options.map(opt => (
-            <button
-              key={opt.id}
-              onClick={() => { onChange(opt.id); setOpen(false); }}
-              className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/8 ${
-                value === opt.id ? 'text-[#d692ff] font-semibold' : 'text-white/70'
-              }`}
-            >
-              {opt.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 export const Browse: React.FC = () => {
-  const { category: routeCategory = 'phim-le' } = useParams();
-  const navigate = useNavigate();
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  const { slug = 'phim-le' } = useParams<{ slug: string }>();
+  
+  const isCountry = COUNTRY_SLUGS.includes(slug);
+  const isCategory = CATEGORY_SLUGS.includes(slug);
+  const isGenre = !isCountry && !isCategory;
+  
+  // Filter states
+  const [genreFilter, setGenreFilter] = useState("");
+  const [countryFilter, setCountryFilter] = useState("");
+  const [yearFilter, setYearFilter] = useState("");
+  const [sortFilter, setSortFilter] = useState("modified.time");
   const [page, setPage] = useState(1);
-  const [showGenrePanel, setShowGenrePanel] = useState(false);
 
-  // Reset filters when route changes
-  React.useEffect(() => {
-    setFilters(DEFAULT_FILTERS);
+  useEffect(() => {
     setPage(1);
-  }, [routeCategory]);
+  }, [slug, genreFilter, countryFilter, yearFilter]);
 
-  // ── Derive API params from route + filters ─────────────────────────────────
-  const routeP = ROUTE_PARAMS[routeCategory] ?? { category: routeCategory };
-  const isCountryRoute = !!routeP.country && !routeP.category;  // e.g. phim-viet
-  const isGenreRoute   = !!GENRE_ROUTE_SLUGS[routeCategory];   // e.g. hanh-dong
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["browse", slug, page, genreFilter, countryFilter, yearFilter, sortFilter],
+    queryFn: () => {
+      if (isCountry) return movieApi.getMoviesByCountry(slug, page, {
+        genre: genreFilter, year: yearFilter, sort: sortFilter
+      });
+      if (isGenre) return movieApi.getMoviesByGenre(slug, page, {
+        country: countryFilter, year: yearFilter, sort: sortFilter
+      });
+      return movieApi.getMovies({
+        category: slug,
+        page: page,
+        genre: genreFilter,
+        country: countryFilter,
+        year: yearFilter,
+        sort: sortFilter
+      });
+    }
+  });
 
-  const genreSlugMap: Record<string, string> = {
-    'Hành động': 'hanh-dong', 'Tình cảm': 'tinh-cam', 'Kinh dị': 'kinh-di',
-    'Hài hước': 'hai-huoc', 'Tâm lý': 'tam-ly', 'Hoạt hình': 'hoat-hinh',
-    'Tài liệu': 'tai-lieu', 'Lịch sử': 'lich-su', 'Viễn tưởng': 'vien-tuong', 'Võ thuật': 'vo-thuat',
+  const getTitle = () => {
+    if (isCountry) return `Phim ${COUNTRY_OPTIONS.find(c => c.slug === slug)?.name || slug}`;
+    if (isGenre) return `Phim ${GENRE_OPTIONS.find(g => g.slug === slug)?.name || slug}`;
+    if (slug === 'phim-le') return 'Phim Lẻ';
+    if (slug === 'phim-bo') return 'Phim Bộ';
+    if (slug === 'hoat-hinh') return 'Hoạt Hình / Anime';
+    if (slug === 'tv-shows') return 'TV Shows';
+    if (slug === 'phim-chieu-rap') return 'Phim Chiếu Rạp';
+    return 'Khám phá';
   };
-
-  // Build the effective API query params
-  const activeType = filters.type !== 'all' ? filters.type : null;
-  const apiParams = {
-    // category: from tab filter override > route default > undefined (for country-routes)
-    category: activeType ?? (isCountryRoute ? undefined : (routeP.category ?? 'phim-le')),
-    // country: from dropdown filter > route-level country
-    country: filters.country !== 'all' ? filters.country : (routeP.country ?? undefined),
-    genre: isGenreRoute && !filters.genres.length
-      ? GENRE_ROUTE_SLUGS[routeCategory]               // genre from URL route
-      : filters.genres.length > 0
-        ? genreSlugMap[filters.genres[0]]              // genre from filter chips
-        : undefined,
-    year:  filters.year  !== 'all'    ? filters.year     : undefined,
-    sort:  filters.sort  !== 'newest' ? filters.sort    : undefined,
-    source: routeP.source,
-    page,
-  };
-
-  const { data: movies, isLoading, error, refetch } = useMovies(apiParams);
-
-
-  const updateFilter = <K extends keyof FilterState>(key: K, val: FilterState[K]) => {
-    setFilters(f => ({ ...f, [key]: val }));
-    setPage(1);
-  };
-
-  const toggleGenre = (g: string) => {
-    setFilters(f => ({
-      ...f,
-      genres: f.genres.includes(g) ? f.genres.filter(x => x !== g) : [...f.genres, g],
-    }));
-  };
-
-  const clearFilters = () => {
-    setFilters(DEFAULT_FILTERS);
-    setPage(1);
-  };
-
-  const hasActiveFilters = filters.genres.length > 0 || filters.country !== 'all' || filters.year !== 'all' || filters.type !== 'all';
-  const activeFilterCount = filters.genres.length + (filters.country !== 'all' ? 1 : 0) + (filters.year !== 'all' ? 1 : 0);
-
-  const activeCategoryName = TYPE_TABS.find(t => t.id === filters.type)?.name || 'Danh mục phim';
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-8 pt-24 pb-24 md:pb-12 flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl md:text-4xl font-black text-white">
-          {activeCategoryName}
-        </h1>
-        <p className="text-white/40 text-sm">
-          {movies?.length ? `${movies.length}+ bộ phim` : 'Đang tải...'}
-        </p>
-      </div>
+    <div className="min-h-screen bg-[#0a0b0f] pt-24 pb-12 px-4 md:px-8">
+      <div className="max-w-[1440px] mx-auto">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter italic flex items-center gap-3">
+              <span className="w-2 h-8 bg-purple-600 rounded-full inline-block"></span>
+              {getTitle()}
+            </h1>
+            <p className="text-white/40 text-xs font-bold uppercase tracking-[0.2em] mt-2 ml-5">
+              {data?.total ? `${data.total.toLocaleString()} kết quả được tìm thấy` : 'Đang tìm kiếm phim...'}
+            </p>
+          </div>
+        </div>
 
-      {/* Type Tabs */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-        {TYPE_TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => { updateFilter('type', tab.id); navigate(`/browse/${tab.id === 'all' ? 'phim-moi-cap-nhat' : tab.id}`); }}
-            className={`shrink-0 px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
-              filters.type === tab.id
-                ? 'text-[#3a005a] shadow-[0_0_20px_rgba(214,146,255,0.4)]'
-                : 'bg-[#1d1f27] text-white/60 hover:text-white hover:bg-[#23262e]'
-            }`}
-            style={filters.type === tab.id ? { background: 'linear-gradient(135deg, #d692ff, #af25fe)' } : {}}
-          >
-            {tab.name}
-          </button>
-        ))}
-      </div>
+        {/* Filter Bar */}
+        <div className="bg-white/5 rounded-2xl border border-white/10 p-4 mb-10 flex flex-wrap gap-4 items-center">
+          <div className="flex items-center gap-2 mr-2">
+            <FunnelIcon className="w-4 h-4 text-purple-500" />
+            <span className="text-[11px] font-black text-white/40 uppercase tracking-widest">Bộ lọc</span>
+          </div>
 
-      {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Genre filter toggle */}
-        <button
-          onClick={() => setShowGenrePanel(p => !p)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
-            filters.genres.length > 0
-              ? 'bg-[#d692ff]/20 text-[#d692ff] border-[#d692ff]/30'
-              : 'bg-[#1d1f27] text-white/70 hover:text-white border-white/8'
-          }`}
-        >
-          <FunnelIcon className="w-4 h-4" />
-          Thể loại
-          {filters.genres.length > 0 && (
-            <span className="bg-[#d692ff] text-[#3a005a] text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none">
-              {filters.genres.length}
-            </span>
+          {(isCountry || isCategory) && (
+            <select 
+              value={genreFilter}
+              onChange={(e) => setGenreFilter(e.target.value)}
+              className="bg-[#11131a] border border-white/10 text-white/70 text-[11px] font-bold px-4 py-2 rounded-full focus:border-purple-600 outline-none transition-all uppercase tracking-wider min-w-[140px]"
+            >
+              <option value="">Tất cả thể loại</option>
+              {GENRE_OPTIONS.map(g => <option key={g.slug} value={g.slug}>{g.name}</option>)}
+            </select>
           )}
-        </button>
 
-        <FilterDropdown label="Quốc gia" value={filters.country} options={COUNTRY_FILTERS} onChange={v => updateFilter('country', v)} />
-        <FilterDropdown label="Năm" value={filters.year} options={YEAR_FILTERS} onChange={v => updateFilter('year', v)} />
-        <FilterDropdown label="Sắp xếp" value={filters.sort} options={SORT_OPTIONS} onChange={v => updateFilter('sort', v)} />
+          {(isGenre || isCategory) && (
+            <select 
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              className="bg-[#11131a] border border-white/10 text-white/70 text-[11px] font-bold px-4 py-2 rounded-full focus:border-purple-600 outline-none transition-all uppercase tracking-wider min-w-[140px]"
+            >
+              <option value="">Tất cả quốc gia</option>
+              {COUNTRY_OPTIONS.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+            </select>
+          )}
 
-        {/* Active filter chips */}
-        {filters.genres.map(g => (
-          <button
-            key={g}
-            onClick={() => toggleGenre(g)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#d692ff]/15 text-[#d692ff] text-xs font-semibold border border-[#d692ff]/25 hover:bg-[#d692ff]/25 transition-colors"
+          <select 
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+            className="bg-[#11131a] border border-white/10 text-white/70 text-[11px] font-bold px-4 py-2 rounded-full focus:border-purple-600 outline-none transition-all uppercase tracking-wider min-w-[100px]"
           >
-            {g}
-            <XMarkIcon className="w-3 h-3" />
-          </button>
-        ))}
+            <option value="">Tất cả năm</option>
+            {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
 
-        {hasActiveFilters && (
-          <button
-            onClick={clearFilters}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/8 text-white/50 text-xs font-semibold hover:text-white hover:bg-white/15 transition-colors ml-auto"
+          <select 
+            value={sortFilter}
+            onChange={(e) => setSortFilter(e.target.value)}
+            className="bg-[#11131a] border border-white/10 text-white/70 text-[11px] font-bold px-4 py-2 rounded-full focus:border-purple-600 outline-none transition-all uppercase tracking-wider min-w-[140px]"
           >
-            <XMarkIcon className="w-3 h-3" />
-            Xóa tất cả ({activeFilterCount})
-          </button>
+            {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.name}</option>)}
+          </select>
+
+          {(genreFilter || countryFilter || yearFilter || sortFilter !== "modified.time") && (
+            <button 
+              onClick={() => {
+                setGenreFilter("");
+                setCountryFilter("");
+                setYearFilter("");
+                setSortFilter("modified.time");
+              }}
+              className="p-2 rounded-full bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white transition-all shadow-lg ml-auto"
+            >
+              <XMarkIcon className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Grid Content */}
+        {isLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-3 gap-y-8 md:gap-y-10">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <MovieCard key={i} isLoading />
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="py-32 text-center bg-white/5 rounded-3xl border border-white/5">
+            <h3 className="text-xl font-bold text-white mb-4 uppercase tracking-tighter italic">Lỗi kết nối API</h3>
+            <button onClick={() => refetch()} className="px-8 py-3 rounded-full bg-purple-600 text-white font-black text-[11px] tracking-widest shadow-xl hover:scale-105 transition-all uppercase">Thử lại ngay</button>
+          </div>
+        ) : data?.items?.length ? (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-3 gap-y-8 md:gap-y-10">
+              {data.items.map((movie: any) => (
+                <MovieCard key={movie.slug} {...movie} />
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {data.total_pages > 1 && (
+              <div className="flex justify-center items-center gap-6 mt-16 pt-10 border-t border-white/5">
+                <button 
+                  disabled={page === 1}
+                  onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="px-6 py-2.5 rounded-full bg-white/5 text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:pointer-events-none transition-all border border-white/10 text-[10px] font-black tracking-widest uppercase"
+                >
+                  Trang trước
+                </button>
+                
+                <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-black text-xs shadow-lg">
+                  {page}
+                </div>
+
+                <button 
+                  disabled={page === data.total_pages}
+                  onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="px-6 py-2.5 rounded-full bg-purple-600 text-white shadow-xl hover:scale-105 transition-all text-[10px] font-black tracking-widest uppercase disabled:opacity-20"
+                >
+                  Trang tiếp
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="py-32 text-center text-white/30 font-bold uppercase tracking-[0.3em] italic opacity-50">
+            Không tìm thấy phim nào phù hợp...
+          </div>
         )}
       </div>
-
-      {/* Genre Panel */}
-      {showGenrePanel && (
-        <div className="bg-[#11131a] rounded-2xl p-5 border border-white/8 flex flex-wrap gap-2">
-          {GENRE_FILTERS.map(g => (
-            <button
-              key={g}
-              onClick={() => toggleGenre(g)}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                filters.genres.includes(g)
-                  ? 'text-[#3a005a] shadow-[0_0_15px_rgba(214,146,255,0.3)]'
-                  : 'bg-[#1d1f27] text-white/60 hover:text-white hover:bg-[#23262e]'
-              }`}
-              style={filters.genres.includes(g) ? { background: 'linear-gradient(135deg, #d692ff, #af25fe)' } : {}}
-            >
-              {g}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Movie Grid */}
-      {error ? (
-        <div className="py-20 flex flex-col items-center gap-4 text-center">
-          <p className="text-white/50">Không thể tải danh sách phim.</p>
-          <button onClick={() => refetch()} className="px-5 py-2.5 rounded-xl bg-[#d692ff]/20 text-[#d692ff] text-sm font-semibold hover:bg-[#d692ff]/30 transition-colors">
-            Thử lại
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-5">
-          {isLoading
-            ? Array.from({ length: 18 }).map((_, i) => (
-                <MovieCard key={i} isLoading className="w-full" />
-              ))
-            : movies?.length
-              ? movies.map(m => (
-                  <MovieCard
-                    key={m.id || m.slug}
-                    slug={m.slug}
-                    name={m.name}
-                    posterUrl={m.posterUrl}
-                    thumbUrl={m.thumbUrl}
-                    quality={m.quality}
-                    lang={m.lang}
-                    year={m.year}
-                    isStreamable={m.isStreamable}
-                    trailerUrl={m.trailerUrl}
-                    className="w-full"
-                  />
-                ))
-              : (
-                <div className="col-span-full py-20 text-center text-white/40">
-                  Không tìm thấy phim nào. Hãy thử thay đổi bộ lọc.
-                </div>
-              )
-          }
-        </div>
-      )}
-
-      {/* Pagination */}
-      {!isLoading && !error && movies && movies.length > 0 && (
-        <div className="flex justify-center items-center gap-3 mt-4">
-          {page > 1 && (
-            <button onClick={() => setPage(p => p - 1)}
-              className="px-6 py-2.5 rounded-xl bg-[#1d1f27] text-white/70 hover:text-white hover:bg-[#23262e] text-sm font-medium border border-white/8 transition-all">
-              ← Trang trước
-            </button>
-          )}
-          <span className="px-4 py-2.5 rounded-xl bg-[#11131a] text-white/50 text-sm border border-white/8">
-            Trang {page}
-          </span>
-          <button onClick={() => setPage(p => p + 1)}
-            className="px-6 py-2.5 rounded-xl text-sm font-medium text-[#3a005a] transition-all hover:scale-105"
-            style={{ background: 'linear-gradient(135deg, #d692ff, #af25fe)' }}>
-            Trang tiếp →
-          </button>
-        </div>
-      )}
     </div>
   );
 };

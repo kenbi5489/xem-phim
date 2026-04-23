@@ -15,7 +15,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
-          <Route path="browse/:category" element={<Browse />} />
+          <Route path="browse/:slug" element={<Browse />} />
           <Route path="search" element={<Search />} />
           <Route path="phim/:slug" element={<MovieDetail />} />
           <Route path="live" element={<LiveTV />} />

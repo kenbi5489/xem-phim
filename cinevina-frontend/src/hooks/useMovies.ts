@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { movieApi, type MovieListParams } from '../services/api';
-import { adaptMovieCard, adaptMovieDetail } from '../utils/movieAdapter';
 
 // ─── Debounce Hook ────────────────────────────────────────────────────────────
 export const useDebounce = <T>(value: T, delay = 300): T => {
@@ -18,22 +17,35 @@ export const useMovies = (params: MovieListParams) =>
   useQuery({
     queryKey: ['movies', params],
     queryFn: async () => {
-      const raw = await movieApi.getMovies(params);
-      // Use card adapter for listing (lighter, no stream links)
-      return Array.isArray(raw) ? raw.map(adaptMovieCard) : [];
+      const res = await movieApi.getMovies(params);
+      return res.items;
     },
     staleTime: 1000 * 60 * 30,
     enabled: !!(params.category || params.country || params.genre || params.year || params.source),
+  });
+
+// ─── Browse By Country/Genre ──────────────────────────────────────────────────
+export const useMoviesByCountry = (slug: string, page = 1, filters?: any) =>
+  useQuery({
+    queryKey: ['movies', 'country', slug, page, filters],
+    queryFn: () => movieApi.getMoviesByCountry(slug, page, filters),
+    staleTime: 1000 * 60 * 30,
+    enabled: !!slug,
+  });
+
+export const useMoviesByGenre = (slug: string, page = 1, filters?: any) =>
+  useQuery({
+    queryKey: ['movies', 'genre', slug, page, filters],
+    queryFn: () => movieApi.getMoviesByGenre(slug, page, filters),
+    staleTime: 1000 * 60 * 30,
+    enabled: !!slug,
   });
 
 // ─── Search ───────────────────────────────────────────────────────────────────
 export const useSearchMovies = (keyword: string, page = 1) =>
   useQuery({
     queryKey: ['movies', 'search', keyword, page],
-    queryFn: async () => {
-      const raw = await movieApi.searchMovies(keyword, page);
-      return Array.isArray(raw) ? raw.map(adaptMovieCard) : [];
-    },
+    queryFn: () => movieApi.searchMovies(keyword, page),
     enabled: keyword.trim().length >= 2,
     staleTime: 1000 * 60 * 10,
   });
@@ -44,10 +56,7 @@ export const useSearchMovies = (keyword: string, page = 1) =>
 export const useMovieDetail = (slug: string, source?: string) =>
   useQuery({
     queryKey: ['movie-detail', slug, source],  // separate cache key from listing
-    queryFn: async () => {
-      const raw = await movieApi.getMovieDetail(slug, source);
-      return adaptMovieDetail(raw);
-    },
+    queryFn: () => movieApi.getMovieDetail(slug, source),
     enabled: !!slug,
     staleTime: 1000 * 60 * 10,  // 10 min — shorter to get fresh stream links
     retry: 2,
@@ -68,8 +77,20 @@ export const useCinemaMovies = (page = 1) =>
   useQuery({
     queryKey: ['movies', 'cinema', page],
     queryFn: async () => {
-      const raw = await movieApi.getCinemaMovies(page);
-      return Array.isArray(raw) ? raw.map(adaptMovieCard) : [];
+      const res = await movieApi.getCinemaMovies(page);
+      return res.items;
     },
     staleTime: 1000 * 60 * 30,
   });
+
+// ─── Trending Movies ──────────────────────────────────────────────────────────
+export const useTrendingMovies = (limit = 10) =>
+  useQuery({
+    queryKey: ['movies', 'trending', limit],
+    queryFn: async () => {
+      const res = await movieApi.getTrendingMovies(limit);
+      return res;
+    },
+    staleTime: 1000 * 60 * 60, // 1 hour
+  });
+
