@@ -7,6 +7,18 @@ router = APIRouter(prefix="/api/proxy", tags=["proxy"])
 ALLOWED_DOMAINS = [
     "phimimg.com",
     "phimapi.com",
+    "googleusercontent.com",
+    "imgur.com",
+    "cloudinary.com",
+    "vnmedia.vn",
+    "vnmedia.com.vn",
+    "static.vn",
+    "mediacloud.vn",
+]
+
+DOMAIN_FALLBACKS = [
+    ("phimapi.com/upload/", "phimimg.com/upload/"),
+    ("phimimg.com/upload/", "phimapi.com/upload/"),
 ]
 
 def _is_allowed(url: str) -> bool:
@@ -23,44 +35,49 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
     if not url:
         raise HTTPException(status_code=400, detail="url parameter is required")
 
-    if not _is_allowed(url):
-        raise HTTPException(status_code=403, detail="Domain not allowed")
+    # Determine fallback URLs to try
+    urls_to_try = [url]
+    for old, new in DOMAIN_FALLBACKS:
+        if old in url:
+            urls_to_try.append(url.replace(old, new))
+            break
 
-    try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
-                "Referer": "https://phimimg.com/",
-            }
-            r = await client.get(url, headers=headers)
+    last_error = None
+    
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://phimimg.com/",
+        }
+        
+        for try_url in urls_to_try:
+            if not _is_allowed(try_url):
+                continue
+                
+            try:
+                r = await client.get(try_url, headers=headers)
+                
+                if r.status_code == 200:
+                    content_type = r.headers.get("content-type", "image/jpeg")
+                    # Ensure it is an image or at least some common binary data
+                    if "image" in content_type or "octet-stream" in content_type:
+                        return Response(
+                            content=r.content,
+                            media_type=content_type,
+                            headers={
+                                "Cache-Control": "public, max-age=31536000, immutable",
+                                "Access-Control-Allow-Origin": "*",
+                                "X-Content-Type-Options": "nosniff",
+                            }
+                        )
+                
+                last_error = f"Upstream {try_url} returned {r.status_code}"
+            except Exception as e:
+                last_error = f"Error fetching {try_url}: {str(e)}"
+                continue
 
-        if r.status_code != 200:
-            raise HTTPException(
-                status_code=r.status_code,
-                detail=f"Upstream returned {r.status_code}"
-            )
-
-        content_type = r.headers.get("content-type", "image/jpeg")
-        # Ensure it is an image
-        if "image" not in content_type and "octet-stream" not in content_type:
-            raise HTTPException(status_code=415, detail="Upstream is not an image")
-
-        return Response(
-            content=r.content,
-            media_type=content_type,
-            headers={
-                "Cache-Control": "public, max-age=31536000, immutable",
-                "Access-Control-Allow-Origin": "*",
-                "X-Content-Type-Options": "nosniff",
-            }
-        )
-    except HTTPException:
-        raise
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Upstream image timed out")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")
+    raise HTTPException(status_code=404, detail=last_error or "Image not found")

@@ -13,21 +13,21 @@ STREAM_PLACEHOLDER = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
 # ── Channel definitions ────────────────────────────────────────────────────────
 # Format: (id, name, group, emoji, program_now, program_next, stream_url)
 _CHANNELS = [
+    # Truyền hình (TV) - REAL STREAMS
+    ("vtv1",      "VTV1 HD",        "truyen-hinh", "📡", "Thời sự & Chính luận",    "Bản tin tiếp theo",    "https://live.fptplay53.net/fnxch2/vtv1hd_abr.smil/chunklist.m3u8"),
+    ("vtv2",      "VTV2 HD",        "truyen-hinh", "🌍", "Khoa học & Giáo dục",     "Chương trình KH-GD",   "https://live.fptplay53.net/fnxch2/vtv2hd_abr.smil/chunklist.m3u8"),
+    ("vtv3",      "VTV3 HD",        "truyen-hinh", "🎭", "Giải trí & Thể thao",     "Phim truyện",          "https://live.fptplay53.net/fnxch2/vtv3hd_abr.smil/chunklist.m3u8"),
+    ("vtv9",      "VTV9 HD",        "truyen-hinh", "📺", "Tin tức phía Nam",        "Chương trình VTV9",    "https://live.fptplay53.net/fnxhd1/vtv9_vhls.smil/chunklist.m3u8"),
+    ("htv7",      "HTV7 HD",        "truyen-hinh", "🇻🇳", "Giải trí tổng hợp",       "Phim truyện HTV",      STREAM_PLACEHOLDER),
+
     # Thể thao (Sports)
-    ("vtv5tt",    "VTV5 Thể Thao",  "the-thao", "⚽", "Bóng đá V-League",      "Tin thể thao tổng hợp", STREAM_PLACEHOLDER),
-    ("vtv6",      "VTV6",           "the-thao", "🎬", "Phim chiếu rạp HD",     "Gameshow tối",          STREAM_PLACEHOLDER),
-    ("on-sports", "On Sports+",     "the-thao", "🏆", "AFF Cup Trực Tiếp",     "Phân tích chiến thuật", STREAM_PLACEHOLDER),
-    ("fox",       "Fox Sports",     "the-thao", "🦊", "Premier League Live",   "La Liga Highlights",    STREAM_PLACEHOLDER),
-    # Bóng đá (Football)
-    ("kplus",     "K+",             "bong-da",  "📡", "Champions League",      "K+ Studio",             STREAM_PLACEHOLDER),
-    ("kplus1",    "K+1",            "bong-da",  "📺", "Serie A: Juventus",     "Ligue 1",               STREAM_PLACEHOLDER),
-    ("kplus-pm",  "K+PM",          "bong-da",  "🏅", "La Liga: Barcelona",    "Bundesliga",            STREAM_PLACEHOLDER),
-    ("bein1",     "beIN Sports 1",  "bong-da",  "⚽", "NBA: Lakers vs GSW",    "MLB Baseball",          STREAM_PLACEHOLDER),
-    ("bein2",     "beIN Sports 2",  "bong-da",  "🏀", "NFL Sunday Night",      "NHL Hockey",            STREAM_PLACEHOLDER),
-    # Truyền hình (TV)
-    ("vtv1",      "VTV1",           "truyen-hinh", "📡", "Thời sự 19h",        "Phim truyện",           STREAM_PLACEHOLDER),
-    ("vtv3",      "VTV3",           "truyen-hinh", "🎭", "Ai Là Triệu Phú",    "Phim Việt giờ vàng",    STREAM_PLACEHOLDER),
-    ("htv7",      "HTV7",           "truyen-hinh", "🇻🇳", "Running Man VN",   "Phim tối HTV7",         STREAM_PLACEHOLDER),
+    ("vtv5tt",    "VTV5 Thể Thao",  "the-thao", "⚽", "Bóng đá trực tiếp",     "Tin thể thao",          STREAM_PLACEHOLDER),
+    ("vtv6",      "VTV6 (Test)",    "the-thao", "🎬", "Luồng thử nghiệm",      "Đang cập nhật",         STREAM_PLACEHOLDER),
+    ("on-sports", "On Sports+",     "the-thao", "🏆", "AFF Cup / V-League",    "Phân tích trận đấu",    STREAM_PLACEHOLDER),
+
+    # Bóng đá (Football) - Premium / Test links
+    ("kplus",     "K+ SPORT 1",     "bong-da",  "📡", "Premier League",        "Ngoại hạng Anh",        STREAM_PLACEHOLDER),
+    ("kplus1",    "K+ CINE",        "bong-da",  "📺", "Phim Điện Ảnh",         "Đang chiếu",            STREAM_PLACEHOLDER),
 ]
 
 # ── Group meta ────────────────────────────────────────────────────────────────
@@ -115,3 +115,9 @@ class SportLivePlugin(BaseSourcePlugin):
             if ch[0] == movie_slug:
                 return StreamInfo(url=ch[6], type="hls", quality="HD")
         return None
+
+    async def get_by_category(self, slug: str, page: int = 1, **filters) -> dict:
+        return {"items": [], "total": 0, "page": page}
+
+    async def get_by_country(self, slug: str, page: int = 1, **filters) -> dict:
+        return {"items": [], "total": 0, "page": page}

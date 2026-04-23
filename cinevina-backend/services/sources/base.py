@@ -43,11 +43,15 @@ class MovieInfo(BaseModel):
     trailer_url: Optional[str] = None # YouTube trailer link
     category: Optional[str] = None
     country: Optional[str] = None
+    country_slug: Optional[str] = None
+    genres: List[Dict[str, str]] = []  # [{"name": "Hành động", "slug": "hanh-dong"}]
     cast: Optional[str] = None
     director: Optional[str] = None
     rating: Optional[str] = None
     totalEpisodes: Optional[str] = None
+    current_episode: Optional[str] = None
     is_streamable: bool = False       # True khi có link_m3u8 hoặc link_embed
+    modified: Optional[str] = None
     # Lightweight list of episode slugs (for episode navigation)
     episodes: List[EpisodeInfo] = []
     # Full server data with stream links (only populated in detail response)
@@ -72,13 +76,18 @@ class BaseSourcePlugin(ABC):
         pass
         
     @property
-    def is_active(self) -> bool:
-        """Trạng thái hoạt động của plugin. Mặc định là True."""
+    def priority(self) -> int:
+        """Độ ưu tiên (1 là cao nhất)"""
+        return 10
+        
+    @property
+    def enabled(self) -> bool:
+        """Trạng thái hoạt động của plugin"""
         return True
 
     @abstractmethod
-    async def get_movies(self, category: str, page: int = 1) -> List[MovieInfo]:
-        """Lấy danh sách phim theo danh mục"""
+    async def get_movies(self, category: str, page: int = 1, **filters) -> Dict[str, Any]:
+        """Lấy danh sách phim theo danh mục (phim-moi, phim-le, phim-bo, hoat-hinh)"""
         pass
 
     @abstractmethod
@@ -89,6 +98,16 @@ class BaseSourcePlugin(ABC):
     @abstractmethod
     async def get_movie_detail(self, slug: str) -> Optional[MovieInfo]:
         """Lấy chi tiết phim"""
+        pass
+
+    @abstractmethod
+    async def get_by_category(self, slug: str, page: int = 1, **filters) -> Dict[str, Any]:
+        """Lấy phim theo thể loại thuần (hanh-dong, kinh-di, etc)"""
+        pass
+
+    @abstractmethod
+    async def get_by_country(self, slug: str, page: int = 1, **filters) -> Dict[str, Any]:
+        """Lấy phim theo quốc gia (viet-nam, han-quoc, etc)"""
         pass
 
     @abstractmethod

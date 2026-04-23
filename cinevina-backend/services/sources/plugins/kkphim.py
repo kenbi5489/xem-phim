@@ -1,6 +1,6 @@
 import asyncio
 import httpx
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from ..base import BaseSourcePlugin, MovieInfo, EpisodeInfo, EpisodeData, ServerData, StreamInfo
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,10 +29,26 @@ def _build_img(path: str) -> str:
 def _map_listing_item(item: dict) -> MovieInfo:
     """
     Map một item từ listing API → MovieInfo.
-    Listing API KHÔNG có episodes/stream links.
-    is_streamable được suy ra từ status (status == 'trailer' → không xem được).
     """
     status = item.get('status', '')
+    
+    # Handle country
+    raw_countries = item.get('country', [])
+    country_name = ""
+    country_slug = ""
+    if isinstance(raw_countries, list) and len(raw_countries) > 0:
+        country_name = raw_countries[0].get('name', '')
+        country_slug = raw_countries[0].get('slug', '')
+    elif isinstance(raw_countries, str):
+        country_name = raw_countries
+        country_slug = raw_countries.lower().replace(' ', '-')
+
+    # Handle category/genre
+    raw_categories = item.get('category', [])
+    genres = []
+    if isinstance(raw_categories, list):
+        genres = [{"name": c.get("name",""), "slug": c.get("slug","")} for c in raw_categories]
+    
     return MovieInfo(
         id=item.get('_id', ''),
         slug=item.get('slug', ''),
@@ -46,10 +62,14 @@ def _map_listing_item(item: dict) -> MovieInfo:
         lang=item.get('lang'),
         type=item.get('type', ''),
         is_cinema=bool(item.get('chieurap', False)),
+        country=country_name,
+        country_slug=country_slug,
+        genres=genres,
         trailer_url=item.get('trailer_url', ''),
-        # Dùng status để suy luận streamable từ listing (không gọi detail cho từng phim)
-        # status != 'trailer' có nghĩa là phim này có thể xem được
+        totalEpisodes=str(item.get('episode_total', '')),
+        current_episode=item.get('episode_current', ''),
         is_streamable=status != 'trailer',
+        modified=item.get('modified', {}).get('time', ''),
         episodes=[],
         servers=[],
     )
@@ -58,8 +78,6 @@ def _map_listing_item(item: dict) -> MovieInfo:
 def _map_detail_movie(data: dict) -> Optional[MovieInfo]:
     """
     Map full detail API response → MovieInfo.
-    Đây là hàm duy nhất được dùng cho /api/movies/{slug}.
-    Giữ nguyên link_m3u8/link_embed trong ServerData để frontend dùng.
     """
     movie = data.get('movie', {})
     if not movie:
@@ -105,16 +123,22 @@ def _map_detail_movie(data: dict) -> Optional[MovieInfo]:
             server_data=ep_data_list,
         ))
     
-    # Build category and country as display strings
+    # Build category and country
     raw_categories = movie.get('category', [])
-    category_str = ', '.join(
-        c.get('name', '') for c in raw_categories if isinstance(c, dict)
-    ) if isinstance(raw_categories, list) else str(raw_categories)
+    genres = []
+    category_str = ""
+    if isinstance(raw_categories, list):
+        genres = [{"name": c.get("name",""), "slug": c.get("slug","")} for c in raw_categories]
+        category_str = ', '.join(c.get('name', '') for c in raw_categories if isinstance(c, dict))
     
     raw_countries = movie.get('country', [])
-    country_str = ', '.join(
-        c.get('name', '') for c in raw_countries if isinstance(c, dict)
-    ) if isinstance(raw_countries, list) else str(raw_countries)
+    country_name = ""
+    country_slug = ""
+    country_str = ""
+    if isinstance(raw_countries, list) and len(raw_countries) > 0:
+        country_name = raw_countries[0].get('name', '')
+        country_slug = raw_countries[0].get('slug', '')
+        country_str = ', '.join(c.get('name', '') for c in raw_countries if isinstance(c, dict))
     
     raw_actors = movie.get('actor', [])
     cast_str = ', '.join(raw_actors) if isinstance(raw_actors, list) else str(raw_actors)
@@ -140,14 +164,18 @@ def _map_detail_movie(data: dict) -> Optional[MovieInfo]:
         lang=movie.get('lang'),
         type=movie.get('type', ''),
         is_cinema=bool(movie.get('chieurap', False)),
+        country=country_str,
+        country_slug=country_slug,
+        genres=genres,
         trailer_url=movie.get('trailer_url', ''),
         category=category_str,
-        country=country_str,
         cast=cast_str,
         director=director_str,
         rating=rating_str,
         totalEpisodes=str(movie.get('episode_total', '')),
+        current_episode=movie.get('episode_current', ''),
         is_streamable=is_streamable,
+        modified=movie.get('modified', {}).get('time', ''),
         episodes=all_episodes_flat,
         servers=servers,
     )
@@ -155,49 +183,58 @@ def _map_detail_movie(data: dict) -> Optional[MovieInfo]:
 
 # ─── Plugin ───────────────────────────────────────────────────────────────────
 
-class VNMediaPlugin(BaseSourcePlugin):
+class KKPhimSource(BaseSourcePlugin):
     BASE_URL = "https://phimapi.com"
 
     @property
     def id(self) -> str:
-        return "vnmedia"
+        return "kkphim"
 
     @property
     def name(self) -> str:
-        return "VN Media (PhimAPI)"
+        return "KKPhim"
+        
+    @property
+    def priority(self) -> int:
+        return 1
 
     # ── Internal Helpers ──────────────────────────────────────────────────────
 
     def _filter_trailers(self, items: List[dict]) -> List[dict]:
-        """
-        Loại bỏ phim trailer-only khỏi listing thông thường.
-        Chỉ dùng field status để lọc — không gọi detail API cho từng phim.
-        """
         return [i for i in items if i.get('status') != 'trailer']
 
     def _extract_items_from_v1_response(self, body: dict) -> List[dict]:
-        """Extract items từ response chuẩn của /v1/api/..."""
         data = body.get('data', {})
         if isinstance(data, dict):
             return data.get('items', [])
         return []
 
+    def _wrap_paginated_response(self, body: dict, items: List[MovieInfo]) -> Dict[str, Any]:
+        params = body.get('data', {}).get('params', {})
+        pagination = params.get('pagination', {})
+        return {
+            "items": items,
+            "total": pagination.get('totalItems', 0),
+            "page": pagination.get('currentPage', 1),
+            "limit": pagination.get('totalItemsPerPage', 24),
+            "total_pages": pagination.get('totalPages', 1)
+        }
+
     # ── Public Interface ──────────────────────────────────────────────────────
 
-    async def get_movies(self, category: str, page: int = 1) -> List[MovieInfo]:
-        return await self.get_catalog(category, page)
-
-    async def get_catalog(self, category: str, page: int = 1) -> List[MovieInfo]:
+    async def get_movies(self, category: str, page: int = 1, **filters) -> Dict[str, Any]:
         """
-        GET /v1/api/danh-sach/{category}?page={n}
-        
-        Với phim-chieu-rap: lấy từ phim-le rồi lọc chieurap==true.
+        Lấy danh mục phim (phim-moi, phim-le, phim-bo, hoat-hinh)
         """
-        if category == 'phim-chieu-rap':
-            fetch_category = 'phim-le'
-        else:
-            fetch_category = category
+        # Handle custom filters if provided
+        genre = filters.get('genre')
+        country = filters.get('country')
+        if genre:
+            return await self.get_by_category(genre, page, **filters)
+        if country:
+            return await self.get_by_country(country, page, **filters)
 
+        fetch_category = category
         url = f"{self.BASE_URL}/v1/api/danh-sach/{fetch_category}"
         
         async with httpx.AsyncClient(timeout=15) as client:
@@ -208,104 +245,35 @@ class VNMediaPlugin(BaseSourcePlugin):
                 url_old = f"{self.BASE_URL}/danh-sach/{category}"
                 resp = await client.get(url_old, params={"page": page})
                 if resp.status_code != 200:
-                    return []
+                    return {"items": [], "total": 0, "page": page, "limit": 24, "total_pages": 0}
                 body = resp.json()
                 raw_items = body.get('items', [])
+                filtered = self._filter_trailers(raw_items)
+                items = [_map_listing_item(i) for i in filtered]
+                return {
+                    "items": items,
+                    "total": len(items),
+                    "page": page,
+                    "limit": 24,
+                    "total_pages": 1
+                }
             else:
-                raw_items = self._extract_items_from_v1_response(resp.json())
-
-        # Filter trailers
-        filtered = self._filter_trailers(raw_items)
-        
-        # Cinema: lọc thêm chieurap == true
-        if category == 'phim-chieu-rap':
-            filtered = [i for i in filtered if i.get('chieurap') is True]
-
-        return [_map_listing_item(i) for i in filtered]
-
-    async def get_catalog_by_genre(self, slug: str, page: int = 1) -> List[MovieInfo]:
-        """
-        GET /v1/api/the-loai/{slug}?page={n}
-        
-        Special case: hoat-hinh is a category (not a genre) in KKPhim, route it accordingly.
-        """
-        # hoat-hinh is a listing category, not a genre tag
-        if slug in ('hoat-hinh', 'hoathinh'):
-            return await self.get_catalog('hoat-hinh', page)
-        
-        url = f"{self.BASE_URL}/v1/api/the-loai/{slug}"
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(url, params={"page": page})
-            if resp.status_code != 200:
-                return []
-            body = resp.json()
-            # Check if API returned success
-            if not body.get('status', True):
-                return []
-            raw_items = self._extract_items_from_v1_response(body)
-
-        filtered = self._filter_trailers(raw_items)
-        
-        # Verify: item phải thực sự thuộc genre slug này
-        # The /v1/api/the-loai/ endpoint already filters by genre, so items should match
-        # But we do a secondary verify to weed out any mismatches
-        verified = []
-        for item in filtered:
-            item_cats = item.get('category', [])
-            if isinstance(item_cats, list) and item_cats:
-                cat_slugs = [c.get('slug', '') for c in item_cats if isinstance(c, dict)]
-                if not cat_slugs or slug in cat_slugs:
-                    verified.append(item)
-            else:
-                # If no category data in listing item, include it (endpoint already filtered)
-                verified.append(item)
-        
-        return [_map_listing_item(i) for i in verified]
-
-    async def get_catalog_by_country(self, slug: str, page: int = 1) -> List[MovieInfo]:
-        """GET /v1/api/quoc-gia/{slug}?page={n}"""
-        url = f"{self.BASE_URL}/v1/api/quoc-gia/{slug}"
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(url, params={"page": page})
-            if resp.status_code != 200:
-                return []
-            raw_items = self._extract_items_from_v1_response(resp.json())
-
-        filtered = self._filter_trailers(raw_items)
-        return [_map_listing_item(i) for i in filtered]
-
-    async def get_catalog_by_year(self, year: str, page: int = 1) -> List[MovieInfo]:
-        """GET /v1/api/nam/{year}?page={n}"""
-        url = f"{self.BASE_URL}/v1/api/nam/{year}"
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(url, params={"page": page})
-            if resp.status_code != 200:
-                return []
-            raw_items = self._extract_items_from_v1_response(resp.json())
-
-        filtered = self._filter_trailers(raw_items)
-        return [_map_listing_item(i) for i in filtered]
+                body = resp.json()
+                raw_items = self._extract_items_from_v1_response(body)
+                filtered = self._filter_trailers(raw_items)
+                items = [_map_listing_item(i) for i in filtered]
+                return self._wrap_paginated_response(body, items)
 
     async def search(self, keyword: str, page: int = 1) -> List[MovieInfo]:
-        """GET /v1/api/tim-kiem?keyword={kw}&page={n}&limit=30"""
         url = f"{self.BASE_URL}/v1/api/tim-kiem"
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(url, params={"keyword": keyword, "page": page, "limit": 30})
             if resp.status_code != 200:
                 return []
             raw_items = self._extract_items_from_v1_response(resp.json())
-
-        # Don't filter trailers in search — user might be searching for trailers intentionally
-        # but mark is_streamable correctly via status
         return [_map_listing_item(i) for i in raw_items]
 
     async def get_movie_detail(self, slug: str) -> Optional[MovieInfo]:
-        """
-        GET /phim/{slug}
-        
-        Bắt buộc dùng hàm này để lấy chi tiết phim + stream links đầy đủ.
-        KHÔNG dùng listing response để render detail.
-        """
         url = f"{self.BASE_URL}/phim/{slug}"
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(url)
@@ -313,8 +281,47 @@ class VNMediaPlugin(BaseSourcePlugin):
                 return None
             return _map_detail_movie(resp.json())
 
+    async def get_by_category(self, slug: str, page: int = 1, **filters) -> Dict[str, Any]:
+        """Lấy phim theo thể loại thuần (hanh-dong, kinh-di, etc)"""
+        # hoat-hinh is a listing category, not a genre tag in KKPhim
+        if slug in ('hoat-hinh', 'hoathinh'):
+            return await self.get_movies('hoat-hinh', page, **filters)
+        
+        url = f"{self.BASE_URL}/v1/api/the-loai/{slug}"
+        params = {"page": page}
+        if filters.get('country'): params["country"] = filters['country']
+        if filters.get('year'): params["year"] = filters['year']
+        if filters.get('sort'): params["sort_field"] = filters['sort']
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url, params=params)
+            if resp.status_code != 200:
+                return {"items": [], "total": 0, "page": page, "limit": 24, "total_pages": 0}
+            body = resp.json()
+            raw_items = self._extract_items_from_v1_response(body)
+            filtered = self._filter_trailers(raw_items)
+            items = [_map_listing_item(i) for i in filtered]
+            return self._wrap_paginated_response(body, items)
+
+    async def get_by_country(self, slug: str, page: int = 1, **filters) -> Dict[str, Any]:
+        """Lấy phim theo quốc gia (viet-nam, han-quoc, etc)"""
+        url = f"{self.BASE_URL}/v1/api/quoc-gia/{slug}"
+        params = {"page": page}
+        if filters.get('genre'): params["category"] = filters['genre']
+        if filters.get('year'): params["year"] = filters['year']
+        if filters.get('sort'): params["sort_field"] = filters['sort']
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url, params=params)
+            if resp.status_code != 200:
+                return {"items": [], "total": 0, "page": page, "limit": 24, "total_pages": 0}
+            body = resp.json()
+            raw_items = self._extract_items_from_v1_response(body)
+            filtered = self._filter_trailers(raw_items)
+            items = [_map_listing_item(i) for i in filtered]
+            return self._wrap_paginated_response(body, items)
+
     async def get_stream(self, movie_slug: str, episode_slug: str) -> Optional[StreamInfo]:
-        """GET /phim/{slug} → tìm episode theo slug → trả StreamInfo"""
         url = f"{self.BASE_URL}/phim/{movie_slug}"
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(url)
@@ -323,23 +330,19 @@ class VNMediaPlugin(BaseSourcePlugin):
             data = resp.json()
 
         movie_data = data.get('movie', {})
-        
-        # Special case: trailer
         if episode_slug == 'trailer':
             trailer = movie_data.get('trailer_url', '')
             if trailer:
                 return StreamInfo(url=trailer, type='youtube')
             return None
 
-        # Find episode in server_data
         for ep_group in data.get('episodes', []):
             for ep in ep_group.get('server_data', []):
                 if ep.get('slug') == episode_slug:
-                    link_m3u8 = ep.get('link_m3u8', '') or ''
-                    link_embed = ep.get('link_embed', '') or ''
+                    link_m3u8 = ep.get('link_m3u8', '')
+                    link_embed = ep.get('link_embed', '')
                     if link_m3u8:
                         return StreamInfo(url=link_m3u8, type='hls')
                     elif link_embed:
                         return StreamInfo(url=link_embed, type='embed')
-        
         return None
