@@ -74,7 +74,7 @@ const HeroBanner: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, 
         <div className="absolute inset-0 bg-gradient-to-b from-[#08090d]/30 via-transparent to-transparent" />
       </div>
       
-      <div className="absolute inset-0 flex items-end md:items-center pb-20 md:pb-0">
+      <div className="absolute inset-0 flex items-end md:items-center justify-center md:justify-start pb-20 md:pb-0">
         <div className="max-w-[1400px] mx-auto px-6 md:px-12 w-full">
           {/* Glass Info Box */}
           <div className={`flex flex-col gap-5 transition-all duration-[800ms] delay-500 w-full max-w-2xl p-5 md:p-8 rounded-[32px] glass-premium ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
@@ -361,7 +361,7 @@ export const Home: React.FC = () => {
             </div>
             <Link to="/live" className="btn-vibrant !px-6 !py-2.5 !text-xs !rounded-xl uppercase tracking-widest">Xem tất cả →</Link>
           </div>
-          <div className="flex gap-8 overflow-x-auto scrollbar-hide snap-x pr-12">
+          <div className="flex gap-8 overflow-x-auto scrollbar-hide snap-x pr-12 w-full">
             {livePreview.map(ch => <LiveCard key={ch.id} ch={ch} />)}
           </div>
         </section>
