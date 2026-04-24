@@ -31,6 +31,12 @@
 }
 
 @layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
   html {
     scroll-behavior: smooth;
   }
@@ -40,11 +46,11 @@
     color: var(--color-on-surface);
     font-family: var(--font-body);
     min-height: 100dvh;
-    /* Safe area handling without causing overflow */
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     margin: 0;
     overflow-x: hidden;
     position: relative;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
   }
 
   #root {

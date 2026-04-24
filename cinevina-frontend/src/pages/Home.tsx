@@ -77,7 +77,7 @@ const HeroBanner: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, 
       <div className="absolute inset-0 flex items-end md:items-center pb-20 md:pb-0">
         <div className="max-w-[1400px] mx-auto px-6 md:px-12 w-full">
           {/* Glass Info Box */}
-          <div className={`flex flex-col gap-5 transition-all duration-[800ms] delay-500 max-w-2xl p-6 md:p-8 rounded-[32px] glass-premium ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
+          <div className={`flex flex-col gap-5 transition-all duration-[800ms] delay-500 w-full max-w-2xl p-5 md:p-8 rounded-[32px] glass-premium ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
             <div className="flex flex-wrap gap-2.5">
               {movie.isCinema && (
                 <span className="bg-red-600 text-white text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse">
@@ -94,7 +94,7 @@ const HeroBanner: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, 
               </span>
             </div>
             
-            <h1 className="font-display font-black text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-white leading-[1.1] drop-shadow-2xl uppercase tracking-tighter">
+            <h1 className="font-display font-black text-2xl sm:text-4xl md:text-5xl lg:text-6xl text-white leading-[1.1] drop-shadow-2xl uppercase tracking-tighter">
               {movie.name}
             </h1>
             
@@ -104,15 +104,15 @@ const HeroBanner: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, 
                 : 'Khám phá thế giới điện ảnh đỉnh cao với chất lượng 4K tuyệt mỹ cùng CINEVINA.'}
             </p>
             
-            <div className="flex items-center gap-4 mt-2">
+            <div className="flex flex-col sm:flex-row items-center gap-3 mt-2">
               <Link to={`/phim/${movie.slug}`}>
-                <button className="btn-vibrant flex items-center gap-2 group">
-                  <PlayIcon className="w-6 h-6 group-hover:scale-125 transition-transform" /> XEM NGAY
+                <button className="btn-vibrant flex items-center justify-center gap-2 group w-full sm:w-auto !px-6 !py-3">
+                  <PlayIcon className="w-5 h-5 group-hover:scale-125 transition-transform" /> XEM NGAY
                 </button>
               </Link>
               <Link to={`/phim/${movie.slug}`}>
-                <button className="flex items-center gap-2 px-6 py-3.5 rounded-full font-extrabold text-white text-sm border border-white/10 hover:bg-white/10 transition-all backdrop-blur-xl group">
-                  <InformationCircleIcon className="w-6 h-6 text-white/60 group-hover:text-white transition-colors" /> THÔNG TIN
+                <button className="flex items-center justify-center gap-2 px-6 py-3 rounded-full font-extrabold text-white text-[13px] border border-white/10 hover:bg-white/10 transition-all backdrop-blur-xl group w-full sm:w-auto">
+                  <InformationCircleIcon className="w-5 h-5 text-white/60 group-hover:text-white transition-colors" /> THÔNG TIN
                 </button>
               </Link>
             </div>
