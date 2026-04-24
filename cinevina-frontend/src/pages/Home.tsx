@@ -129,8 +129,8 @@ const Top10Card: React.FC<{ movie: MovieInfo; rank: number }> = ({ movie, rank }
 
   return (
     <Link to={`/phim/${movie.slug}`} className="relative flex items-end shrink-0 group cursor-pointer pl-8 md:pl-12 py-4">
-      <span className="absolute left-0 bottom-6 z-10 select-none font-display font-black leading-none italic pointer-events-none transition-all group-hover:scale-110 group-hover:-rotate-6 duration-700 text-gradient-gold drop-shadow-[0_0_20px_rgba(234,179,8,0.3)]"
-        style={{ fontSize: '10rem', WebkitTextStroke: '2px rgba(255,255,255,0.1)' }}>
+      <span className="absolute left-0 bottom-4 z-10 select-none font-display font-black leading-none italic pointer-events-none transition-all group-hover:scale-110 group-hover:-rotate-6 duration-700 text-gradient-gold drop-shadow-[0_0_20px_rgba(234,179,8,0.3)] text-[7rem] md:text-[10rem]"
+        style={{ WebkitTextStroke: '2px rgba(255,255,255,0.1)' }}>
         {rank}
       </span>
       <div className="relative w-[140px] md:w-[180px] aspect-[2/3] rounded-2xl overflow-hidden shrink-0 shadow-2xl border border-white/5 group-hover:border-primary/50 group-hover:shadow-[0_0_40px_rgba(175,37,254,0.4)] transition-all duration-500 movie-card-glow">
@@ -256,7 +256,7 @@ export const Home: React.FC = () => {
         </div>
       </section>
 
-      <div className="flex flex-col gap-16 md:gap-24 mt-12 md:mt-20 max-w-[1500px] mx-auto w-full px-4 md:px-8">
+      <div className="flex flex-col gap-16 md:gap-24 mt-12 md:mt-20 max-w-[1500px] mx-auto w-full px-4 md:px-8 overflow-x-hidden">
         
         {/* ── 2. TOP 10 HÔM NAY ────────────────────────────────────────── */}
         <section>

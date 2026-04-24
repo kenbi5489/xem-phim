@@ -44,7 +44,7 @@ export const Carousel: React.FC<CarouselProps> = ({
   };
 
   return (
-    <div className={cn('flex flex-col gap-8', className)}>
+    <div className={cn('flex flex-col gap-8 w-full max-w-full overflow-hidden', className)}>
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-0 md:px-0 group/header">
         <div className="flex items-center gap-4 relative">
