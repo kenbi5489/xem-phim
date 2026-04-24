@@ -73,11 +73,11 @@ def normalize_quality(*sources: Optional[str]) -> str:
     """
     combined = " ".join(str(s).upper() for s in sources if s)
     
-    if any(k in combined for k in ["4K", "UHD", "2160", "ULTRAH.D", "ULTRA HD"]):
+    if any(k in combined for k in ["4K", "UHD", "2160", "2160P", "4096", "ULTRAHD", "ULTRA HD", "ULTRA-HD", "HDR10", "HDR 10", "DOLBY VISION", "DV"]):
         return "4K"
-    if any(k in combined for k in ["FHD", "1080", "FULL HD", "FULLHD"]):
+    if any(k in combined for k in ["FHD", "1080", "FULL HD", "FULLHD", "FULL-HD", "1080P"]):
         return "FHD"
-    if any(k in combined for k in ["HD", "720"]):
+    if any(k in combined for k in ["HD", "720", "720P"]):
         return "HD"
     if any(k in combined for k in ["CAM", "TS", "TC", "BẢN CAM"]):
         return "CAM"
@@ -199,27 +199,39 @@ async def get_movies(
     category: Optional[str] = None,
     country:  Optional[str] = None,
     genre:    Optional[str] = None,
+    year:     Optional[str] = None,
+    sort:     str           = "modified.time",
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=24, ge=1, le=100),
 ):
-    """Lấy danh sách phim có hỗ trợ filter country và genre."""
+    """Lấy danh sách phim có hỗ trợ filter country, genre, year, sort."""
     
+    base_params: dict = {"page": page, "limit": limit, "sort_field": sort}
+    if year:  base_params["year"] = year
+
     # Ưu tiên filter theo Country
     if country:
         endpoint = f"/v1/api/quoc-gia/{country}"
+        if genre: base_params["category"] = genre
+        data = await _kkphim_get(endpoint, base_params)
+        return _paginate(data, page, limit)
+
     # Ưu tiên tiếp theo theo Genre
-    elif genre:
+    if genre:
         endpoint = f"/v1/api/the-loai/{genre}"
+        data = await _kkphim_get(endpoint, base_params)
+        return _paginate(data, page, limit)
+
     # Cuối cùng theo Category
-    else:
-        cat = category or "phim-moi-cap-nhat"
-        if cat == "phim-moi-cap-nhat":
-            data = await _kkphim_get("/danh-sach/phim-moi-cap-nhat", {"page": page, "limit": limit})
-            return _paginate(data, page, limit)
-        endpoint = f"/v1/api/danh-sach/{cat}"
-        
-    data = await _kkphim_get(endpoint, {"page": page, "limit": limit})
+    cat = category or "phim-moi-cap-nhat"
+    if cat == "phim-moi-cap-nhat":
+        data = await _kkphim_get("/danh-sach/phim-moi-cap-nhat", {"page": page, "limit": limit})
+        return _paginate(data, page, limit)
+    
+    endpoint = f"/v1/api/danh-sach/{cat}"
+    data = await _kkphim_get(endpoint, base_params)
     return _paginate(data, page, limit)
+
 
 
 @router.get("/search")
@@ -228,15 +240,18 @@ async def search_movies(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=24, ge=1, le=100),
 ):
-    # 1. Fetch live tv items from plugin
+    # 1. Optionally fetch live/sport items from plugin (non-fatal)
     live_items = []
     if page == 1:
-        SourceRegistry.discover_plugins()
-        plugin = SourceRegistry.get_plugin("sport_live")
-        if plugin and plugin.is_active:
-            live_items_raw = await plugin.search(keyword)
-            # Map MovieInfo from plugin to dict for frontend
-            live_items = [item.model_dump() if hasattr(item, "model_dump") else item for item in live_items_raw]
+        try:
+            SourceRegistry.discover_plugins()
+            plugin = SourceRegistry.get_plugin("sport_live")
+            if plugin and getattr(plugin, "is_active", False):
+                live_items_raw = await plugin.search(keyword)
+                live_items = [item.model_dump() if hasattr(item, "model_dump") else item for item in live_items_raw]
+        except Exception:
+            pass  # Plugin errors should never break main search
+
 
     # 2. Fetch KKPhim items
     data = await _kkphim_get(
