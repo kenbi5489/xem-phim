@@ -80,16 +80,19 @@ export const Browse: React.FC = () => {
       if (isGenre) return movieApi.getMoviesByGenre(slug, page, {
         country: countryFilter, year: yearFilter, sort: sortFilter
       });
+      // Category route — now properly passes year + sort
       return movieApi.getMovies({
         category: slug,
-        page: page,
+        page,
         genre: genreFilter,
         country: countryFilter,
         year: yearFilter,
-        sort: sortFilter
+        sort: sortFilter,
       });
-    }
+    },
+    staleTime: 30_000, // Cache 30s to avoid re-fetching on every minor state change
   });
+
 
   const getTitle = () => {
     if (isCountry) return `Phim ${COUNTRY_OPTIONS.find(c => c.slug === slug)?.name || slug}`;
@@ -103,66 +106,71 @@ export const Browse: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0b0f] pt-24 pb-12 px-4 md:px-8">
-      <div className="max-w-[1440px] mx-auto">
+    <div className="min-h-screen bg-background pt-32 pb-16 px-6 md:px-12">
+      <div className="max-w-[1500px] mx-auto">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter italic flex items-center gap-3">
-              <span className="w-2 h-8 bg-purple-600 rounded-full inline-block"></span>
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+          <div className="relative">
+            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter italic flex items-center gap-4 text-gradient-primary">
+              <span className="w-2.5 h-10 bg-primary rounded-full inline-block shadow-[0_0_15px_rgba(175,37,254,0.6)]"></span>
               {getTitle()}
             </h1>
-            <p className="text-white/40 text-xs font-bold uppercase tracking-[0.2em] mt-2 ml-5">
-              {data?.total ? `${data.total.toLocaleString()} kết quả được tìm thấy` : 'Đang tìm kiếm phim...'}
+            <p className="text-white/40 text-[13px] font-black uppercase tracking-[0.3em] mt-3 ml-6 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" />
+              {data?.total ? `${data.total.toLocaleString()} nội dung đỉnh cao` : 'Đang tìm kiếm phim...'}
             </p>
           </div>
         </div>
 
         {/* Filter Bar */}
-        <div className="bg-white/5 rounded-2xl border border-white/10 p-4 mb-10 flex flex-wrap gap-4 items-center">
-          <div className="flex items-center gap-2 mr-2">
-            <FunnelIcon className="w-4 h-4 text-purple-500" />
-            <span className="text-[11px] font-black text-white/40 uppercase tracking-widest">Bộ lọc</span>
+        <div className="glass-premium p-6 md:p-8 rounded-[40px] mb-16 flex flex-wrap gap-5 items-center">
+          <div className="flex items-center gap-3 mr-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+              <FunnelIcon className="w-5 h-5" />
+            </div>
+            <span className="text-[12px] font-black text-white uppercase tracking-[0.2em] italic">Bộ lọc</span>
           </div>
 
-          {(isCountry || isCategory) && (
+          <div className="flex flex-wrap gap-4 flex-1">
+            {(isCountry || isCategory) && (
+              <select 
+                value={genreFilter}
+                onChange={(e) => setGenreFilter(e.target.value)}
+                className="bg-surface-container border border-white/5 text-white/70 text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[160px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
+              >
+                <option value="">Thể loại</option>
+                {GENRE_OPTIONS.map(g => <option key={g.slug} value={g.slug}>{g.name}</option>)}
+              </select>
+            )}
+
+            {(isGenre || isCategory) && (
+              <select 
+                value={countryFilter}
+                onChange={(e) => setCountryFilter(e.target.value)}
+                className="bg-surface-container border border-white/5 text-white/70 text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[160px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
+              >
+                <option value="">Quốc gia</option>
+                {COUNTRY_OPTIONS.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+              </select>
+            )}
+
             <select 
-              value={genreFilter}
-              onChange={(e) => setGenreFilter(e.target.value)}
-              className="bg-[#11131a] border border-white/10 text-white/70 text-[11px] font-bold px-4 py-2 rounded-full focus:border-purple-600 outline-none transition-all uppercase tracking-wider min-w-[140px]"
+              value={yearFilter}
+              onChange={(e) => setYearFilter(e.target.value)}
+              className="bg-surface-container border border-white/5 text-white/70 text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[120px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
             >
-              <option value="">Tất cả thể loại</option>
-              {GENRE_OPTIONS.map(g => <option key={g.slug} value={g.slug}>{g.name}</option>)}
+              <option value="">Năm</option>
+              {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
-          )}
 
-          {(isGenre || isCategory) && (
             <select 
-              value={countryFilter}
-              onChange={(e) => setCountryFilter(e.target.value)}
-              className="bg-[#11131a] border border-white/10 text-white/70 text-[11px] font-bold px-4 py-2 rounded-full focus:border-purple-600 outline-none transition-all uppercase tracking-wider min-w-[140px]"
+              value={sortFilter}
+              onChange={(e) => setSortFilter(e.target.value)}
+              className="bg-surface-container border border-white/5 text-white/70 text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[160px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
             >
-              <option value="">Tất cả quốc gia</option>
-              {COUNTRY_OPTIONS.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+              {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.name}</option>)}
             </select>
-          )}
-
-          <select 
-            value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value)}
-            className="bg-[#11131a] border border-white/10 text-white/70 text-[11px] font-bold px-4 py-2 rounded-full focus:border-purple-600 outline-none transition-all uppercase tracking-wider min-w-[100px]"
-          >
-            <option value="">Tất cả năm</option>
-            {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-
-          <select 
-            value={sortFilter}
-            onChange={(e) => setSortFilter(e.target.value)}
-            className="bg-[#11131a] border border-white/10 text-white/70 text-[11px] font-bold px-4 py-2 rounded-full focus:border-purple-600 outline-none transition-all uppercase tracking-wider min-w-[140px]"
-          >
-            {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.name}</option>)}
-          </select>
+          </div>
 
           {(genreFilter || countryFilter || yearFilter || sortFilter !== "modified.time") && (
             <button 
@@ -172,28 +180,34 @@ export const Browse: React.FC = () => {
                 setYearFilter("");
                 setSortFilter("modified.time");
               }}
-              className="p-2 rounded-full bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white transition-all shadow-lg ml-auto"
+              className="w-12 h-12 rounded-full bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white transition-all shadow-xl flex items-center justify-center border border-red-500/30"
+              title="Xóa bộ lọc"
             >
-              <XMarkIcon className="w-4 h-4" />
+              <XMarkIcon className="w-6 h-6" />
             </button>
           )}
         </div>
 
         {/* Grid Content */}
         {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-3 gap-y-8 md:gap-y-10">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-12">
             {Array.from({ length: 12 }).map((_, i) => (
-              <MovieCard key={i} isLoading />
+              <div key={i} className="flex flex-col gap-4 w-full">
+                <div className="w-full aspect-[2/3] bg-surface-container-highest animate-pulse rounded-[24px]" />
+                <div className="h-4 bg-surface-container-highest animate-pulse rounded-full w-3/4" />
+                <div className="h-3 bg-surface-container-highest animate-pulse rounded-full w-1/2" />
+              </div>
             ))}
           </div>
         ) : isError ? (
-          <div className="py-32 text-center bg-white/5 rounded-3xl border border-white/5">
-            <h3 className="text-xl font-bold text-white mb-4 uppercase tracking-tighter italic">Lỗi kết nối API</h3>
-            <button onClick={() => refetch()} className="px-8 py-3 rounded-full bg-purple-600 text-white font-black text-[11px] tracking-widest shadow-xl hover:scale-105 transition-all uppercase">Thử lại ngay</button>
+          <div className="py-32 text-center glass-premium rounded-[40px] flex flex-col items-center gap-6">
+            <span className="text-5xl">📡</span>
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Lỗi kết nối API</h3>
+            <button onClick={() => refetch()} className="btn-vibrant">THỬ LẠI NGAY</button>
           </div>
         ) : data?.items?.length ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-3 gap-y-8 md:gap-y-10">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-12 md:gap-y-16">
               {data.items.map((movie: any) => (
                 <MovieCard key={movie.slug} {...movie} />
               ))}
@@ -201,35 +215,37 @@ export const Browse: React.FC = () => {
 
             {/* Pagination */}
             {data.total_pages > 1 && (
-              <div className="flex justify-center items-center gap-6 mt-16 pt-10 border-t border-white/5">
+              <div className="flex justify-center items-center gap-8 mt-24 pt-12 border-t border-white/5">
                 <button 
                   disabled={page === 1}
                   onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="px-6 py-2.5 rounded-full bg-white/5 text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:pointer-events-none transition-all border border-white/10 text-[10px] font-black tracking-widest uppercase"
+                  className="px-8 py-3 rounded-2xl bg-white/5 text-white/40 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:pointer-events-none transition-all border border-white/10 text-[11px] font-black tracking-widest uppercase"
                 >
-                  Trang trước
+                  Trước
                 </button>
                 
-                <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-black text-xs shadow-lg">
+                <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-black text-sm shadow-[0_0_20px_rgba(175,37,254,0.6)] transform rotate-3">
                   {page}
                 </div>
 
                 <button 
                   disabled={page === data.total_pages}
                   onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="px-6 py-2.5 rounded-full bg-purple-600 text-white shadow-xl hover:scale-105 transition-all text-[10px] font-black tracking-widest uppercase disabled:opacity-20"
+                  className="btn-vibrant !px-8 !py-3 !text-[11px] !rounded-2xl disabled:opacity-20"
                 >
-                  Trang tiếp
+                  Tiếp theo
                 </button>
               </div>
             )}
           </>
         ) : (
-          <div className="py-32 text-center text-white/30 font-bold uppercase tracking-[0.3em] italic opacity-50">
-            Không tìm thấy phim nào phù hợp...
+          <div className="py-32 text-center glass-premium rounded-[40px] flex flex-col items-center gap-4 opacity-50">
+            <span className="text-4xl">🎬</span>
+            <p className="text-xl font-black text-white/40 uppercase tracking-[0.3em] italic">Không tìm thấy phim phù hợp</p>
           </div>
         )}
       </div>
     </div>
   );
 };
+

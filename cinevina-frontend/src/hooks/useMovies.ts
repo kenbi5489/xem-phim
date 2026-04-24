@@ -1,6 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { movieApi, type MovieListParams } from '../services/api';
+import axios from 'axios';
+
+// Resolve API base URL (same logic as api.ts)
+const _envUrl = import.meta.env.VITE_API_URL;
+const API_BASE = _envUrl
+  ? (_envUrl.startsWith('http')
+      ? (_envUrl.replace(/\/$/, '').endsWith('/api') ? _envUrl.replace(/\/$/, '') : `${_envUrl.replace(/\/$/, '')}/api`)
+      : _envUrl)
+  : '/api';
+
+const STALE_30M = 1000 * 60 * 30;
+const STALE_1H  = 1000 * 60 * 60;
+const GC_1H     = 1000 * 60 * 60;
 
 // ─── Debounce Hook ────────────────────────────────────────────────────────────
 export const useDebounce = <T>(value: T, delay = 300): T => {
@@ -20,8 +33,11 @@ export const useMovies = (params: MovieListParams) =>
       const res = await movieApi.getMovies(params);
       return res.items;
     },
-    staleTime: 1000 * 60 * 30,
-    enabled: !!(params.category || params.country || params.genre || params.year || params.source),
+    staleTime: STALE_30M,
+    gcTime: GC_1H,
+    // Allow fetch when category is set OR when no country/genre/year (defaults to phim-moi-cap-nhat)
+    enabled: !!(params.category || params.country || params.genre || params.year || params.source)
+      || (!params.country && !params.genre && !params.year),
   });
 
 // ─── Browse By Country/Genre ──────────────────────────────────────────────────
@@ -29,7 +45,8 @@ export const useMoviesByCountry = (slug: string, page = 1, filters?: any) =>
   useQuery({
     queryKey: ['movies', 'country', slug, page, filters],
     queryFn: () => movieApi.getMoviesByCountry(slug, page, filters),
-    staleTime: 1000 * 60 * 30,
+    staleTime: STALE_30M,
+    gcTime: GC_1H,
     enabled: !!slug,
   });
 
@@ -37,7 +54,8 @@ export const useMoviesByGenre = (slug: string, page = 1, filters?: any) =>
   useQuery({
     queryKey: ['movies', 'genre', slug, page, filters],
     queryFn: () => movieApi.getMoviesByGenre(slug, page, filters),
-    staleTime: 1000 * 60 * 30,
+    staleTime: STALE_30M,
+    gcTime: GC_1H,
     enabled: !!slug,
   });
 
@@ -51,14 +69,12 @@ export const useSearchMovies = (keyword: string, page = 1) =>
   });
 
 // ─── Movie Detail ─────────────────────────────────────────────────────────────
-// Always fetches from /api/movies/{slug} — never uses cached listing data.
-// Uses adaptMovieDetail which reads servers[] with full stream links.
 export const useMovieDetail = (slug: string, source?: string) =>
   useQuery({
-    queryKey: ['movie-detail', slug, source],  // separate cache key from listing
+    queryKey: ['movie-detail', slug, source],
     queryFn: () => movieApi.getMovieDetail(slug, source),
     enabled: !!slug,
-    staleTime: 1000 * 60 * 10,  // 10 min — shorter to get fresh stream links
+    staleTime: 1000 * 60 * 10,
     retry: 2,
   });
 
@@ -80,7 +96,8 @@ export const useCinemaMovies = (page = 1) =>
       const res = await movieApi.getCinemaMovies(page);
       return res.items;
     },
-    staleTime: 1000 * 60 * 30,
+    staleTime: STALE_30M,
+    gcTime: GC_1H,
   });
 
 // ─── Trending Movies ──────────────────────────────────────────────────────────
@@ -91,6 +108,56 @@ export const useTrendingMovies = (limit = 10) =>
       const res = await movieApi.getTrendingMovies(limit);
       return res;
     },
-    staleTime: 1000 * 60 * 60, // 1 hour
+    staleTime: STALE_1H,
+    gcTime: GC_1H,
   });
 
+// ─── Live TV Channels ─────────────────────────────────────────────────────────
+export interface LiveChannel {
+  id: string;
+  name: string;
+  network: string;
+  network_label: string;
+  group: string;
+  group_label: string;
+  emoji: string;
+  is_hd: boolean;
+  logo_url: string;
+  program_now: string;
+  program_next: string;
+  stream_url: string;
+  color: string;
+}
+
+export const useLiveChannels = (type?: string, group?: string, network?: string) =>
+  useQuery({
+    queryKey: ['live', 'channels', type, group, network],
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (type)    params.type    = type;
+      if (group)   params.group   = group;
+      if (network) params.network = network;
+      const res = await axios.get(`${API_BASE}/live/channels`, { params });
+      return res.data as LiveChannel[];
+    },
+    staleTime: STALE_30M,
+    gcTime: GC_1H,
+  });
+
+export interface LiveNetwork {
+  id: string;
+  label: string;
+  color: string;
+  count: number;
+}
+
+export const useLiveNetworks = () =>
+  useQuery({
+    queryKey: ['live', 'networks'],
+    queryFn: async () => {
+      const res = await axios.get(`${API_BASE}/live/networks`);
+      return res.data as LiveNetwork[];
+    },
+    staleTime: STALE_1H,
+    gcTime: GC_1H,
+  });

@@ -2,55 +2,74 @@
 
 @theme {
   /* Fonts */
-  --font-display: "Be Vietnam Pro", sans-serif;
+  --font-display: "Plus Jakarta Sans", "Be Vietnam Pro", sans-serif;
   --font-body: "Inter", sans-serif;
 
-  /* Colors based on Stitch Design System: Neon Auteur */
-  --color-background: #0c0e14;
-  --color-surface: #0c0e14;
-  --color-surface-container-low: #11131a;
-  --color-surface-container-high: #1d1f27;
-  --color-surface-container-highest: #23262e;
+  /* Colors based on Stitch Design System: Ultra Neon Premium */
+  --color-background: #08090d;
+  --color-surface: #0f111a;
+  --color-surface-container: #161923;
+  --color-surface-container-low: #0f111a;
+  --color-surface-container-high: #1e2230;
+  --color-surface-container-highest: #262c3d;
   
-  --color-primary: #d692ff;
-  --color-primary-dim: #af25fe;
-  --color-primary-container: #ce7eff;
-  --color-on-primary-container: #3a005a;
+  --color-primary: #af25fe;
+  --color-primary-bright: #d692ff;
+  --color-primary-glow: rgba(175, 37, 254, 0.5);
   
-  --color-secondary: #fe7e4f;
-  --color-secondary-dim: #f7794b;
-  --color-secondary-container: #8e2c01;
-  --color-on-secondary: #491300;
+  --color-accent: #ff00cc;
+  --color-accent-bright: #ff66ee;
   
-  --color-on-surface: #e5e4ed;
-  --color-on-surface-variant: #aaaab3;
+  --color-secondary: #00f2ff;
+  --color-secondary-bright: #70f9ff;
   
-  --color-outline: #74757d;
-  --color-outline-variant: #46484f;
+  --color-on-surface: #f8f9fa;
+  --color-on-surface-variant: #b0b3b8;
+  
+  --color-outline: #3a3f4b;
+  --color-outline-variant: #2d323e;
 }
 
 @layer base {
+  html {
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-on-surface);
     font-family: var(--font-body);
+    width: 100%;
+    min-height: 100dvh;
+    overflow-x: hidden;
     /* Safe area padding for mobile/TV overscan */
     padding-top: env(safe-area-inset-top);
     padding-right: env(safe-area-inset-right);
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
   }
+
+  #root {
+    width: 100%;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
   
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
+    letter-spacing: -0.02em;
   }
 
   /* TV Navigation Focus Outlines */
   *:focus-visible {
-    outline: 4px solid var(--color-primary);
+    outline: 3px solid var(--color-primary);
     outline-offset: 4px;
-    border-radius: 8px;
-    transition: outline-color 0.2s ease;
+    border-radius: 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
@@ -62,81 +81,172 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none; /* Chrome, Safari and Opera */
   }
+
+  /* Premium Text Effects */
+  .text-gradient-primary {
+    background: linear-gradient(135deg, var(--color-primary-bright), var(--color-accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #fde047, #eab308, #b45309);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-glow-primary {
+    text-shadow: 0 0 15px var(--color-primary-glow);
+  }
+
+  /* Shimmer Animation */
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  .animate-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .animate-shimmer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.1) 20%,
+      rgba(255, 255, 255, 0.2) 60%,
+      rgba(255, 255, 255, 0)
+    );
+    animation: shimmer 2.5s infinite;
+  }
 }
 
 @layer components {
-  /* Neon Glow Effect */
-  .glow-primary {
-    box-shadow: 0px 0px 12px rgba(176, 38, 255, 0.3);
+  /* Enhanced Glassmorphism */
+  .glass-premium {
+    background: rgba(15, 17, 26, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
   }
   
-  /* Glassmorphism */
-  .glass {
-    background-color: color-mix(in srgb, var(--color-surface) 60%, transparent);
-    backdrop-filter: blur(24px);
+  .glass-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
+  }
+
+  .glass-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
   }
   
-  /* Ghost Border */
-  .ghost-border {
-    border: 1px solid color-mix(in srgb, var(--color-outline-variant) 15%, transparent);
-  }
-  
-  /* Gradient Primary Action */
-  .btn-primary {
-    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dim));
+  /* Buttons */
+  .btn-vibrant {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
     color: white;
-    border-radius: 1.5rem; /* xl */
-    font-weight: 600;
-    padding: 0.75rem 1.5rem;
-    transition: all 0.3s ease;
+    border-radius: 9999px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    padding: 0.8rem 2rem;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 10px 20px -10px var(--color-primary-glow);
   }
   
-  .btn-primary:hover {
-    transform: scale(1.05);
-    box-shadow: 0px 0px 12px rgba(176, 38, 255, 0.5);
-  }
-  
-  /* Outlined / Secondary Action */
-  .btn-secondary {
-    border: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
-    color: var(--color-primary);
-    border-radius: 1.5rem;
-    font-weight: 600;
-    padding: 0.75rem 1.5rem;
-    transition: all 0.3s ease;
-  }
-  
-  .btn-secondary:hover {
-    background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  .btn-vibrant:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 15px 30px -10px var(--color-primary-glow), 0 0 15px var(--color-primary-glow);
   }
 
-  /* Utilities */
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  .btn-vibrant:active {
+    transform: scale(0.98);
   }
 
-  /* Standardized Movie Card & Images */
-  .movie-card {
-    position: relative;
-    width: 100%;
-    overflow: visible;
+  /* Standardized Movie Card Improvements */
+  .movie-card-container {
+    perspective: 1000px;
   }
 
-  .movie-card__image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.5s ease;
+  .movie-card-glow {
+    transition: all 0.5s ease;
+  }
+
+  .movie-card-glow:hover {
+    box-shadow: 0 0 25px 0 var(--color-primary-glow);
+    transform: translateY(-8px);
   }
 }
 
 @layer utilities {
-  .text-shadow-premium {
-    text-shadow: 0 4px 8px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+  /* Float animation for hero elements */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-12px); }
   }
+  .animate-float {
+    animation: float 4s ease-in-out infinite;
+  }
+
+  /* Fade-in for results / status messages */
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out both;
+  }
+
+  /* Thin scrollbar for episode lists, etc. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(175, 37, 254, 0.3) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(175, 37, 254, 0.3);
+    border-radius: 999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(175, 37, 254, 0.6);
+  }
+}
+
+/* ── TV / Large screen overscale prevention ── */
+@media (min-width: 1920px) {
+  html { font-size: 17px; }
+}
+@media (min-width: 2560px) {
+  html { font-size: 20px; }
+}
+
+/* ── Mobile touch improvements ── */
+@media (max-width: 768px) {
+  button, a {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+/* ── Safe area support for notched devices ── */
+@supports (padding: max(0px)) {
+  .safe-bottom { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+  .safe-top    { padding-top:    max(1.5rem, env(safe-area-inset-top)); }
 }

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PlayIcon, InformationCircleIcon, StarIcon } from '@heroicons/react/24/solid';
 import { Carousel } from '../components/ui/Carousel';
 import { MovieCard } from '../components/ui/MovieCard';
-import { useMovies, useCinemaMovies, useTrendingMovies, useMovieDetail } from '../hooks/useMovies';
+import { useMovies, useCinemaMovies, useTrendingMovies, useLiveChannels } from '../hooks/useMovies';
 import type { MovieInfo } from '../services/api';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -35,70 +35,84 @@ const COUNTRIES = [
   { name: 'Ấn Độ', slug: 'an-do', emoji: '🇮🇳', color: 'from-orange-500/20 to-orange-600/10' },
 ];
 
-const LIVE_CHANNELS = [
-  { id: 'vtv1',  name: 'VTV1',  program: 'Thời sự 19h',              emoji: '📺', color: '#1d4ed8' },
-  { id: 'vtv3',  name: 'VTV3',  program: 'Bóng đá trực tiếp',         emoji: '⚽', color: '#16a34a' },
-  { id: 'vtv6',  name: 'VTV6',  program: 'Phim chiếu rạp',            emoji: '🎬', color: '#7c3aed' },
-  { id: 'kplus', name: 'K+',    program: 'Champions League',          emoji: '🏆', color: '#0891b2' },
+// Live channels are fetched from API — fallback list for SSR/loading
+const LIVE_CHANNELS_FALLBACK = [
+  { id: 'vtv1',      name: 'VTV1',   program: 'Thời sự 19h',        emoji: '📺', color: '#1d4ed8', logo_url: '' },
+  { id: 'vtv3',      name: 'VTV3',   program: 'Bóng đá trực tiếp',  emoji: '⚽', color: '#16a34a', logo_url: '' },
+  { id: 'kplus',     name: 'K+',     program: 'Champions League',   emoji: '🏆', color: '#0891b2', logo_url: '' },
+  { id: 'al-jazeera',name: 'Al Jazeera', program: 'World News',   emoji: '🌍', color: '#475569', logo_url: '' },
 ];
+
+// ─── Quality badge helper (shared with MovieCard) ──────────────────────────
+function getQualityBadgeClass(quality?: string): string {
+  const q = (quality || '').toUpperCase();
+  if (q === '4K' || q === 'UHD') return 'bg-gradient-to-r from-yellow-500 to-amber-400 text-black shadow-[0_0_10px_rgba(234,179,8,0.5)]';
+  if (q === 'FHD' || q === '1080P') return 'bg-gradient-to-r from-blue-500 to-blue-400 text-white';
+  if (q === 'CAM' || q === 'TS') return 'bg-red-600/80 text-white';
+  return 'bg-purple-600 text-white shadow-lg shadow-purple-600/30';
+}
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
+// HeroBanner NO LONGER calls useMovieDetail per-slide (was causing 6 extra API
+// calls). It uses the listing data directly which already has enough for the banner.
+// ─── HeroBanner ─────────────────────────────────────────────────────────────
 const HeroBanner: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, isActive }) => {
-  // Fetch details to get full description if missing from listing
-  const { data: detail } = useMovieDetail(movie.slug);
-  const displayMovie = detail || movie;
 
   return (
-    <div className={`absolute inset-0 transition-all duration-1000 ease-in-out ${isActive ? 'opacity-100 z-10 scale-100' : 'opacity-0 z-0 scale-105'}`}>
+    <div className={`absolute inset-0 transition-all duration-[1200ms] ease-in-out ${isActive ? 'opacity-100 z-10 scale-100' : 'opacity-0 z-0 scale-110'}`}>
       <div className="absolute inset-0">
         <img 
-          src={displayMovie.posterUrl || displayMovie.thumbUrl || "/fallback-poster.svg"} 
-          alt={displayMovie.name}
+          src={movie.posterUrl || movie.thumbUrl || "/fallback-poster.svg"} 
+          alt={movie.name}
           className="w-full h-full object-cover object-top"
           loading="eager"
         />
-        {/* Premium Gradients */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/20 to-transparent" />
+        {/* Dynamic Multi-layered Gradients */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#08090d] via-[#08090d]/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#08090d] via-[#08090d]/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#08090d]/30 via-transparent to-transparent" />
       </div>
       
-      <div className="absolute inset-0 flex items-center">
-        <div className="max-w-[1400px] mx-auto px-6 md:px-10 w-full flex flex-col gap-4 mt-10">
-          {/* Content with slide-up transition */}
-          <div className={`flex flex-col gap-4 transition-all duration-700 delay-300 ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
-            <div className="flex flex-wrap gap-2">
-              {displayMovie.isCinema && (
-                <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">
+      <div className="absolute inset-0 flex items-end md:items-center pb-20 md:pb-0">
+        <div className="max-w-[1400px] mx-auto px-6 md:px-12 w-full">
+          {/* Glass Info Box */}
+          <div className={`flex flex-col gap-5 transition-all duration-[800ms] delay-500 max-w-2xl p-6 md:p-8 rounded-[32px] glass-premium ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
+            <div className="flex flex-wrap gap-2.5">
+              {movie.isCinema && (
+                <span className="bg-red-600 text-white text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse">
                   ĐANG CHIẾU
                 </span>
               )}
-              {displayMovie.quality && <span className="bg-purple-600 text-white text-xs font-black px-2 py-0.5 rounded uppercase shadow-lg shadow-purple-600/30">{displayMovie.quality}</span>}
-              <span className="flex items-center gap-1 bg-yellow-500/20 text-yellow-400 text-xs font-bold px-2 py-0.5 rounded border border-yellow-500/30">
-                <StarIcon className="w-3.5 h-3.5" /> {displayMovie.rating || '8.5'}
+              {movie.quality && (
+                <span className={`text-[11px] font-black px-3 py-1 rounded-full uppercase shadow-lg ${getQualityBadgeClass(movie.quality)}`}>
+                  {movie.quality}
+                </span>
+              )}
+              <span className="flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 text-[11px] font-black px-3 py-1 rounded-full border border-yellow-500/30 backdrop-blur-md">
+                <StarIcon className="w-4 h-4" /> {movie.rating || '8.5'}
               </span>
             </div>
             
-            <h1 className="font-display font-black text-4xl md:text-7xl text-white leading-none drop-shadow-2xl max-w-3xl uppercase tracking-tighter">
-              {displayMovie.name}
+            <h1 className="font-display font-black text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-white leading-[1.1] drop-shadow-2xl uppercase tracking-tighter">
+              {movie.name}
             </h1>
             
-            <p className="text-white/70 text-sm md:text-base leading-relaxed line-clamp-3 max-w-xl font-medium">
-              {displayMovie.description 
-                ? displayMovie.description.replace(/<[^>]*>/g, '').slice(0, 250) + (displayMovie.description.length > 250 ? '...' : '')
-                : 'Trải nghiệm điện ảnh đỉnh cao cùng CINEVINA.'}
+            <p className="text-white/80 text-base md:text-lg leading-relaxed line-clamp-2 font-medium">
+              {movie.description 
+                ? movie.description.replace(/<[^>]*>/g, '').slice(0, 180) + (movie.description.length > 180 ? '...' : '')
+                : 'Khám phá thế giới điện ảnh đỉnh cao với chất lượng 4K tuyệt mỹ cùng CINEVINA.'}
             </p>
             
-            <div className="flex items-center gap-4 mt-4">
-              <Link to={`/phim/${displayMovie.slug}`}>
-                <button className="flex items-center gap-2 px-8 py-3.5 rounded-full font-black text-white text-sm transition-all hover:scale-110 active:scale-95 shadow-[0_0_30px_rgba(175,37,254,0.4)] focus:outline-none focus-visible:ring-4 focus-visible:ring-white"
-                  style={{ background: 'linear-gradient(135deg,#af25fe,#7c3aed)' }}>
-                  <PlayIcon className="w-5 h-5" /> XEM NGAY
+            <div className="flex items-center gap-4 mt-2">
+              <Link to={`/phim/${movie.slug}`}>
+                <button className="btn-vibrant flex items-center gap-2 group">
+                  <PlayIcon className="w-6 h-6 group-hover:scale-125 transition-transform" /> XEM NGAY
                 </button>
               </Link>
-              <Link to={`/phim/${displayMovie.slug}`}>
-                <button className="flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-white text-sm border border-white/20 hover:bg-white/10 transition-all backdrop-blur-md focus:outline-none focus-visible:ring-4 focus-visible:ring-white">
-                  <InformationCircleIcon className="w-5 h-5" /> CHI TIẾT
+              <Link to={`/phim/${movie.slug}`}>
+                <button className="flex items-center gap-2 px-6 py-3.5 rounded-full font-extrabold text-white text-sm border border-white/10 hover:bg-white/10 transition-all backdrop-blur-xl group">
+                  <InformationCircleIcon className="w-6 h-6 text-white/60 group-hover:text-white transition-colors" /> THÔNG TIN
                 </button>
               </Link>
             </div>
@@ -114,16 +128,16 @@ const Top10Card: React.FC<{ movie: MovieInfo; rank: number }> = ({ movie, rank }
   const [imgSrc, setImgSrc] = useState(movie.posterUrl || movie.thumbUrl || '/fallback-poster.svg');
 
   return (
-    <Link to={`/phim/${movie.slug}`} className="relative flex items-end shrink-0 group cursor-pointer pl-6 md:pl-10">
-      <span className="absolute left-0 bottom-4 z-10 select-none font-display font-black leading-none italic pointer-events-none transition-transform group-hover:scale-110 group-hover:-rotate-6 duration-500"
-        style={{ fontSize: '8rem', WebkitTextStroke: '2px rgba(255,255,255,0.2)', color: 'transparent' }}>
+    <Link to={`/phim/${movie.slug}`} className="relative flex items-end shrink-0 group cursor-pointer pl-8 md:pl-12 py-4">
+      <span className="absolute left-0 bottom-6 z-10 select-none font-display font-black leading-none italic pointer-events-none transition-all group-hover:scale-110 group-hover:-rotate-6 duration-700 text-gradient-gold drop-shadow-[0_0_20px_rgba(234,179,8,0.3)]"
+        style={{ fontSize: '10rem', WebkitTextStroke: '2px rgba(255,255,255,0.1)' }}>
         {rank}
       </span>
-      <div className="relative w-[130px] md:w-[160px] aspect-[2/3] rounded-xl overflow-hidden shrink-0 shadow-2xl border border-white/10 group-hover:shadow-[0_0_30px_rgba(175,37,254,0.4)] transition-all duration-300">
+      <div className="relative w-[140px] md:w-[180px] aspect-[2/3] rounded-2xl overflow-hidden shrink-0 shadow-2xl border border-white/5 group-hover:border-primary/50 group-hover:shadow-[0_0_40px_rgba(175,37,254,0.4)] transition-all duration-500 movie-card-glow">
         <img
           src={imgSrc}
           alt={movie.name}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
           loading="lazy"
           onError={() => {
             if (imgSrc !== movie.thumbUrl && movie.thumbUrl) {
@@ -133,11 +147,12 @@ const Top10Card: React.FC<{ movie: MovieInfo; rank: number }> = ({ movie, rank }
             }
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#08090d] via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute inset-0 animate-shimmer opacity-0 group-hover:opacity-100 transition-opacity" />
         
         {/* Badge chất lượng */}
         {movie.quality && (
-          <span className="absolute top-2 left-2 px-1.5 py-0.5 text-[10px] font-bold bg-purple-600 text-white rounded shadow-lg">
+          <span className={`absolute top-3 left-3 px-2 py-0.5 text-[10px] font-black rounded-full shadow-xl backdrop-blur-md ${getQualityBadgeClass(movie.quality)}`}>
             {movie.quality}
           </span>
         )}
@@ -146,21 +161,28 @@ const Top10Card: React.FC<{ movie: MovieInfo; rank: number }> = ({ movie, rank }
   );
 };
 
-const LiveCard: React.FC<{ ch: typeof LIVE_CHANNELS[0] }> = ({ ch }) => (
-  <Link to="/live" className="shrink-0 w-[200px] md:w-[240px] group snap-start">
-    <div className="relative aspect-video rounded-xl overflow-hidden border border-white/5 group-hover:border-red-500/40 transition-all duration-300 shadow-lg"
-      style={{ background: `linear-gradient(135deg, ${ch.color}20, ${ch.color}05)` }}>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-        <span className="text-4xl group-hover:scale-125 transition-transform duration-500">{ch.emoji}</span>
-        <span className="font-display font-black text-xl text-white tracking-widest">{ch.name}</span>
+interface LiveChannelData { id: string; name: string; emoji: string; color: string; logo_url?: string; program_now?: string; program?: string; }
+
+const LiveCard: React.FC<{ ch: LiveChannelData }> = ({ ch }) => (
+  <Link to="/live" className="shrink-0 w-[220px] md:w-[280px] group snap-start">
+    <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/5 group-hover:border-red-500/60 transition-all duration-500 shadow-2xl group-hover:shadow-[0_0_30px_rgba(220,38,38,0.3)]"
+      style={{ background: `linear-gradient(135deg, ${ch.color}30, ${ch.color}10)` }}>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+        {ch.logo_url ? (
+          <img src={ch.logo_url} alt={ch.name} className="w-16 h-16 object-contain drop-shadow-2xl group-hover:scale-110 transition-transform duration-500" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+        ) : (
+          <span className="text-5xl group-hover:scale-125 transition-transform duration-700 drop-shadow-xl">{ch.emoji}</span>
+        )}
+        <span className="font-display font-black text-2xl text-white tracking-[0.2em] uppercase drop-shadow-lg">{ch.name}</span>
       </div>
-      <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase">
-        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE
+      <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase shadow-lg">
+        <span className="w-2 h-2 rounded-full bg-white animate-pulse" /> LIVE
       </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
     </div>
-    <div className="mt-3">
-      <p className="text-sm font-bold text-white group-hover:text-red-500 transition-colors truncate uppercase tracking-tight">{ch.name}</p>
-      <p className="text-xs text-white/40 truncate italic">{ch.program}</p>
+    <div className="mt-4 px-1">
+      <p className="text-[15px] font-black text-white group-hover:text-red-500 transition-colors truncate uppercase tracking-tight">{ch.name}</p>
+      <p className="text-[13px] text-white/50 truncate italic font-medium mt-0.5">{ch.program_now || ch.program}</p>
     </div>
   </Link>
 );
@@ -172,27 +194,35 @@ export const Home: React.FC = () => {
   const [heroIdx, setHeroIdx] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Queries
-  const recentQ  = useMovies({ category: 'phim-moi-cap-nhat', page: 1 });
+  // Queries — heavy sections load deferred
+  const recentQ   = useMovies({ category: 'phim-moi-cap-nhat', page: 1 });
   const trendingQ = useTrendingMovies(10);
-  const cinemaQ  = useCinemaMovies(1);
-  const seriesQ  = useMovies({ category: 'phim-bo', page: 1 });
-  const animeQ   = useMovies({ category: 'hoat-hinh', page: 1 });
-  const comedyQ  = useMovies({ genre: 'hai-huoc', page: 1 });
-  const horrorQ  = useMovies({ genre: 'kinh-di', page: 1 });
-  
-  // Specific Countries
-  const vnQ      = useMovies({ country: 'viet-nam', page: 1 });
-  const krQ      = useMovies({ country: 'han-quoc', page: 1 });
-  const cnQ      = useMovies({ country: 'trung-quoc', page: 1 });
-  const usQ      = useMovies({ country: 'au-my', page: 1 });
+  const cinemaQ   = useCinemaMovies(1);
+  const seriesQ   = useMovies({ category: 'phim-bo', page: 1 });
+  const animeQ    = useMovies({ category: 'hoat-hinh', page: 1 });
+  const comedyQ   = useMovies({ genre: 'hai-huoc', page: 1 });
+  const horrorQ   = useMovies({ genre: 'kinh-di', page: 1 });
+  const liveQ     = useLiveChannels('live');
+
+  // Country rows
+  const vnQ = useMovies({ country: 'viet-nam', page: 1 });
+  const krQ = useMovies({ country: 'han-quoc', page: 1 });
+  const cnQ = useMovies({ country: 'trung-quoc', page: 1 });
+  const usQ = useMovies({ country: 'au-my', page: 1 });
 
   const heroMovies = (recentQ.data || []).slice(0, 6);
+  const livePreview = (liveQ.data || []).slice(0, 4).length > 0
+    ? (liveQ.data || []).slice(0, 4)
+    : LIVE_CHANNELS_FALLBACK;
 
   const startInterval = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (heroMovies.length > 1) {
-      intervalRef.current = setInterval(() => setHeroIdx(i => (i + 1) % heroMovies.length), 6000);
+      intervalRef.current = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          setHeroIdx(i => (i + 1) % heroMovies.length);
+        }
+      }, 7000); // Slightly slower for more "cinematic" feel
     }
   }, [heroMovies.length]);
 
@@ -202,40 +232,45 @@ export const Home: React.FC = () => {
   }, [startInterval]);
 
   return (
-    <div className="flex flex-col pb-24 md:pb-12 bg-[#0F1117] min-h-screen">
+    <div className="flex flex-col pb-24 md:pb-16 bg-background min-h-screen">
       
       {/* ── 1. HERO SLIDER ─────────────────────────────────────────────── */}
-      <section className="relative w-full h-[56vh] sm:h-[62vh] lg:h-[68vh] max-h-[700px] min-h-[400px] overflow-hidden bg-black">
+      <section className="relative w-full h-[65vh] sm:h-[75vh] lg:h-[85vh] max-h-[850px] min-h-[500px] overflow-hidden bg-black shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
         {heroMovies.length === 0 && !recentQ.isLoading && (
-          <div className="absolute inset-0 bg-[#11131a] flex items-center justify-center">
-             <p className="text-white/20 italic uppercase tracking-widest font-black">Chưa có dữ liệu banner</p>
+          <div className="absolute inset-0 bg-surface flex items-center justify-center">
+             <p className="text-white/20 italic uppercase tracking-[0.3em] font-black text-xl">DỮ LIỆU ĐANG TẢI...</p>
           </div>
         )}
         {recentQ.isLoading && (
-          <div className="absolute inset-0 bg-[#11131a] animate-pulse flex items-center justify-center">
-            <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+          <div className="absolute inset-0 bg-surface animate-pulse flex items-center justify-center">
+            <div className="relative w-20 h-20">
+              <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
+              <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
           </div>
         )}
         {heroMovies.map((m, i) => <HeroBanner key={m.id} movie={m} isActive={i === heroIdx} />)}
         
-        {/* Dot Indicators */}
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3">
+        {/* Enhanced Dot Indicators */}
+        <div className="absolute bottom-12 right-12 z-30 flex flex-col gap-4">
           {heroMovies.map((_, i) => (
             <button key={i} onClick={() => { setHeroIdx(i); startInterval(); }}
-              className={`h-1.5 transition-all duration-500 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${i === heroIdx ? 'w-10 bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.8)]' : 'w-3 bg-white/30 hover:bg-white/50'}`} />
+              className={`w-2 transition-all duration-700 rounded-full focus:outline-none ${i === heroIdx ? 'h-12 bg-primary shadow-[0_0_20px_rgba(168,85,247,1)]' : 'h-2 bg-white/20 hover:bg-white/40'}`} />
           ))}
         </div>
       </section>
 
-      <div className="flex flex-col gap-10 md:gap-14 mt-8 md:mt-12 max-w-[1440px] mx-auto w-full">
+      <div className="flex flex-col gap-16 md:gap-24 mt-12 md:mt-20 max-w-[1500px] mx-auto w-full px-4 md:px-8">
         
         {/* ── 2. TOP 10 HÔM NAY ────────────────────────────────────────── */}
-        <section className="px-4 md:px-8">
-          <div className="flex items-center gap-3 mb-6">
-            <span className="text-3xl">🏆</span>
-            <h2 className="font-display text-2xl font-black text-white tracking-tight uppercase italic">Top 10 Hôm Nay</h2>
+        <section>
+          <div className="flex items-center gap-4 mb-10">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center shadow-lg shadow-yellow-500/20">
+              <span className="text-2xl">🏆</span>
+            </div>
+            <h2 className="font-display text-3xl md:text-4xl font-black text-white tracking-tight uppercase italic text-gradient-gold">Top 10 Hôm Nay</h2>
           </div>
-          <div className="flex gap-4 overflow-x-auto scrollbar-hide snap-x pb-6 pr-10">
+          <div className="flex gap-4 overflow-x-auto scrollbar-hide snap-x pb-8 pr-12">
             {(trendingQ.data || []).map((m, i) => (
               <div key={m.id} className="snap-start"><Top10Card movie={m} rank={i + 1} /></div>
             ))}
@@ -246,15 +281,15 @@ export const Home: React.FC = () => {
         <Carousel title="Mới Cập Nhật" emoji="⚡" isLoading={recentQ.isLoading} error={recentQ.error}
           onRetry={recentQ.refetch} viewAllLink="/browse/phim-moi-cap-nhat">
           {recentQ.data?.map(m => (
-            <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />
+            <MovieCard key={m.slug} {...m} className="w-[150px] md:w-[200px] lg:w-[230px] shrink-0 snap-start" />
           ))}
         </Carousel>
 
         {/* ── 4. PHIM CHIẾU RẠP ────────────────────────────────────────── */}
-        <Carousel title="Phim Chiếu Rạp" emoji="🎬" badge="ĐANG CHIẾU" isLoading={cinemaQ.isLoading} error={cinemaQ.error}
+        <Carousel title="Phim Chiếu Rạp" emoji="🎬" badge="VIP" isLoading={cinemaQ.isLoading} error={cinemaQ.error}
           onRetry={cinemaQ.refetch} viewAllLink="/browse/phim-chieu-rap">
           {cinemaQ.data?.map(m => (
-            <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />
+            <MovieCard key={m.slug} {...m} className="w-[150px] md:w-[200px] lg:w-[230px] shrink-0 snap-start" />
           ))}
         </Carousel>
 
@@ -262,92 +297,76 @@ export const Home: React.FC = () => {
         <Carousel title="Phim Bộ Đang Hot" emoji="📺" isLoading={seriesQ.isLoading} error={seriesQ.error}
           onRetry={seriesQ.refetch} viewAllLink="/browse/phim-bo">
           {seriesQ.data?.map(m => (
-            <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />
+            <MovieCard key={m.slug} {...m} className="w-[150px] md:w-[200px] lg:w-[230px] shrink-0 snap-start" />
           ))}
         </Carousel>
 
         {/* ── 6. THEO QUỐC GIA ────────────────────────────────────────── */}
-        <section className="px-4 md:px-8">
-          <div className="flex items-center gap-3 mb-6">
-            <span className="text-2xl">🌍</span>
-            <h2 className="font-display text-xl md:text-2xl font-black text-white tracking-tight uppercase italic">Theo Quốc Gia</h2>
+        <section>
+          <div className="flex items-center gap-4 mb-10">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/20">
+              <span className="text-2xl">🌍</span>
+            </div>
+            <h2 className="font-display text-3xl md:text-4xl font-black text-white tracking-tight uppercase italic text-gradient-primary">Theo Quốc Gia</h2>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
             {COUNTRIES.map(c => (
               <button key={c.slug} onClick={() => navigate(`/browse/${c.slug}`)}
-                className={`flex items-center gap-3 px-6 py-3.5 rounded-full bg-gradient-to-br ${c.color} border border-white/5 hover:border-white/20 transition-all hover:scale-105 group`}>
-                <span className="text-xl group-hover:scale-125 transition-transform">{c.emoji}</span>
-                <span className="font-bold text-white/90 group-hover:text-white uppercase tracking-widest text-[11px]">{c.name}</span>
+                className={`flex flex-col items-center gap-3 p-6 rounded-[24px] glass-card hover:border-primary/50 group`}>
+                <span className="text-3xl group-hover:scale-125 transition-transform duration-500">{c.emoji}</span>
+                <span className="font-extrabold text-white/80 group-hover:text-white uppercase tracking-widest text-[11px]">{c.name}</span>
               </button>
             ))}
           </div>
         </section>
 
-        {/* ── 7. CÁC ROW QUỐC GIA ── */}
-        <Carousel title="Phim Việt Nam" emoji="🇻🇳" isLoading={vnQ.isLoading} error={vnQ.error}
-          onRetry={vnQ.refetch} viewAllLink="/browse/viet-nam">
-          {vnQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />)}
+        {/* Rows by Country */}
+        <Carousel title="Phim Việt Nam" emoji="🇻🇳" isLoading={vnQ.isLoading} onRetry={vnQ.refetch} viewAllLink="/browse/viet-nam">
+          {vnQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[150px] md:w-[200px] lg:w-[230px] shrink-0 snap-start" />)}
         </Carousel>
 
-        <Carousel title="Phim Hàn Quốc" emoji="🇰🇷" isLoading={krQ.isLoading} error={krQ.error}
-          onRetry={krQ.refetch} viewAllLink="/browse/han-quoc">
-          {krQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />)}
+        <Carousel title="Phim Hàn Quốc" emoji="🇰🇷" isLoading={krQ.isLoading} onRetry={krQ.refetch} viewAllLink="/browse/han-quoc">
+          {krQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[150px] md:w-[200px] lg:w-[230px] shrink-0 snap-start" />)}
         </Carousel>
 
-        <Carousel title="Phim Trung Quốc" emoji="🇨🇳" isLoading={cnQ.isLoading} error={cnQ.error}
-          onRetry={cnQ.refetch} viewAllLink="/browse/trung-quoc">
-          {cnQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />)}
-        </Carousel>
-
-        <Carousel title="Phim Âu Mỹ" emoji="🇺🇸" isLoading={usQ.isLoading} error={usQ.error}
-          onRetry={usQ.refetch} viewAllLink="/browse/au-my">
-          {usQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />)}
-        </Carousel>
-
-        {/* ── 8. ANIME & THỂ LOẠI ── */}
-        <Carousel title="Anime Mới Nhất" emoji="🎌" isLoading={animeQ.isLoading} error={animeQ.error}
-          onRetry={animeQ.refetch} viewAllLink="/browse/hoat-hinh">
-          {animeQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />)}
-        </Carousel>
-
-        <Carousel title="Phim Hài - Giải Trí" emoji="😂" isLoading={comedyQ.isLoading} error={comedyQ.error}
-          onRetry={comedyQ.refetch} viewAllLink="/browse/hai-huoc">
-          {comedyQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />)}
-        </Carousel>
-
-        <Carousel title="Phim Kinh Dị" emoji="👻" isLoading={horrorQ.isLoading} error={horrorQ.error}
-          onRetry={horrorQ.refetch} viewAllLink="/browse/kinh-di">
-          {horrorQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[140px] md:w-[180px] lg:w-[200px] shrink-0 snap-start" />)}
+        <Carousel title="Phim Âu Mỹ" emoji="🇺🇸" isLoading={usQ.isLoading} onRetry={usQ.refetch} viewAllLink="/browse/au-my">
+          {usQ.data?.map(m => <MovieCard key={m.slug} {...m} className="w-[150px] md:w-[200px] lg:w-[230px] shrink-0 snap-start" />)}
         </Carousel>
 
         {/* ── 9. KHÁM PHÁ THEO THỂ LOẠI ── */}
-        <section className="px-4 md:px-8">
-          <div className="flex items-center gap-3 mb-6">
-            <span className="text-2xl">🎭</span>
-            <h2 className="font-display text-xl md:text-2xl font-black text-white tracking-tight uppercase">Khám Phá Theo Thể Loại</h2>
+        <section>
+          <div className="flex items-center gap-4 mb-10">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent to-primary flex items-center justify-center shadow-lg shadow-accent/20">
+              <span className="text-2xl">🎭</span>
+            </div>
+            <h2 className="font-display text-3xl md:text-4xl font-black text-white tracking-tight uppercase italic text-gradient-primary">Khám Phá Thể Loại</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5">
             {GENRES.map(g => (
               <button key={g.slug} onClick={() => navigate(`/browse/${g.slug}`)}
-                className={`flex flex-col items-center justify-center gap-3 p-6 rounded-2xl bg-gradient-to-br ${g.color} opacity-90 hover:opacity-100 transition-all hover:scale-[1.03] hover:shadow-2xl group shadow-lg`}>
-                <span className="text-4xl group-hover:scale-125 transition-transform duration-500 drop-shadow-md">{g.emoji}</span>
-                <span className="font-display font-black text-white text-sm tracking-widest uppercase">{g.name}</span>
+                className={`flex flex-col items-center justify-center gap-4 p-8 rounded-[32px] bg-gradient-to-br ${g.color} opacity-90 hover:opacity-100 transition-all hover:scale-[1.05] hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)] group shadow-xl relative overflow-hidden`}>
+                <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity animate-shimmer" />
+                <span className="text-5xl group-hover:scale-125 transition-transform duration-700 drop-shadow-2xl">{g.emoji}</span>
+                <span className="font-display font-black text-white text-[13px] tracking-[0.2em] uppercase text-center">{g.name}</span>
               </button>
             ))}
           </div>
         </section>
 
         {/* ── 10. LIVE TV ─────────────────────────────────────────────── */}
-        <section className="px-4 md:px-8 pb-10">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <span className="w-3 h-3 rounded-full bg-red-600 animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.8)]" />
-              <h2 className="font-display text-2xl font-black text-white tracking-tight uppercase">Live TV</h2>
+        <section className="pb-20">
+          <div className="flex items-center justify-between mb-12">
+            <div className="flex items-center gap-5">
+              <div className="relative">
+                <div className="w-4 h-4 rounded-full bg-red-600 animate-ping absolute inset-0 opacity-75" />
+                <div className="w-4 h-4 rounded-full bg-red-600 relative z-10 shadow-[0_0_15px_rgba(220,38,38,0.8)]" />
+              </div>
+              <h2 className="font-display text-3xl md:text-4xl font-black text-white tracking-tight uppercase italic text-gradient-primary">Live TV</h2>
             </div>
-            <Link to="/live" className="text-xs font-bold text-purple-400 hover:text-white transition-all uppercase tracking-widest">Xem tất cả →</Link>
+            <Link to="/live" className="btn-vibrant !px-6 !py-2.5 !text-xs !rounded-xl uppercase tracking-widest">Xem tất cả →</Link>
           </div>
-          <div className="flex gap-6 overflow-x-auto scrollbar-hide snap-x pr-10">
-            {LIVE_CHANNELS.map(ch => <LiveCard key={ch.id} ch={ch} />)}
+          <div className="flex gap-8 overflow-x-auto scrollbar-hide snap-x pr-12">
+            {livePreview.map(ch => <LiveCard key={ch.id} ch={ch} />)}
           </div>
         </section>
 
@@ -355,3 +374,4 @@ export const Home: React.FC = () => {
     </div>
   );
 };
+

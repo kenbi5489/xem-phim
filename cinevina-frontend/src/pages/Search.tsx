@@ -90,146 +90,176 @@ export const Search: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 md:px-8 pt-24 pb-24 md:pb-12 flex flex-col gap-8">
+    <div className="min-h-screen bg-background pt-32 pb-24 px-6 md:px-12 flex flex-col gap-12">
+      <div className="max-w-[1500px] mx-auto w-full flex flex-col gap-12">
+        
+        {/* ── Search Input ───────────────────────────────────────────────── */}
+        <div className="max-w-3xl mx-auto w-full flex flex-col gap-4">
+          <div className="relative flex items-center group">
+            <div className="absolute left-6 w-6 h-6 text-primary group-focus-within:scale-125 transition-transform duration-500">
+              <MagnifyingGlassIcon />
+            </div>
+            <input
+              id="search-input"
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') clearSearch();
+              }}
+              placeholder="Tìm kiếm phim, diễn viên, đạo diễn..."
+              autoFocus
+              className="w-full pl-16 pr-16 py-6 rounded-[32px] glass-premium border border-white/10 text-white placeholder-white/30 text-lg md:text-xl font-bold focus:outline-none focus:border-primary focus:shadow-[0_0_40px_rgba(175,37,254,0.2)] transition-all duration-500"
+            />
+            {input && (
+              <button onClick={clearSearch} className="absolute right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all" aria-label="Xóa">
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            )}
+          </div>
 
-      {/* ── Search Input ───────────────────────────────────────────────── */}
-      <div className="max-w-2xl mx-auto w-full flex flex-col gap-3">
-        <div className="relative flex items-center">
-          <MagnifyingGlassIcon className="absolute left-4 w-5 h-5 text-white/40 pointer-events-none" />
-          <input
-            id="search-input"
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Escape') clearSearch();
-            }}
-            placeholder="Tìm kiếm phim, diễn viên, đạo diễn..."
-            autoFocus
-            className="w-full pl-12 pr-12 py-4 rounded-2xl bg-[#1d1f27] border border-white/10 text-white placeholder-white/30 text-base focus:outline-none focus:border-[#d692ff]/60 focus:shadow-[0_0_0_3px_rgba(214,146,255,0.1)] transition-all"
-          />
-          {input && (
-            <button onClick={clearSearch} className="absolute right-4 text-white/40 hover:text-white transition-colors" aria-label="Xóa">
-              <XMarkIcon className="w-5 h-5" />
-            </button>
+          {/* Result count */}
+          {debouncedQuery.trim().length >= 2 && !isLoading && (
+            <p className="text-white/40 text-sm font-black uppercase tracking-[0.2em] text-center flex items-center justify-center gap-3 animate-fade-in">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              {hasResults
+                ? `Tìm thấy ${results!.length} siêu phẩm cho "${debouncedQuery.trim()}"`
+                : `Không tìm thấy kết quả nào cho "${debouncedQuery.trim()}"`}
+            </p>
           )}
         </div>
 
-        {/* Result count */}
-        {debouncedQuery.trim().length >= 2 && !isLoading && (
-          <p className="text-white/40 text-sm text-center">
-            {hasResults
-              ? `Tìm thấy ${results!.length} kết quả cho "${debouncedQuery.trim()}"`
-              : `Không tìm thấy kết quả nào cho "${debouncedQuery.trim()}"`}
-          </p>
-        )}
-      </div>
-
-      {/* ── Loading ─────────────────────────────────────────────────────── */}
-      {isLoading && <SearchSkeleton />}
-
-      {/* ── Error ───────────────────────────────────────────────────────── */}
-      {error && !isLoading && (
-        <div className="py-20 flex flex-col items-center gap-4 text-center">
-          <span className="text-5xl">😵</span>
-          <p className="text-white/50">Không thể thực hiện tìm kiếm. Hệ thống đang gặp lỗi.</p>
-          <button onClick={() => refetch()}
-            className="px-5 py-2.5 rounded-xl bg-[#d692ff]/20 text-[#d692ff] text-sm font-semibold hover:bg-[#d692ff]/30 transition-colors">
-            Thử lại
-          </button>
-        </div>
-      )}
-
-      {/* ── Empty (has query, no results) ────────────────────────────────── */}
-      {!isLoading && !error && debouncedQuery.trim().length >= 2 && !hasResults && (
-        <div className="py-20 flex flex-col items-center gap-6 text-center">
-          <div className="w-24 h-24 rounded-full bg-[#1d1f27] flex items-center justify-center text-5xl">🔍</div>
-          <div>
-            <h2 className="font-display text-2xl font-bold text-white mb-2">Không tìm thấy kết quả</h2>
-            <p className="text-white/40 max-w-sm">
-              Thử tìm với từ khóa khác hoặc duyệt theo danh mục bên dưới.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3 justify-center mt-2">
-            {[
-              { to: '/browse/phim-le',   label: '🎬 Phim Lẻ' },
-              { to: '/browse/phim-bo',   label: '📺 Phim Bộ' },
-              { to: '/browse/hoat-hinh', label: '🌙 Anime' },
-              { to: '/browse/phim-chieu-rap', label: '🎭 Chiếu Rạp' },
-            ].map(({ to, label }) => (
-              <Link key={to} to={to}
-                className="px-5 py-2.5 rounded-full bg-[#1d1f27] border border-white/10 text-white/65 hover:text-white hover:bg-[#23262e] text-sm font-medium transition-all">
-                {label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Results grouped by type ──────────────────────────────────────── */}
-      {!isLoading && !error && hasResults && (
-        <div className="flex flex-col gap-12">
-          {GROUP_ORDER.map(groupKey => {
-            const group = grouped[groupKey];
-            if (!group || group.length === 0) return null;
-            const { label, emoji } = GROUP_LABELS[groupKey];
-            return (
-              <section key={groupKey}>
-                <div className="flex items-center gap-3 mb-5">
-                  <h2 className="font-display text-xl font-bold text-white">
-                    {emoji} {label}
-                  </h2>
-                  <span className="bg-white/8 text-white/45 text-xs font-bold px-2.5 py-1 rounded-full border border-white/8">
-                    {group.length}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-5">
-                  {group.map(m => (
-                    <MovieCard
-                      key={m.id || m.slug}
-                      slug={m.slug}
-                      name={m.name}
-                      posterUrl={m.posterUrl}
-                      thumbUrl={m.thumbUrl}
-                      quality={m.quality}
-                      lang={m.lang}
-                      year={m.year}
-                      description={m.description}
-                      isCinema={m.isCinema}
-                      isStreamable={m.isStreamable}
-                      trailerUrl={m.trailerUrl}
-                      className="w-full"
-                    />
+        {/* ── Loading ─────────────────────────────────────────────────────── */}
+        {isLoading && (
+          <div className="flex flex-col gap-16">
+            {[1, 2].map(g => (
+              <div key={g} className="flex flex-col gap-8">
+                <div className="h-8 w-48 bg-surface-container-highest animate-pulse rounded-full" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex flex-col gap-4">
+                      <div className="aspect-[2/3] bg-surface-container-highest animate-pulse rounded-[24px]" />
+                      <div className="h-4 bg-surface-container-highest animate-pulse rounded-full w-3/4" />
+                    </div>
                   ))}
                 </div>
-              </section>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Initial state (no query) ─────────────────────────────────────── */}
-      {!isLoading && !error && !debouncedQuery.trim() && (
-        <div className="py-16 flex flex-col items-center gap-5 text-center">
-          <div className="text-7xl select-none">🎬</div>
-          <div>
-            <h2 className="font-display text-2xl font-bold text-white mb-2">Tìm phim yêu thích</h2>
-            <p className="text-white/40 max-w-sm">Nhập tên phim, diễn viên hoặc thể loại để bắt đầu tìm kiếm</p>
+              </div>
+            ))}
           </div>
-          {/* Trending searches */}
-          <div className="flex flex-col items-center gap-3 mt-2">
-            <p className="text-white/30 text-xs uppercase tracking-wider">Tìm kiếm phổ biến</p>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {['Lật mặt', 'Avengers', 'One Piece', 'Song Hye Kyo', 'Doraemon', 'Fast Furious'].map(q => (
-                <button key={q} onClick={() => setInput(q)}
-                  className="px-4 py-2 rounded-full bg-[#1d1f27] border border-white/8 text-white/55 hover:text-white hover:bg-[#23262e] text-sm transition-all">
-                  {q}
-                </button>
+        )}
+
+        {/* ── Error ───────────────────────────────────────────────────────── */}
+        {error && !isLoading && (
+          <div className="py-32 flex flex-col items-center gap-8 text-center glass-premium rounded-[40px]">
+            <span className="text-7xl animate-bounce">😵</span>
+            <div className="flex flex-col gap-2">
+              <h2 className="text-2xl font-black text-white uppercase italic">Hệ thống đang bảo trì</h2>
+              <p className="text-white/40 font-bold uppercase tracking-widest text-xs">Không thể thực hiện tìm kiếm lúc này</p>
+            </div>
+            <button onClick={() => refetch()} className="btn-vibrant">THỬ LẠI NGAY</button>
+          </div>
+        )}
+
+        {/* ── Empty (has query, no results) ────────────────────────────────── */}
+        {!isLoading && !error && debouncedQuery.trim().length >= 2 && !hasResults && (
+          <div className="py-24 flex flex-col items-center gap-10 text-center glass-premium rounded-[40px]">
+            <div className="w-32 h-32 rounded-[40px] bg-surface-container flex items-center justify-center text-6xl shadow-2xl border border-white/5">🔍</div>
+            <div>
+              <h2 className="font-display text-3xl font-black text-white mb-3 uppercase tracking-tighter italic">Không có kết quả</h2>
+              <p className="text-white/40 max-w-sm font-bold uppercase tracking-widest text-xs">
+                Hãy thử từ khóa khác hoặc khám phá các danh mục nổi bật dưới đây
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-4 justify-center">
+              {[
+                { to: '/browse/phim-le',   label: '🎬 Phim Lẻ' },
+                { to: '/browse/phim-bo',   label: '📺 Phim Bộ' },
+                { to: '/browse/hoat-hinh', label: '🌙 Anime' },
+                { to: '/browse/phim-chieu-rap', label: '🎭 Chiếu Rạp' },
+              ].map(({ to, label }) => (
+                <Link key={to} to={to}
+                  className="px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-primary/20 hover:border-primary/40 text-sm font-black uppercase tracking-widest transition-all">
+                  {label}
+                </Link>
               ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* ── Results grouped by type ──────────────────────────────────────── */}
+        {!isLoading && !error && hasResults && (
+          <div className="flex flex-col gap-16">
+            {GROUP_ORDER.map(groupKey => {
+              const group = grouped[groupKey];
+              if (!group || group.length === 0) return null;
+              const { label, emoji } = GROUP_LABELS[groupKey];
+              return (
+                <section key={groupKey} className="flex flex-col gap-8">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-surface-container flex items-center justify-center text-2xl shadow-lg border border-white/5">
+                      {emoji}
+                    </div>
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-4">
+                        <h2 className="font-display text-2xl md:text-3xl font-black text-white uppercase italic text-gradient-primary">
+                          {label}
+                        </h2>
+                        <span className="bg-primary/20 text-primary text-[10px] font-black px-3 py-1 rounded-full border border-primary/20 shadow-[0_0_15px_rgba(175,37,254,0.3)]">
+                          {group.length} KẾT QUẢ
+                        </span>
+                      </div>
+                      <div className="h-1 w-12 bg-primary rounded-full mt-1" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 md:gap-8">
+                    {group.map(m => (
+                      <MovieCard
+                        key={m.id || m.slug}
+                        slug={m.slug}
+                        name={m.name}
+                        posterUrl={m.posterUrl}
+                        thumbUrl={m.thumbUrl}
+                        quality={m.quality}
+                        lang={m.lang}
+                        year={m.year}
+                        description={m.description}
+                        isCinema={m.isCinema}
+                        isStreamable={m.isStreamable}
+                        trailerUrl={m.trailerUrl}
+                        className="w-full"
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Initial state (no query) ─────────────────────────────────────── */}
+        {!isLoading && !error && !debouncedQuery.trim() && (
+          <div className="py-24 flex flex-col items-center gap-10 text-center glass-premium rounded-[40px]">
+            <div className="text-8xl select-none animate-float">🎬</div>
+            <div>
+              <h2 className="font-display text-4xl font-black text-white mb-3 uppercase tracking-tighter italic text-gradient-primary">Tìm kiếm phim</h2>
+              <p className="text-white/40 max-w-sm font-bold uppercase tracking-widest text-xs">Nhập tên phim, diễn viên hoặc đạo diễn để bắt đầu</p>
+            </div>
+            {/* Trending searches */}
+            <div className="flex flex-col items-center gap-5 mt-4">
+              <p className="text-white/30 text-[10px] font-black uppercase tracking-[0.3em]">Xu hướng tìm kiếm</p>
+              <div className="flex flex-wrap gap-3 justify-center max-w-2xl">
+                {['Lật mặt', 'Avengers', 'One Piece', 'Song Hye Kyo', 'Doraemon', 'Fast Furious', 'Spider-Man'].map(q => (
+                  <button key={q} onClick={() => setInput(q)}
+                    className="px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-primary/20 hover:border-primary/40 hover:scale-105 text-sm font-black uppercase tracking-widest transition-all">
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
+

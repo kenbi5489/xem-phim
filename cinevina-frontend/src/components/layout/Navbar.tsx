@@ -4,7 +4,7 @@ import {
   MagnifyingGlassIcon, UserCircleIcon, 
   ChevronDownIcon, XMarkIcon,
   HomeIcon, FilmIcon, TvIcon,
-  VideoCameraIcon, SparklesIcon,
+  VideoCameraIcon, SparklesIcon, TrophyIcon,
   GlobeAltIcon, HeartIcon,
   RectangleGroupIcon
 } from '@heroicons/react/24/outline';
@@ -45,12 +45,14 @@ const NAV_LINKS = [
   { name: 'Phim bộ',    to: '/browse/phim-bo', icon: TvIcon },
   { name: 'Chiếu Rạp',  to: '/browse/phim-chieu-rap', badge: 'HOT', icon: SparklesIcon },
   { name: 'Live TV',    to: '/live', icon: VideoCameraIcon },
+  { name: 'Thể Thao',   to: '/sports', icon: TrophyIcon },
 ];
 
 const MOBILE_NAV = [
   { name: 'Trang chủ', to: '/',        Icon: HomeIcon,       IconSolid: HomeSolid },
   { name: 'Phim Lẻ',   to: '/browse/phim-le', Icon: FilmIcon,       IconSolid: FilmSolid },
   { name: 'Phim Bộ',   to: '/browse/phim-bo', Icon: TvIcon,         IconSolid: TvSolid },
+  { name: 'Thể Thao',  to: '/sports',         Icon: TrophyIcon,     IconSolid: TrophyIcon },
   { name: 'Tài khoản', to: '/account', Icon: UserCircleIcon, IconSolid: UserSolid },
 ];
 

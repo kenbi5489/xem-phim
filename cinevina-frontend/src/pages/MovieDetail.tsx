@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Button } from '../components/ui/Button';
 import {
   HeartIcon, PlusIcon, StarIcon, XMarkIcon,
   PlayIcon, InformationCircleIcon, ShareIcon, CalendarIcon, ClockIcon,
-  GlobeAltIcon, LanguageIcon, RectangleGroupIcon
+  GlobeAltIcon, LanguageIcon, RectangleGroupIcon, ChevronDownIcon,
 } from '@heroicons/react/24/outline';
 import { PlayIcon as PlaySolid } from '@heroicons/react/24/solid';
-import { useMovieDetail } from '../hooks/useMovies';
-import type { ServerData } from '../services/api';
+import { useMovieDetail, useMovieStream } from '../hooks/useMovies';
 import { computeIsStreamable } from '../services/api';
+import { EmbeddedPlayer } from '../components/ui/EmbeddedPlayer';
 
 // ── YouTube embed helper ───────────────────────────────────────────────────────
 const extractYouTubeId = (url: string): string | null => {
@@ -34,43 +33,51 @@ const TrailerModal: React.FC<{ videoId: string; onClose: () => void }> = ({ vide
   </div>
 );
 
-// ── EpisodeList ───────────────────────────────────────────────────────────────
-const EpisodeList: React.FC<{ servers: ServerData[]; movieSlug: string; currentEpSlug?: string; }> = ({ servers, movieSlug, currentEpSlug }) => {
+// ── PlayerSection — inline stream with EmbeddedPlayer ─────────────────────────
+const PlayerSection: React.FC<{
+  movieSlug: string;
+  movieName: string;
+  servers: any[];
+  initialEpSlug: string;
+}> = ({ movieSlug, movieName, servers, initialEpSlug }) => {
   const [activeServer, setActiveServer] = useState(0);
-  if (!servers || servers.length === 0) return null;
-  const server = servers[activeServer];
+  const [activeEpSlug, setActiveEpSlug] = useState(initialEpSlug);
+
+  const { data: stream, isLoading } = useMovieStream(movieSlug, activeEpSlug);
+
+  const handleEpisodeChange = (serverIdx: number, epSlug: string) => {
+    setActiveServer(serverIdx);
+    setActiveEpSlug(epSlug);
+    // Scroll to player smoothly
+    document.getElementById('cinevina-player')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  if (isLoading) {
+    return (
+      <div id="cinevina-player" className="w-full aspect-video bg-black rounded-[32px] flex items-center justify-center border border-white/10">
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
+          <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!stream) return null;
 
   return (
-    <section className="bg-white/5 rounded-3xl border border-white/5 p-6 md:p-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-8 bg-purple-600 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
-          <h3 className="font-display text-2xl font-black text-white uppercase tracking-tighter">Danh Sách Tập</h3>
-        </div>
-        {servers.length > 1 && (
-          <div className="flex gap-2 bg-black/20 p-1 rounded-full">
-            {servers.map((s, i) => (
-              <button key={i} onClick={() => setActiveServer(i)}
-                className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeServer === i ? 'bg-purple-600 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}>
-                {s.server_name || `Nguồn ${i + 1}`}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-8 lg:grid-cols-12 gap-3">
-        {server.server_data.map(ep => {
-          const isCurrent = currentEpSlug === ep.slug;
-          return (
-            <Link key={ep.slug} to={`/play/${movieSlug}/${ep.slug}`}>
-              <button className={`w-full py-3.5 rounded-xl transition-all text-sm font-black border ${isCurrent ? 'bg-purple-600 text-white border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.4)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
-                {ep.name}
-              </button>
-            </Link>
-          );
-        })}
-      </div>
-    </section>
+    <div id="cinevina-player" className="scroll-mt-24">
+      <EmbeddedPlayer
+        streamUrl={stream.url}
+        streamType={stream.type as 'hls' | 'embed'}
+        movieSlug={movieSlug}
+        movieName={movieName}
+        currentEpisode={activeEpSlug}
+        servers={servers}
+        onEpisodeChange={handleEpisodeChange}
+        className="w-full"
+      />
+    </div>
   );
 };
 
@@ -79,80 +86,112 @@ export const MovieDetail: React.FC = () => {
   const { slug } = useParams();
   const { data: movie, isLoading, error, refetch } = useMovieDetail(slug || '');
   const [showTrailer, setShowTrailer] = useState(false);
+  const [isWatching, setIsWatching]   = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
 
-  if (isLoading) return <div className="min-h-screen bg-black animate-pulse" />;
-  if (error || !movie) return <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6"><p className="text-white/40">Lỗi tải dữ liệu...</p><Button onClick={() => refetch()}>Thử lại</Button></div>;
+  if (isLoading) return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="relative w-24 h-24">
+        <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
+        <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    </div>
+  );
+  if (error || !movie) return (
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
+      <p className="text-white/40 font-bold uppercase tracking-widest">Lỗi tải dữ liệu...</p>
+      <button onClick={() => refetch()} className="btn-vibrant">THỬ LẠI</button>
+    </div>
+  );
 
   const isStreamable = computeIsStreamable(movie);
-  const firstEp = movie.servers?.[0]?.server_data?.[0]?.slug || movie.episodes?.[0]?.slug || '';
-  const trailerYtId = extractYouTubeId(movie.trailerUrl || '');
+  const firstEp      = movie.servers?.[0]?.server_data?.[0]?.slug || movie.episodes?.[0]?.slug || '';
+  const trailerYtId  = extractYouTubeId(movie.trailerUrl || '');
+  const is4K         = movie.quality?.toUpperCase().includes('4K');
+
+  const handleWatchNow = () => {
+    setIsWatching(true);
+    // Give React a tick to render, then scroll
+    setTimeout(() => {
+      document.getElementById('cinevina-player')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
 
   return (
-    <div className="flex flex-col pb-20 bg-[#0c0e14] min-h-screen">
+    <div className="flex flex-col pb-24 bg-background min-h-screen">
       {showTrailer && trailerYtId && <TrailerModal videoId={trailerYtId} onClose={() => setShowTrailer(false)} />}
 
       {/* ── Dynamic Hero Background ── */}
-      <div className="relative w-full h-[65vh] md:h-[85vh] overflow-hidden">
+      <div className="relative w-full h-[60vh] md:h-[80vh] overflow-hidden">
         <div className="absolute inset-0">
-          <img src={movie.posterUrl || movie.thumbUrl || ""} className="w-full h-full object-cover object-top opacity-30 blur-2xl scale-110" alt="" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0c0e14] via-[#0c0e14]/60 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0c0e14] via-transparent to-transparent" />
+          <img src={movie.posterUrl || movie.thumbUrl || ""} className="w-full h-full object-cover object-top opacity-25 blur-3xl scale-110" alt="" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-transparent" />
         </div>
 
         {/* Content Overlay */}
         <div className="absolute inset-0 flex items-end">
-          <div className="max-w-[1440px] mx-auto px-4 md:px-8 w-full pb-10 md:pb-20 grid grid-cols-1 md:grid-cols-[auto,1fr] gap-10 items-end">
+          <div className="max-w-[1500px] mx-auto px-4 sm:px-6 md:px-12 w-full pb-10 md:pb-20 flex flex-col md:grid md:grid-cols-[auto,1fr] gap-8 md:gap-12 items-end">
             
-            {/* Poster - 2:3 ratio, premium shadow */}
-            <div className="hidden md:block shrink-0 w-64 lg:w-72 aspect-[2/3] rounded-[2rem] overflow-hidden border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.8)] transform -rotate-2 hover:rotate-0 transition-all duration-700">
+            {/* Poster */}
+            <div className="hidden md:block shrink-0 w-56 lg:w-72 aspect-[2/3] rounded-[32px] overflow-hidden border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.9)] -rotate-2 hover:rotate-0 transition-all duration-700 movie-card-glow">
               <img src={movie.thumbUrl || movie.posterUrl || ""} className="w-full h-full object-cover" alt={movie.name} />
               {movie.isCinema && (
-                <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded uppercase tracking-widest animate-pulse">ĐANG CHIẾU</div>
+                <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_20px_rgba(220,38,38,0.5)] animate-pulse">ĐANG CHIẾU</div>
               )}
             </div>
 
             {/* Info Block */}
-            <div className="flex flex-col gap-6 mb-4 max-w-4xl">
+            <div className="flex flex-col gap-5 md:gap-7 max-w-4xl glass-premium p-6 md:p-10 rounded-[32px] md:rounded-[40px]">
+              {/* Badges */}
               <div className="flex flex-wrap items-center gap-3">
-                {movie.quality && <span className="bg-purple-600 text-white text-xs font-black px-3 py-1 rounded-full uppercase shadow-[0_0_20px_rgba(168,85,247,0.4)]">{movie.quality}</span>}
-                {movie.lang && <span className="bg-white/10 text-white/80 text-xs font-bold px-3 py-1 rounded-full border border-white/10 backdrop-blur-sm uppercase">{movie.lang}</span>}
-                <span className="flex items-center gap-1.5 text-yellow-400 font-black text-sm px-3 py-1 bg-yellow-400/10 rounded-full border border-yellow-400/20">
+                {movie.quality && (
+                  <span className={`text-[11px] font-black px-3 py-1.5 rounded-full uppercase shadow-lg ${is4K ? 'bg-gradient-to-r from-yellow-500 to-amber-400 text-black' : 'bg-primary text-white shadow-[0_0_15px_rgba(175,37,254,0.4)]'}`}>
+                    {movie.quality}
+                  </span>
+                )}
+                {movie.lang && <span className="bg-white/5 text-white/70 text-[11px] font-black px-3 py-1.5 rounded-full border border-white/10 uppercase">{movie.lang}</span>}
+                <span className="flex items-center gap-1.5 text-yellow-400 font-black text-sm px-3 py-1.5 bg-yellow-400/10 rounded-full border border-yellow-400/20">
                   <StarIcon className="w-4 h-4 fill-current" /> {movie.rating || '8.5'}
                 </span>
-                {movie.year && <span className="text-white/40 text-sm font-bold tracking-widest uppercase">{movie.year}</span>}
+                {movie.year && <span className="text-white/40 text-[12px] font-black tracking-[0.2em] uppercase">{movie.year}</span>}
               </div>
 
-              <h1 className="font-display text-4xl md:text-7xl font-black text-white leading-[0.9] uppercase tracking-tighter italic drop-shadow-2xl">
-                {movie.name}
-              </h1>
-              {movie.originalName && <p className="text-purple-400 font-bold text-lg md:text-xl tracking-tight opacity-80">{movie.originalName}</p>}
+              <div>
+                <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white leading-[1] uppercase tracking-tighter italic drop-shadow-2xl">
+                  {movie.name}
+                </h1>
+                {movie.originalName && <p className="text-primary font-black text-base md:text-xl tracking-tight uppercase italic mt-2 opacity-90">{movie.originalName}</p>}
+              </div>
 
-              {/* Action row */}
-              <div className="flex flex-wrap items-center gap-4 mt-4">
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3 md:gap-4">
                 {isStreamable && firstEp ? (
-                  <Link to={`/play/${movie.slug}/${firstEp}`}>
-                    <button className="flex items-center gap-3 px-10 py-4 rounded-full bg-gradient-to-r from-purple-600 to-indigo-700 text-white font-black text-sm tracking-widest shadow-[0_20px_40px_rgba(168,85,247,0.3)] hover:scale-105 transition-all">
-                      <PlaySolid className="w-6 h-6" /> XEM NGAY
-                    </button>
-                  </Link>
+                  <button
+                    onClick={handleWatchNow}
+                    className="btn-vibrant !px-8 md:!px-12 !py-4 md:!py-5 flex items-center gap-3 group"
+                  >
+                    <PlaySolid className="w-6 h-6 md:w-7 md:h-7 group-hover:scale-125 transition-transform" />
+                    {isWatching ? 'ĐANG PHÁT' : 'XEM NGAY'}
+                  </button>
                 ) : (
-                  <div className="flex items-center gap-3 px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white/40 font-bold text-xs uppercase tracking-widest italic">
+                  <div className="flex items-center gap-3 px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white/40 font-black text-xs uppercase tracking-widest italic">
                     <InformationCircleIcon className="w-5 h-5" /> Sắp ra mắt
                   </div>
                 )}
 
                 {trailerYtId && (
-                  <button onClick={() => setShowTrailer(true)} className="flex items-center gap-3 px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all font-black text-xs tracking-widest uppercase">
+                  <button onClick={() => setShowTrailer(true)} className="flex items-center gap-2 px-6 py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all font-black text-xs tracking-widest uppercase group">
                     <PlayIcon className="w-5 h-5 text-red-500" /> Trailer
                   </button>
                 )}
 
                 <div className="flex gap-2">
-                  <button className="p-4 rounded-full bg-white/5 border border-white/10 text-white hover:text-red-500 hover:bg-white/10 transition-all shadow-lg group">
-                    <HeartIcon className="w-6 h-6 group-hover:fill-red-500" />
+                  <button className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border border-white/10 text-white hover:text-red-500 hover:border-red-500/40 transition-all flex items-center justify-center group">
+                    <HeartIcon className="w-6 h-6 group-hover:fill-red-500 transition-all" />
                   </button>
-                  <button className="p-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all shadow-lg">
-                    <PlusIcon className="w-6 h-6" />
+                  <button className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border border-white/10 text-white hover:text-primary hover:border-primary/40 transition-all flex items-center justify-center group">
+                    <PlusIcon className="w-6 h-6 group-hover:scale-110 transition-transform" />
                   </button>
                 </div>
               </div>
@@ -161,66 +200,85 @@ export const MovieDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Content Details ── */}
-      <div className="max-w-[1440px] mx-auto px-4 md:px-8 grid grid-cols-1 lg:grid-cols-[1fr,350px] gap-12 mt-12">
-        
-        {/* Left Side: Summary & Episodes */}
-        <div className="flex flex-col gap-14">
-          {movie.description && (
-            <section className="bg-white/5 rounded-3xl border border-white/5 p-8 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-8 opacity-[0.03] scale-150 rotate-12 group-hover:rotate-0 transition-transform duration-1000">
-                <InformationCircleIcon className="w-32 h-32" />
-              </div>
-              <h3 className="font-display text-2xl font-black text-white mb-6 uppercase tracking-tighter flex items-center gap-3">
-                <InformationCircleIcon className="w-7 h-7 text-purple-500" /> Nội Dung Phim
-              </h3>
-              <div className="text-white/60 leading-loose text-lg font-medium italic" dangerouslySetInnerHTML={{ __html: movie.description }} />
-            </section>
-          )}
+      {/* ── Inline Player (renders when Watch Now is clicked) ── */}
+      {isWatching && isStreamable && movie.servers && firstEp && (
+        <div className="max-w-[1500px] mx-auto px-4 sm:px-6 md:px-12 w-full mt-8 md:mt-12">
+          <PlayerSection
+            movieSlug={movie.slug}
+            movieName={movie.name}
+            servers={movie.servers}
+            initialEpSlug={firstEp}
+          />
+        </div>
+      )}
 
-          {!movie.isCinema && isStreamable && movie.servers && (
-            <EpisodeList servers={movie.servers} movieSlug={movie.slug} />
+      {/* ── Content Details ── */}
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 md:px-12 grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-10 md:gap-16 mt-10 md:mt-16">
+        
+        {/* Left: Description */}
+        <div className="flex flex-col gap-10 md:gap-16">
+          {movie.description && (
+            <section className="glass-premium p-6 md:p-10 rounded-[32px] md:rounded-[40px] relative overflow-hidden">
+              <div className="flex flex-col gap-2 mb-6">
+                <h3 className="font-display text-2xl md:text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-4 text-gradient-primary">
+                  <InformationCircleIcon className="w-7 h-7 md:w-8 md:h-8 shrink-0" /> Nội Dung Phim
+                </h3>
+                <div className="h-1 w-16 bg-primary rounded-full" />
+              </div>
+              <div className={`text-white/70 leading-[1.8] text-base md:text-lg font-medium italic overflow-hidden transition-all duration-500 ${descExpanded ? '' : 'max-h-48 md:max-h-none'}`}
+                dangerouslySetInnerHTML={{ __html: movie.description }}
+              />
+              {/* Mobile expand button for long descriptions */}
+              <button
+                className="md:hidden mt-4 flex items-center gap-2 text-primary font-black text-xs uppercase tracking-widest"
+                onClick={() => setDescExpanded(v => !v)}
+              >
+                {descExpanded ? 'Thu gọn' : 'Đọc thêm'} <ChevronDownIcon className={`w-4 h-4 transition-transform ${descExpanded ? 'rotate-180' : ''}`} />
+              </button>
+            </section>
           )}
         </div>
 
-        {/* Right Side: Metadata Sidebar */}
-        <div className="flex flex-col gap-8">
-          <section className="bg-[#11131a] rounded-3xl border border-white/5 p-8 shadow-2xl flex flex-col gap-6">
-            <h3 className="font-display text-lg font-black text-white uppercase tracking-widest border-b border-white/5 pb-4">Thông tin chi tiết</h3>
+        {/* Right: Metadata Sidebar */}
+        <div className="flex flex-col gap-8 md:gap-10">
+          <section className="glass-premium p-6 md:p-10 rounded-[32px] md:rounded-[40px] flex flex-col gap-6 md:gap-8">
+            <h3 className="font-display text-lg font-black text-white uppercase tracking-[0.2em] italic border-b border-white/5 pb-5 text-gradient-primary">Thông tin phim</h3>
             
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-5 md:gap-8">
               {[
                 { icon: CalendarIcon, label: 'Phát hành', val: movie.year },
                 { icon: GlobeAltIcon, label: 'Quốc gia', val: movie.country },
                 { icon: RectangleGroupIcon, label: 'Thể loại', val: movie.categories },
                 { icon: LanguageIcon, label: 'Ngôn ngữ', val: movie.lang },
-                { icon: ClockIcon, label: 'Thời lượng', val: movie.totalEpisodes ? `${movie.totalEpisodes} tập` : 'Đang cập nhật' },
+                { icon: ClockIcon, label: 'Số tập', val: movie.totalEpisodes ? `${movie.totalEpisodes} tập` : 'Đang cập nhật' },
               ].map(item => item.val ? (
                 <div key={item.label} className="flex gap-4 group">
-                  <div className="shrink-0 w-10 h-10 rounded-xl bg-purple-600/10 border border-purple-600/20 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
-                    <item.icon className="w-5 h-5" />
+                  <div className="shrink-0 w-11 h-11 md:w-12 md:h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-500">
+                    <item.icon className="w-5 h-5 md:w-6 md:h-6" />
                   </div>
-                  <div>
-                    <p className="text-[10px] font-black text-white/30 uppercase tracking-widest">{item.label}</p>
-                    <p className="text-sm font-bold text-white/80 mt-0.5">{item.val}</p>
+                  <div className="flex flex-col justify-center">
+                    <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">{item.label}</p>
+                    <p className="text-sm md:text-[15px] font-extrabold text-white/90 mt-0.5">{item.val}</p>
                   </div>
                 </div>
               ) : null)}
 
-              <div className="pt-4 border-t border-white/5">
-                <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-3">Diễn viên chính</p>
-                <div className="flex flex-wrap gap-2">
-                  {movie.cast?.split(',').map(name => (
-                    <span key={name} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[12px] font-bold text-white/60 hover:text-white hover:border-purple-600/40 transition-all cursor-default">
-                      {name.trim()}
-                    </span>
-                  ))}
+              {movie.cast && (
+                <div className="pt-6 border-t border-white/5">
+                  <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-4">Diễn viên chính</p>
+                  <div className="flex flex-wrap gap-2">
+                    {movie.cast.split(',').slice(0, 8).map(name => (
+                      <span key={name} className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-[12px] md:text-[13px] font-bold text-white/60 hover:text-white hover:border-primary/40 hover:bg-primary/10 transition-all cursor-default">
+                        {name.trim()}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             
-            <button className="w-full flex items-center justify-center gap-3 py-4 mt-4 rounded-2xl bg-white/5 border border-white/10 text-white/60 font-black text-xs uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all group">
-              <ShareIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" /> Chia sẻ phim
+            <button className="w-full flex items-center justify-center gap-3 py-4 md:py-5 rounded-2xl md:rounded-[24px] bg-white/5 border border-white/10 text-white/60 font-black text-xs md:text-[13px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all group">
+              <ShareIcon className="w-5 h-5 md:w-6 md:h-6 group-hover:rotate-12 transition-transform" /> Chia sẻ phim
             </button>
           </section>
         </div>

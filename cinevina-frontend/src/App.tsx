@@ -4,6 +4,7 @@ import { Home } from './pages/Home';
 import { Browse } from './pages/Browse';
 import { MovieDetail } from './pages/MovieDetail';
 import { LiveTV } from './pages/LiveTV';
+import { Sports } from './pages/Sports';
 import { Account } from './pages/Account';
 import { Player } from './pages/Player';
 import { Admin } from './pages/Admin';
@@ -19,6 +20,7 @@ function App() {
           <Route path="search" element={<Search />} />
           <Route path="phim/:slug" element={<MovieDetail />} />
           <Route path="live" element={<LiveTV />} />
+          <Route path="sports" element={<Sports />} />
           <Route path="account" element={<Account />} />
           <Route path="admin" element={<Admin />} />
         </Route>
