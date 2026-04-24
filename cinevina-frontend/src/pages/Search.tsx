@@ -35,24 +35,7 @@ const groupMovies = (movies: MovieInfo[]) => {
   return groups;
 };
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-const SearchSkeleton: React.FC = () => (
-  <div className="flex flex-col gap-10">
-    {[1, 2].map(g => (
-      <div key={g} className="flex flex-col gap-4">
-        <div className="h-6 w-36 bg-[#1d1f27] animate-pulse rounded-lg" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex flex-col gap-2">
-              <div className="aspect-[2/3] bg-[#1d1f27] animate-pulse rounded-2xl" />
-              <div className="h-4 bg-[#1d1f27] animate-pulse rounded w-3/4" />
-            </div>
-          ))}
-        </div>
-      </div>
-    ))}
-  </div>
-);
+
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export const Search: React.FC = () => {

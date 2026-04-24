@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import Hls from 'hls.js';
 import {
   ArrowsPointingOutIcon,
@@ -31,7 +30,6 @@ interface EmbeddedPlayerProps {
 export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   streamUrl,
   streamType,
-  movieSlug,
   movieName,
   currentEpisode,
   servers,
@@ -52,7 +50,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   const [controlsVisible, setControlsVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const formatTime = (seconds: number) => {

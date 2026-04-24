@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   HeartIcon, PlusIcon, StarIcon, XMarkIcon,
   PlayIcon, InformationCircleIcon, ShareIcon, CalendarIcon, ClockIcon,
@@ -40,13 +40,11 @@ const PlayerSection: React.FC<{
   servers: any[];
   initialEpSlug: string;
 }> = ({ movieSlug, movieName, servers, initialEpSlug }) => {
-  const [activeServer, setActiveServer] = useState(0);
   const [activeEpSlug, setActiveEpSlug] = useState(initialEpSlug);
 
   const { data: stream, isLoading } = useMovieStream(movieSlug, activeEpSlug);
 
-  const handleEpisodeChange = (serverIdx: number, epSlug: string) => {
-    setActiveServer(serverIdx);
+  const handleEpisodeChange = (_serverIdx: number, epSlug: string) => {
     setActiveEpSlug(epSlug);
     // Scroll to player smoothly
     document.getElementById('cinevina-player')?.scrollIntoView({ behavior: 'smooth', block: 'start' });

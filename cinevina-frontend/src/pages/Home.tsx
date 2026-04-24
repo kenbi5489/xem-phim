@@ -199,15 +199,11 @@ export const Home: React.FC = () => {
   const trendingQ = useTrendingMovies(10);
   const cinemaQ   = useCinemaMovies(1);
   const seriesQ   = useMovies({ category: 'phim-bo', page: 1 });
-  const animeQ    = useMovies({ category: 'hoat-hinh', page: 1 });
-  const comedyQ   = useMovies({ genre: 'hai-huoc', page: 1 });
-  const horrorQ   = useMovies({ genre: 'kinh-di', page: 1 });
   const liveQ     = useLiveChannels('live');
 
   // Country rows
   const vnQ = useMovies({ country: 'viet-nam', page: 1 });
   const krQ = useMovies({ country: 'han-quoc', page: 1 });
-  const cnQ = useMovies({ country: 'trung-quoc', page: 1 });
   const usQ = useMovies({ country: 'au-my', page: 1 });
 
   const heroMovies = (recentQ.data || []).slice(0, 6);

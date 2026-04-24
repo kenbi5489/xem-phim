@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SignalIcon, MagnifyingGlassIcon, TrophyIcon } from '@heroicons/react/24/outline';
 import { SpeakerWaveIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid';
 import Hls from 'hls.js';
-import { useLiveChannels, useLiveNetworks, type LiveChannel } from '../hooks/useMovies';
+import { useLiveChannels, type LiveChannel } from '../hooks/useMovies';
 
 // ─── Channel Logo ─────────────────────────────────────────────────────────────
 const ChannelLogo: React.FC<{ ch: LiveChannel; size?: string }> = ({ ch, size = 'w-12 h-12' }) => {
