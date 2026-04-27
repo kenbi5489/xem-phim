@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PlayIcon, InformationCircleIcon, StarIcon } from '@heroicons/react/24/solid';
+import { PlayIcon, InformationCircleIcon } from '@heroicons/react/24/solid';
+import { HeartIcon } from '@heroicons/react/24/outline';
 import { Carousel } from '../components/ui/Carousel';
 import { MovieCard } from '../components/ui/MovieCard';
 import { useMovies, useCinemaMovies, useTrendingMovies, useLiveChannels } from '../hooks/useMovies';
@@ -60,59 +61,90 @@ function getQualityBadgeClass(quality?: string): string {
 const HeroBanner: React.FC<{ movie: MovieInfo; isActive: boolean }> = ({ movie, isActive }) => {
 
   return (
-    <div className={`absolute inset-0 transition-all duration-[1200ms] ease-in-out ${isActive ? 'opacity-100 z-10 scale-100' : 'opacity-0 z-0 scale-110'}`}>
-      <div className="absolute inset-0">
+    <div className={`absolute inset-0 transition-all duration-[1200ms] ease-in-out ${isActive ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+      <div className={`absolute inset-0 transition-transform duration-[8000ms] ease-out ${isActive ? 'scale-105' : 'scale-100'}`}>
         <img 
           src={movie.posterUrl || movie.thumbUrl || "/fallback-poster.svg"} 
           alt={movie.name}
           className="w-full h-full object-cover object-top"
           loading="eager"
         />
-        {/* Dynamic Multi-layered Gradients */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#08090d] via-[#08090d]/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#08090d] via-[#08090d]/20 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#08090d]/30 via-transparent to-transparent" />
+        {/* Dark overlays to make text pop on the left */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#08090d] via-[#08090d]/60 to-transparent w-[80%]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#08090d] via-[#08090d]/30 to-transparent" />
       </div>
       
-      <div className="absolute inset-0 flex items-end md:items-center justify-center md:justify-start pb-20 md:pb-0">
+      <div className="absolute inset-0 flex items-center justify-start pb-20 md:pb-0">
         <div className="max-w-[1400px] mx-auto px-6 md:px-12 w-full">
-          {/* Glass Info Box */}
-          <div className={`flex flex-col gap-5 transition-all duration-[800ms] delay-500 w-full max-w-2xl p-5 md:p-8 rounded-[32px] glass-premium ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
-            <div className="flex flex-wrap gap-2.5">
-              {movie.isCinema && (
-                <span className="bg-red-600 text-white text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse">
-                  ĐANG CHIẾU
+          {/* Content Box - Left Aligned */}
+          <div className={`flex flex-col items-start gap-4 transition-all duration-[800ms] delay-500 w-full max-w-3xl ${isActive ? 'translate-x-0 opacity-100' : '-translate-x-12 opacity-0'}`}>
+            
+            {/* Title Block */}
+            <div className="flex flex-col select-none max-w-[90%] md:max-w-4xl gap-2">
+              <h1 className="font-display font-bold text-4xl sm:text-5xl md:text-[4rem] text-white leading-[1.15] tracking-tight drop-shadow-xl line-clamp-3"
+                  style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8)' }}>
+                {movie.name}
+              </h1>
+              {movie.originalName && (
+                <h3 className="font-body font-bold text-lg md:text-xl text-white/90 tracking-wide drop-shadow-md line-clamp-1">
+                  {movie.originalName}
+                </h3>
+              )}
+            </div>
+
+            {/* Badges Row */}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className="flex items-center gap-1 border border-yellow-400 text-yellow-400 text-[12px] font-bold px-2 py-0.5 rounded shadow-sm">
+                IMDb {movie.rating || '7.9'}
+              </span>
+              {movie.year && (
+                <span className="border border-white/40 text-white/90 text-[12px] font-medium px-2.5 py-0.5 rounded shadow-sm">
+                  {movie.year}
                 </span>
               )}
               {movie.quality && (
-                <span className={`text-[11px] font-black px-3 py-1 rounded-full uppercase shadow-lg ${getQualityBadgeClass(movie.quality)}`}>
+                <span className="border border-white/40 text-white/90 text-[12px] font-medium px-2.5 py-0.5 rounded shadow-sm">
                   {movie.quality}
                 </span>
               )}
-              <span className="flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 text-[11px] font-black px-3 py-1 rounded-full border border-yellow-500/30 backdrop-blur-md">
-                <StarIcon className="w-4 h-4" /> {movie.rating || '8.5'}
-              </span>
+              {movie.totalEpisodes && (
+                <span className="border border-white/40 text-white/90 text-[12px] font-medium px-2.5 py-0.5 rounded shadow-sm">
+                  {movie.totalEpisodes}
+                </span>
+              )}
             </div>
             
-            <h1 className="font-display font-black text-2xl sm:text-4xl md:text-5xl lg:text-6xl text-white leading-[1.1] drop-shadow-2xl uppercase tracking-tighter">
-              {movie.name}
-            </h1>
+            {/* Genres Row */}
+            {movie.categories && (
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                {movie.categories.split(',').slice(0, 3).map((g, idx) => (
+                  <span key={idx} className="bg-white/5 border border-white/10 text-white/80 text-[11px] font-medium px-3 py-1 rounded-full whitespace-nowrap">
+                    {g.trim()}
+                  </span>
+                ))}
+              </div>
+            )}
             
-            <p className="text-white/80 text-base md:text-lg leading-relaxed line-clamp-2 font-medium">
+            {/* Description */}
+            <p className="text-white/80 text-[14px] md:text-[15px] leading-relaxed line-clamp-3 font-normal max-w-2xl mt-4 drop-shadow-md">
               {movie.description 
-                ? movie.description.replace(/<[^>]*>/g, '').slice(0, 180) + (movie.description.length > 180 ? '...' : '')
-                : 'Khám phá thế giới điện ảnh đỉnh cao với chất lượng 4K tuyệt mỹ cùng CINEVINA.'}
+                ? movie.description.replace(/<[^>]*>/g, '').slice(0, 250) + (movie.description.length > 250 ? '...' : '')
+                : 'Khám phá thế giới điện ảnh đỉnh cao với chất lượng tuyệt mỹ cùng CINEVINA.'}
             </p>
             
-            <div className="flex flex-col sm:flex-row items-center gap-3 mt-2">
+            {/* Action Buttons */}
+            <div className="flex items-center gap-4 mt-6">
               <Link to={`/phim/${movie.slug}`}>
-                <button className="btn-vibrant flex items-center justify-center gap-2 group w-full sm:w-auto !px-6 !py-3">
-                  <PlayIcon className="w-5 h-5 group-hover:scale-125 transition-transform" /> XEM NGAY
+                <button className="w-14 h-14 md:w-16 md:h-16 bg-[#f9d854] hover:bg-yellow-400 rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform group">
+                  <PlayIcon className="w-7 h-7 md:w-8 md:h-8 text-black ml-1 group-hover:scale-110 transition-transform" />
                 </button>
               </Link>
+              <button className="w-12 h-12 md:w-14 md:h-14 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full flex items-center justify-center transition-all hover:scale-105">
+                <HeartIcon className="w-6 h-6 text-white" />
+              </button>
               <Link to={`/phim/${movie.slug}`}>
-                <button className="flex items-center justify-center gap-2 px-6 py-3 rounded-full font-extrabold text-white text-[13px] border border-white/10 hover:bg-white/10 transition-all backdrop-blur-xl group w-full sm:w-auto">
-                  <InformationCircleIcon className="w-5 h-5 text-white/60 group-hover:text-white transition-colors" /> THÔNG TIN
+                <button className="w-12 h-12 md:w-14 md:h-14 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full flex items-center justify-center transition-all hover:scale-105">
+                  <InformationCircleIcon className="w-6 h-6 text-white" />
                 </button>
               </Link>
             </div>
@@ -247,16 +279,31 @@ export const Home: React.FC = () => {
         )}
         {heroMovies.map((m, i) => <HeroBanner key={m.id} movie={m} isActive={i === heroIdx} />)}
         
-        {/* Enhanced Dot Indicators */}
-        <div className="absolute bottom-12 right-12 z-30 flex flex-col gap-4">
+        {/* Thumbnails Carousel (Desktop) */}
+        <div className="absolute bottom-8 right-8 md:bottom-12 md:right-12 z-30 hidden md:flex items-center gap-3">
+          {heroMovies.map((m, i) => (
+            <button 
+              key={i} 
+              onClick={() => { setHeroIdx(i); startInterval(); }}
+              className={`relative w-[120px] aspect-video rounded-xl overflow-hidden transition-all duration-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                i === heroIdx ? 'border-2 border-white scale-110 shadow-[0_0_20px_rgba(255,255,255,0.3)] z-10' : 'border border-white/20 opacity-50 hover:opacity-100 hover:scale-105'
+              }`}
+            >
+              <img src={m.thumbUrl || m.posterUrl || "/fallback-poster.svg"} alt={m.name} className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+
+        {/* Mobile Dot Indicators */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex md:hidden items-center gap-2">
           {heroMovies.map((_, i) => (
             <button key={i} onClick={() => { setHeroIdx(i); startInterval(); }}
-              className={`w-2 transition-all duration-700 rounded-full focus:outline-none ${i === heroIdx ? 'h-12 bg-primary shadow-[0_0_20px_rgba(168,85,247,1)]' : 'h-2 bg-white/20 hover:bg-white/40'}`} />
+              className={`h-1.5 transition-all duration-500 rounded-full focus:outline-none ${i === heroIdx ? 'w-6 bg-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.8)]' : 'w-1.5 bg-white/30'}`} />
           ))}
         </div>
       </section>
 
-      <div className="flex flex-col gap-16 md:gap-24 mt-12 md:mt-20 max-w-[1500px] mx-auto w-full px-4 md:px-8 overflow-x-hidden">
+      <div className="flex flex-col gap-16 md:gap-24 mt-12 md:mt-20 max-w-[1500px] mx-auto w-full px-4 md:px-8">
         
         {/* ── 2. TOP 10 HÔM NAY ────────────────────────────────────────── */}
         <section>

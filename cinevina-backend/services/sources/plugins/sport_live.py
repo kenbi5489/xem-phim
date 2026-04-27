@@ -39,46 +39,31 @@ _CHANNELS = [
     ("vtv2", "VTV2 HD", "VTV", "truyen-hinh", "🧬", True, "Khoa học & Giáo dục", "Khám phá thế giới", "https://live.fptplay53.net/fnxch2/vtv2hd_abr.smil/chunklist.m3u8"),
     ("vtv3", "VTV3 HD", "VTV", "truyen-hinh", "🎭", True, "Giải trí & Thể thao", "Phim truyện VTV3", "https://live.fptplay53.net/fnxch2/vtv3hd_abr.smil/chunklist.m3u8"),
     ("vtv5", "VTV5 HD", "VTV", "truyen-hinh", "🏘️", True, "Dân tộc & Miền núi", "Văn hóa dân tộc", "https://live-a.fptplay53.net/live/media/VTV5HD/live_hls_avc/index.m3u8"),
-    ("vtv9", "VTV9 HD", "VTV", "truyen-hinh", "🌴", True, "Tin tức Phía Nam", "Phim truyện VTV9", "https://toiyeuvietnam.dpdns.org/TuyetDoiKhongKinhDoanh/vtv9-hd/KenhCoBan.m3u8"),
+    ("vtv7", "VTV7 HD", "VTV", "truyen-hinh", "🎓", True, "Giáo dục Quốc gia", "Học cùng VTV7", "https://live.fptplay53.net/fnxhd1/vtv7hd_vhls.smil/chunklist.m3u8"),
+    ("vtv8", "VTV8 HD", "VTV", "truyen-hinh", "🌅", True, "Miền Trung - Tây Nguyên", "Văn hóa khu vực", "https://live.fptplay53.net/epzhd1/vtv8hd_vhls.smil/chunklist.m3u8"),
+    ("vtv9", "VTV9 HD", "VTV", "truyen-hinh", "🌴", True, "Tin tức Phía Nam", "Phim truyện VTV9", "https://live.fptplay53.net/fnxhd1/vtv9_vhls.smil/chunklist.m3u8"),
     
-    # Kênh Phim truyện
-    ("hbo", "HBO HD", "HBO", "phim-truyen", "🎬", True, "Phim bom tấn Hollywood", "HBO Original Series", "https://fl1.moveonjoy.com/HBO/index.m3u8"),
-    ("cinemax", "Cinemax HD", "CINEMAX", "phim-truyen", "📽️", True, "Hành động kịch tính", "Max Original", "https://fl1.moveonjoy.com/CINEMAX/index.m3u8"),
-    ("star-movies", "Star Movies", "FOX", "phim-truyen", "⭐️", True, "Hollywood Blockbusters", "Classic Movies", "https://fl1.moveonjoy.com/STARZ/index.m3u8"),
-    ("kplus-cine", "K+ Cine HD", "KPLUS", "phim-truyen", "🎞️", True, "Phim điện ảnh mới nhất", "Phim Việt độc quyền", "https://pepsi4.abntv.live/hls/psp4.m3u8"),
-    ("kplus-action", "K+ Action HD", "KPLUS", "phim-truyen", "💥", True, "Phim hành động", "Phim võ thuật", "https://pepsi2.abntv.live/hls/psp2.m3u8"),
-    
-    # Discovery / Disney
-    ("nat-geo", "Nat Geo HD", "NATGEO", "quoc-te", "🐆", True, "Khám phá thế giới", "National Geographic", "https://fl1.moveonjoy.com/National_Geographic/index.m3u8"),
-    ("discovery", "Discovery Channel", "DISCOVERY", "quoc-te", "🔬", True, "Khoa học & Đời sống", "The History Channel", "https://fl1.moveonjoy.com/history_channel/index.m3u8"),
-    ("disney", "Disney Channel", "DISNEY", "thieu-nhi", "🏰", True, "Disney Original", "Animation", "https://fl1.moveonjoy.com/DISNEY/index.m3u8"),
-
     # HTV / THVL / Dia phuong
-    ("htv7", "HTV7 HD", "HTV", "truyen-hinh", "🇻🇳", True, "Giải trí tổng hợp", "Phim truyện HTV7", "https://live.fptplay53.net/epzhd1/htv7hd_vhls.smil/chunklist_b5000000.m3u8"),
+    ("htv1", "HTV1", "HTV", "truyen-hinh", "🇻🇳", False, "Thông tin công cộng", "HTV1", "https://vc.101vn.com/htv/htvcmb.php?id=2631"),
+    ("htv3", "HTV3", "HTV", "thieu-nhi", "🧸", False, "Phim & Thiếu nhi", "DreamsTV", "https://vc.101vn.com/htv/htvcmb.php?id=2535"),
+    ("htv7", "HTV7 HD", "HTV", "truyen-hinh", "🎬", True, "Giải trí tổng hợp", "Phim truyện HTV7", "https://live.fptplay53.net/epzhd1/htv7hd_vhls.smil/chunklist_b5000000.m3u8"),
     ("htv9", "HTV9 HD", "HTV", "truyen-hinh", "🏙️", True, "Tin tức & Phim", "Phim truyện HTV9", "https://live.fptplay53.net/epzhd1/htv9hd_vhls.smil/chunklist.m3u8"),
+    ("htv-key", "HTV Key", "HTV", "truyen-hinh", "📚", True, "Giáo dục & Kiến thức", "HTV Key", "https://liveh12.vtvprime.vn/hls/HTVKey/index.m3u8"),
     ("thvl1", "THVL1 HD", "THVL", "dia-phuong", "🌿", True, "Vĩnh Long 1 HD", "Phim truyện THVL", "https://live.fptplay53.net/epzhd2/vinhlong1_vhls.smil/chunklist_b5000000.m3u8"),
     ("antv", "ANTV HD", "ANTV", "tin-tuc", "🚔", True, "An ninh & Pháp luật", "Tin tức 24/7", "https://liveh12.vtvprime.vn/hls/ANNINHTV/index.m3u8"),
+    ("dong-thap", "Đồng Tháp TV", "THDT", "dia-phuong", "🌾", True, "Đài PT-TH Đồng Tháp", "Tin tức", "https://liveh34.vtvprime.vn/hls/DONGTHAPTV/index.m3u8"),
+    ("ha-tinh", "Hà Tĩnh TV", "HTTV", "dia-phuong", "🏞️", True, "Đài PT-TH Hà Tĩnh", "Tin tức", "https://wse.hatinhtv.net/live/httv1/chunklist.m3u8"),
 ]
 
 # ── Sports Channels ────────────────────────────────────────────────────────────
 _SPORTS_CHANNELS = [
-    # NBA - Nguồn TrucTiepNBA (Mới nhất)
+    # NBA - Nguồn TrucTiepNBA (Dynamic Tokens - Could be unstable without referer)
     ("nba-prime-1", "NBA Prime 1", "TRUCTIEPNBA", "bong-ro", "🏀", True, "Trực tiếp NBA — Server 1", "Sự kiện sắp diễn ra", "https://cc.bluecdn.link/prime1/playlist.m3u8"),
     ("nba-prime-2", "NBA Prime 2", "TRUCTIEPNBA", "bong-ro", "🏀", True, "Trực tiếp NBA — Server 2", "Sự kiện sắp diễn ra", "https://cc.bluecdn.link/prime2/playlist.m3u8"),
     ("nba-prime-3", "NBA Prime 3", "TRUCTIEPNBA", "bong-ro", "🏀", True, "Trực tiếp NBA — Server 3", "Sự kiện sắp diễn ra", "https://cc.bluecdn.link/prime3/playlist.m3u8"),
     
-    # NBA Official & Fallback
-    ("nba-tv", "NBA TV Official", "NBA", "bong-ro", "🏀", True, "NBA Regular Season", "NBA Highlights", "https://fl1.moveonjoy.com/NBA_TV/index.m3u8"),
-    ("fox-sports-1", "FOX Sports 1", "FOX", "bong-ro", "🏀", True, "NCAA & NBA", "Sports Center", "https://fl7.moveonjoy.com/FOX_Sports_1/index.m3u8"),
-    
-    # K+ Sport
-    ("kplus-sport-1", "K+ SPORT 1 HD", "KPLUS", "bong-da", "⚽", True, "Ngoại Hạng Anh & NBA", "Bình luận bóng đá", "https://pepsi.abntv.live/hls/4spstream.m3u8"),
-    ("kplus-sport-2", "K+ SPORT 2 HD", "KPLUS", "dua-xe", "🏎️", True, "Formula 1 & Tennis", "Đua xe rực lửa", "https://pepsi3.abntv.live/hls/psp3.m3u8"),
-    
-    # Football / Other
-    ("bein-xtra", "BeIN Sports Xtra", "BEIN", "bong-da", "⚽", True, "Live Football", "Xtra Sports", "https://amg01334-beinsportsllc-beinxtra-localnow-kcy6r.amagi.tv/playlist.m3u8"),
-    ("setanta-1", "Setanta Sports 1", "SETANTA", "bong-da", "🏆", True, "European Football", "Sports News", "https://vod.splay.uz/live_splay/original/Setanta1HD/tracks-v1a1/mono.m3u8"),
-    ("mutv", "MUTV HD", "MUTV", "bong-da", "⚽", True, "Man Utd TV", "Inside United", "https://mu.live.moveonjoy.com/MUTV/index.m3u8"),
+    # Public Sports M3U8
+    ("htv-the-thao", "HTV Thể Thao", "HTV", "bong-da", "⚽", True, "Thể thao Việt Nam", "Thể thao", "https://live.fptplay53.net/epzhd1/htvcthethao_vhls.smil/chunklist.m3u8"),
     ("t-sports", "T Sports Live", "TSPORTS", "tong-hop", "🏆", True, "Multi-sports", "Events", "https://lb1-live-mv.v2h-cdn.com/hls/ffef/tsport/tsport.m3u8"),
 ]
 

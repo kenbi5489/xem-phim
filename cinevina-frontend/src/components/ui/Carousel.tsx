@@ -95,7 +95,7 @@ export const Carousel: React.FC<CarouselProps> = ({
         <div 
           ref={scrollRef}
           onScroll={checkScroll}
-          className="flex gap-5 md:gap-7 overflow-x-auto scrollbar-hide snap-x pb-8 touch-pan-x w-full"
+          className="flex gap-5 md:gap-7 overflow-x-auto scrollbar-hide snap-x pb-8 w-full"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {error ? (

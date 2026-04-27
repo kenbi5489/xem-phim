@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   MagnifyingGlassIcon, UserCircleIcon, 
-  ChevronDownIcon, XMarkIcon,
-  HomeIcon, FilmIcon, TvIcon,
-  VideoCameraIcon, SparklesIcon, TrophyIcon,
-  GlobeAltIcon, HeartIcon,
-  RectangleGroupIcon
+  ChevronDownIcon, ArrowDownTrayIcon, XMarkIcon,
+  HomeIcon, FilmIcon, TvIcon, TrophyIcon,
+  GlobeAltIcon,
+  RectangleGroupIcon,
+  PlayCircleIcon
 } from '@heroicons/react/24/outline';
 import {
   HomeIcon as HomeSolid,
@@ -40,12 +40,14 @@ const COUNTRIES = [
 ];
 
 const NAV_LINKS = [
-  { name: 'Trang chủ',  to: '/', icon: HomeIcon },
-  { name: 'Phim lẻ',    to: '/browse/phim-le', icon: FilmIcon },
-  { name: 'Phim bộ',    to: '/browse/phim-bo', icon: TvIcon },
-  { name: 'Chiếu Rạp',  to: '/browse/phim-chieu-rap', badge: 'HOT', icon: SparklesIcon },
-  { name: 'Live TV',    to: '/live', icon: VideoCameraIcon },
-  { name: 'Thể Thao',   to: '/sports', icon: TrophyIcon },
+  { name: 'Trang chủ',      to: '/' },
+  { name: 'Thể loại',       to: '#', isDropdown: true },
+  { name: 'Quốc gia',       to: '#', isDropdown: true },
+  { name: 'Phim mới',       to: '/browse/phim-moi-cap-nhat' },
+  { name: 'Phim bộ',        to: '/browse/phim-bo' },
+  { name: 'Phim lẻ',        to: '/browse/phim-le' },
+  { name: 'Phim chiếu rạp', to: '/browse/phim-chieu-rap' },
+  { name: 'Truyền hình',    to: '/live' },
 ];
 
 const MOBILE_NAV = [
@@ -93,68 +95,82 @@ export const Navbar: React.FC = () => {
 
   return (
     <>
-      <nav className={`fixed top-0 w-full max-w-[1920px] left-1/2 -translate-x-1/2 z-[60] transition-all duration-500 pt-[env(safe-area-inset-top)] ${
+      <nav className={`fixed top-0 left-0 right-0 z-[60] transition-all duration-500 pt-[env(safe-area-inset-top)] max-w-[100vw] overflow-x-hidden ${
         scrolled
           ? 'bg-[#0c0e14]/95 backdrop-blur-2xl shadow-2xl border-b border-white/5 py-2'
           : 'bg-gradient-to-b from-black/90 via-black/40 to-transparent py-4'
       }`}>
         <div className="max-w-[1440px] mx-auto px-4 md:px-8 flex items-center justify-between">
           
-          {/* Left: Logo + Desktop Menu */}
-          <div className="flex items-center gap-10">
+          {/* Left: Logo + Search + Desktop Menu */}
+          <div className="flex items-center gap-6 xl:gap-8 w-full">
+            {/* Logo */}
             <Link to="/" className="shrink-0 flex items-center gap-2 group focus:outline-none focus-visible:ring-4 focus-visible:ring-primary rounded-lg p-1">
-              <FilmSolid className="w-6 h-6 md:w-8 md:h-8 text-purple-600 group-hover:text-purple-500 transition-colors" />
-              <span className="font-display font-black text-xl md:text-3xl tracking-tighter text-white group-hover:text-purple-500 transition-colors italic">
-                CINE<span className="text-purple-600">VINA</span>
-              </span>
+              <PlayCircleIcon className="w-9 h-9 text-[#00E559] fill-[#00E559]/20" />
+              <div className="flex flex-col">
+                <span className="font-display font-black text-xl tracking-tight text-white group-hover:text-gray-200 transition-colors leading-none">
+                  ĐứcCine
+                </span>
+                <span className="text-[8px] text-white/50 tracking-widest font-medium">Kênh siêu giải trí</span>
+              </div>
             </Link>
 
-            <div className="hidden lg:flex items-center gap-1">
-              {NAV_LINKS.map(link => {
-                const isActive = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
-                return (
-                  <Link 
-                    key={link.to} 
-                    to={link.to}
-                    className={`relative px-4 py-2 text-[13px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary rounded-lg ${
-                      isActive ? 'text-purple-500' : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    {link.name}
-                    {link.badge && (
-                      <span className="bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded animate-pulse">
-                        {link.badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+            {/* Search Bar */}
+            <form onSubmit={handleSearch} className="hidden lg:flex relative items-center w-[240px] xl:w-[280px]">
+              <MagnifyingGlassIcon className="absolute left-3 w-4 h-4 text-white/50" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Tìm kiếm phim"
+                className="w-full bg-[#3a3a3a]/80 hover:bg-[#4a4a4a] border border-transparent rounded-lg py-1.5 pl-9 pr-8 text-[13px] text-white placeholder:text-white/50 focus:outline-none focus:bg-[#4a4a4a] transition-all"
+              />
+              {searchQuery && (
+                <button type="button" onClick={() => setSearchQuery('')} className="absolute right-3 text-white/50 hover:text-white">
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              )}
+            </form>
 
-              {/* Explore Dropdown */}
+            {/* Desktop Menu */}
+            <div className="hidden lg:flex flex-1 items-center gap-0 xl:gap-2 overflow-x-auto no-scrollbar ml-4">
+              {/* Explore Dropdown & Links wrapper */}
               <div 
-                className="relative"
+                className="relative flex items-center w-full"
                 onMouseEnter={() => setShowExplore(true)}
                 onMouseLeave={() => setShowExplore(false)}
               >
-                <button className={`flex items-center gap-1 px-4 py-2 text-[13px] font-bold uppercase tracking-widest transition-all focus:outline-none focus-visible:ring-4 focus-visible:ring-primary rounded-lg ${showExplore ? 'text-purple-500' : 'text-white/60'}`}>
-                  KHÁM PHÁ
-                  <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-300 ${showExplore ? 'rotate-180' : ''}`} />
-                </button>
+                <div className="flex items-center gap-2 xl:gap-3">
+                  {NAV_LINKS.map(link => {
+                    const isActive = link.to === '/' ? location.pathname === '/' : (link.to !== '#' && location.pathname.startsWith(link.to));
+                    return (
+                      <Link 
+                        key={link.name} 
+                        to={link.to}
+                        className={`relative px-1.5 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg ${
+                          isActive ? 'text-white' : 'text-white/70 hover:text-white'
+                        }`}
+                      >
+                        {link.name}
+                        {link.isDropdown && <ChevronDownIcon className="w-3 h-3 text-white/50" />}
+                      </Link>
+                    );
+                  })}
+                </div>
 
                 {/* Mega Menu */}
-                <div className={`absolute top-full left-0 mt-2 w-[640px] bg-[#0c0e14]/98 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_40px_100px_-15px_rgba(0,0,0,0.8)] p-8 transition-all duration-500 origin-top-left ${
+                <div className={`absolute top-full left-0 mt-2 w-[640px] bg-[#1a1c23]/98 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_40px_100px_-15px_rgba(0,0,0,0.8)] p-8 transition-all duration-300 origin-top-left ${
                   showExplore ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
                 }`}>
                   <div className="grid grid-cols-2 gap-10">
                     {/* Genres Column */}
                     <div>
-                      <h3 className="text-[11px] font-black text-purple-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2 border-b border-white/5 pb-2">
+                      <h3 className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em] mb-6 flex items-center gap-2 border-b border-white/5 pb-2">
                         <RectangleGroupIcon className="w-4 h-4" /> THỂ LOẠI
                       </h3>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                         {GENRES.map(g => (
-                          <Link key={g.slug} to={`/browse/${g.slug}`} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-purple-600/10 text-[13px] text-white/60 hover:text-purple-400 transition-all font-bold">
-                            <span className="text-base group-hover:scale-125 transition-transform">{g.emoji}</span>
+                          <Link key={g.slug} to={`/browse/${g.slug}`} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-[13px] text-white/70 hover:text-white transition-all">
                             <span>{g.name}</span>
                           </Link>
                         ))}
@@ -162,13 +178,12 @@ export const Navbar: React.FC = () => {
                     </div>
                     {/* Countries Column */}
                     <div>
-                      <h3 className="text-[11px] font-black text-purple-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2 border-b border-white/5 pb-2">
+                      <h3 className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em] mb-6 flex items-center gap-2 border-b border-white/5 pb-2">
                         <GlobeAltIcon className="w-4 h-4" /> QUỐC GIA
                       </h3>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                         {COUNTRIES.map(c => (
-                          <Link key={c.slug} to={`/browse/${c.slug}`} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-purple-600/10 text-[13px] text-white/60 hover:text-purple-400 transition-all font-bold">
-                            <span className="text-base group-hover:scale-125 transition-transform">{c.emoji}</span>
+                          <Link key={c.slug} to={`/browse/${c.slug}`} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-[13px] text-white/70 hover:text-white transition-all">
                             <span>{c.name}</span>
                           </Link>
                         ))}
@@ -180,53 +195,29 @@ export const Navbar: React.FC = () => {
             </div>
           </div>
 
-          {/* Right: Search + Account */}
-          <div className="flex items-center gap-3">
-            {/* Search Input */}
-            <div className={`relative flex items-center transition-all duration-300 ${showSearch ? 'w-64' : 'w-10'}`}>
-              {showSearch ? (
-                <form onSubmit={handleSearch} className="w-full">
-                  <input
-                    ref={searchRef}
-                    type="text"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Tìm kiếm phim..."
-                    className="w-full bg-white/10 border border-white/20 rounded-full py-2 pl-4 pr-10 text-sm text-white focus:outline-none focus:border-purple-500 transition-all shadow-inner"
-                  />
-                  <button type="button" onClick={() => setShowSearch(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white">
-                    <XMarkIcon className="w-4 h-4" />
-                  </button>
-                </form>
-              ) : (
-                <button onClick={() => setShowSearch(true)} className="p-2 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-all">
-                  <MagnifyingGlassIcon className="w-6 h-6" />
-                </button>
-              )}
+          {/* Right: Actions */}
+          <div className="flex items-center gap-3 xl:gap-4 shrink-0">
+            {/* Mobile Search Toggle */}
+            <button onClick={() => setShowSearch(!showSearch)} className="lg:hidden p-2 text-white/70">
+              <MagnifyingGlassIcon className="w-6 h-6" />
+            </button>
+
+            {/* App Download (Yellow Circle) */}
+            <div className="hidden md:flex w-8 h-8 rounded-full bg-[#f9d854] items-center justify-center cursor-pointer hover:bg-yellow-400 transition-colors">
+              <ArrowDownTrayIcon className="w-4 h-4 text-black font-bold" />
             </div>
 
-            {/* Account */}
-            <Link to="/account" className="hidden md:flex items-center gap-3 pl-3 border-l border-white/10 group">
-              <div className="text-right">
-                <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest group-hover:text-purple-500 transition-colors">Thành viên</p>
-                <p className="text-sm font-black text-white">XEM PHIM</p>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 flex items-center justify-center border-2 border-white/10 shadow-lg group-hover:scale-110 transition-transform">
-                <UserSolid className="w-6 h-6 text-white" />
-              </div>
-            </Link>
-
-            {/* Favorite button for mobile/desktop shortcut */}
-            <Link to="/account" className="p-2 text-white/70 hover:text-red-500 transition-colors md:hidden">
-              <HeartIcon className="w-6 h-6" />
+            {/* Account Button */}
+            <Link to="/account" className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-2 rounded-full font-bold text-[13px] transition-colors">
+              <UserCircleIcon className="w-5 h-5" />
+              Thành viên
             </Link>
           </div>
-
         </div>
       </nav>
 
       {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[60] md:hidden bg-[#0c0e14]/95 backdrop-blur-2xl border-t border-white/5 px-2 pt-1 pb-[env(safe-area-inset-bottom)]">
+      <nav className="fixed bottom-0 left-0 right-0 z-[60] md:hidden bg-[#0c0e14]/95 backdrop-blur-2xl border-t border-white/5 px-2 pt-1 pb-[env(safe-area-inset-bottom)] max-w-[100vw] overflow-hidden">
         <div className="flex items-center justify-around">
           {MOBILE_NAV.map(item => {
             const isActive = item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to);

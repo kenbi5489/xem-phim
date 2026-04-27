@@ -4,6 +4,8 @@
   /* Fonts */
   --font-display: "Plus Jakarta Sans", "Be Vietnam Pro", sans-serif;
   --font-body: "Inter", sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-script: "Great Vibes", cursive;
 
   /* Colors based on Stitch Design System: Ultra Neon Premium */
   --color-background: #08090d;
@@ -45,6 +47,7 @@
     background-color: var(--color-background);
     color: var(--color-on-surface);
     font-family: var(--font-body);
+    min-height: 100vh;
     min-height: 100dvh;
     margin: 0;
     overflow-x: hidden;
@@ -55,7 +58,7 @@
 
   #root {
     width: 100%;
-    max-width: 100vw;
+    min-height: 100vh;
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
