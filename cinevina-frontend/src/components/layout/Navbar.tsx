@@ -54,13 +54,14 @@ const MOBILE_NAV = [
   { name: 'Trang chủ', to: '/',        Icon: HomeIcon,       IconSolid: HomeSolid },
   { name: 'Phim Lẻ',   to: '/browse/phim-le', Icon: FilmIcon,       IconSolid: FilmSolid },
   { name: 'Phim Bộ',   to: '/browse/phim-bo', Icon: TvIcon,         IconSolid: TvSolid },
+  { name: 'TV',        to: '/live',           Icon: PlayCircleIcon, IconSolid: PlayCircleIcon },
   { name: 'Thể Thao',  to: '/sports',         Icon: TrophyIcon,     IconSolid: TrophyIcon },
   { name: 'Tài khoản', to: '/account', Icon: UserCircleIcon, IconSolid: UserSolid },
 ];
 
 export const Navbar: React.FC = () => {
   const [scrolled, setScrolled]         = useState(false);
-  const [showExplore, setShowExplore]   = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showSearch, setShowSearch]     = useState(false);
   const [searchQuery, setSearchQuery]   = useState('');
   const location  = useLocation();
@@ -74,7 +75,7 @@ export const Navbar: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setShowExplore(false);
+    setActiveDropdown(null);
     setShowSearch(false);
     setSearchQuery('');
   }, [location.pathname]);
@@ -134,63 +135,65 @@ export const Navbar: React.FC = () => {
 
             {/* Desktop Menu */}
             <div className="hidden lg:flex flex-1 items-center gap-0 xl:gap-2 overflow-x-auto no-scrollbar ml-4">
-              {/* Explore Dropdown & Links wrapper */}
-              <div 
-                className="relative flex items-center w-full"
-                onMouseEnter={() => setShowExplore(true)}
-                onMouseLeave={() => setShowExplore(false)}
-              >
-                <div className="flex items-center gap-2 xl:gap-3">
-                  {NAV_LINKS.map(link => {
-                    const isActive = link.to === '/' ? location.pathname === '/' : (link.to !== '#' && location.pathname.startsWith(link.to));
+              <div className="flex items-center gap-2 xl:gap-3">
+                {NAV_LINKS.map(link => {
+                  const isActive = link.to === '/' ? location.pathname === '/' : (link.to !== '#' && location.pathname.startsWith(link.to));
+                  
+                  if (link.isDropdown) {
                     return (
-                      <Link 
-                        key={link.name} 
-                        to={link.to}
-                        className={`relative px-1.5 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg ${
-                          isActive ? 'text-white' : 'text-white/70 hover:text-white'
-                        }`}
+                      <div 
+                        key={link.name}
+                        className="relative flex items-center"
+                        onMouseEnter={() => setActiveDropdown(link.name)}
+                        onMouseLeave={() => setActiveDropdown(null)}
                       >
-                        {link.name}
-                        {link.isDropdown && <ChevronDownIcon className="w-3 h-3 text-white/50" />}
-                      </Link>
-                    );
-                  })}
-                </div>
+                        <button 
+                          onClick={() => setActiveDropdown(activeDropdown === link.name ? null : link.name)}
+                          className={`relative px-1.5 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg ${
+                            activeDropdown === link.name ? 'text-white' : 'text-white/70 hover:text-white'
+                          }`}
+                        >
+                          {link.name}
+                          <ChevronDownIcon className={`w-3 h-3 transition-transform ${activeDropdown === link.name ? 'rotate-180 text-white' : 'text-white/50'}`} />
+                        </button>
 
-                {/* Mega Menu */}
-                <div className={`absolute top-full left-0 mt-2 w-[640px] bg-[#1a1c23]/98 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_40px_100px_-15px_rgba(0,0,0,0.8)] p-8 transition-all duration-300 origin-top-left ${
-                  showExplore ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
-                }`}>
-                  <div className="grid grid-cols-2 gap-10">
-                    {/* Genres Column */}
-                    <div>
-                      <h3 className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em] mb-6 flex items-center gap-2 border-b border-white/5 pb-2">
-                        <RectangleGroupIcon className="w-4 h-4" /> THỂ LOẠI
-                      </h3>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        {GENRES.map(g => (
-                          <Link key={g.slug} to={`/browse/${g.slug}`} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-[13px] text-white/70 hover:text-white transition-all">
-                            <span>{g.name}</span>
-                          </Link>
-                        ))}
+                        {/* Dropdown Content */}
+                        <div className={`absolute top-full left-0 mt-2 min-w-[320px] bg-[#1a1c23]/98 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_40px_100px_-15px_rgba(0,0,0,0.8)] p-6 transition-all duration-300 origin-top-left ${
+                          activeDropdown === link.name ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
+                        }`}>
+                          <h3 className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em] mb-4 flex items-center gap-2 border-b border-white/5 pb-2">
+                            {link.name === 'Thể loại' ? <RectangleGroupIcon className="w-4 h-4" /> : <GlobeAltIcon className="w-4 h-4" />}
+                            {link.name}
+                          </h3>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            {(link.name === 'Thể loại' ? GENRES : COUNTRIES).map(item => (
+                              <Link 
+                                key={item.slug} 
+                                to={`/browse/${item.slug}`} 
+                                onClick={() => setActiveDropdown(null)}
+                                className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-[13px] text-white/70 hover:text-white transition-all"
+                              >
+                                <span>{item.name}</span>
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    {/* Countries Column */}
-                    <div>
-                      <h3 className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em] mb-6 flex items-center gap-2 border-b border-white/5 pb-2">
-                        <GlobeAltIcon className="w-4 h-4" /> QUỐC GIA
-                      </h3>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        {COUNTRIES.map(c => (
-                          <Link key={c.slug} to={`/browse/${c.slug}`} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-[13px] text-white/70 hover:text-white transition-all">
-                            <span>{c.name}</span>
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                    );
+                  }
+
+                  return (
+                    <Link 
+                      key={link.name} 
+                      to={link.to}
+                      className={`relative px-1.5 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg ${
+                        isActive ? 'text-white' : 'text-white/70 hover:text-white'
+                      }`}
+                    >
+                      {link.name}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -224,8 +227,8 @@ export const Navbar: React.FC = () => {
             const Icon = isActive ? item.IconSolid : item.Icon;
             return (
               <Link key={item.name} to={item.to} className="flex flex-col items-center gap-1 p-2 min-w-[70px]">
-                <Icon className={`w-6 h-6 transition-all ${isActive ? 'text-purple-500 scale-110' : 'text-white/40'}`} />
-                <span className={`text-[10px] font-black uppercase tracking-tighter ${isActive ? 'text-purple-500' : 'text-white/30'}`}>
+                <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-purple-500 scale-110' : 'text-white/40'}`} />
+                <span className={`text-[9px] font-black uppercase tracking-tighter ${isActive ? 'text-purple-500' : 'text-white/30'}`}>
                   {item.name}
                 </span>
               </Link>
