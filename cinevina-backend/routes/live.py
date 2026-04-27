@@ -25,14 +25,14 @@ async def get_live_channels(
 ):
     """Trả danh sách kênh live với stream URL, logo và thông tin nhà mạng."""
     plugin = _get_plugin()
-    return plugin.get_channels(type=type, group=group, network=network)
+    return await plugin.get_channels(type=type, group=group, network=network)
 
 
 @router.get("/networks")
 async def get_live_networks():
     """Trả danh sách nhà mạng và số kênh."""
     plugin = _get_plugin()
-    return plugin.get_networks()
+    return await plugin.get_networks()
 
 
 @router.get("/stream/{channel_id}")

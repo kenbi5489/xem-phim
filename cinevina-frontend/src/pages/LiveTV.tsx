@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SignalIcon, MagnifyingGlassIcon, TvIcon } from '@heroicons/react/24/outline';
 import { SpeakerWaveIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid';
 import Hls from 'hls.js';
+import axios from 'axios';
 import { useLiveChannels, useLiveNetworks, type LiveChannel } from '../hooks/useMovies';
 
 
@@ -87,36 +88,67 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
     const video = videoRef.current;
-    const url   = ch.stream_url;
+    let isMounted = true;
 
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        maxBufferLength: 30,
-        maxMaxBufferLength: 600,
-        lowLatencyMode: true,
-      });
-      hlsRef.current = hls;
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(() => {});
-        setPlaying(true);
-      });
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) setError(true);
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url;
-      video.addEventListener('loadedmetadata', () => {
-        video.play().catch(() => {});
-        setPlaying(true);
-      });
-      video.addEventListener('error', () => setError(true));
-    } else {
-      setError(true);
-    }
+    const loadStream = async () => {
+      let finalUrl = ch.stream_url;
+      if (finalUrl.startsWith('/api/')) {
+        try {
+          const res = await axios.get(finalUrl);
+          if (!isMounted) return;
+          if (res.data && res.data.url) {
+            finalUrl = res.data.url;
+          } else {
+            setError(true);
+            return;
+          }
+        } catch (err) {
+          if (isMounted) setError(true);
+          return;
+        }
+      }
+
+      if (!isMounted) return;
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          maxBufferLength: 30,
+          maxMaxBufferLength: 600,
+          lowLatencyMode: true,
+        });
+        hlsRef.current = hls;
+        hls.loadSource(finalUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (isMounted) {
+            video.play().catch(() => {});
+            setPlaying(true);
+          }
+        });
+        hls.on(Hls.Events.ERROR, (_e, data) => {
+          if (data.fatal && isMounted) setError(true);
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = finalUrl;
+        const onLoaded = () => {
+          if (isMounted) {
+            video.play().catch(() => {});
+            setPlaying(true);
+          }
+        };
+        const onErr = () => { if (isMounted) setError(true); };
+
+        video.addEventListener('loadedmetadata', onLoaded);
+        video.addEventListener('error', onErr);
+      } else {
+        if (isMounted) setError(true);
+      }
+    };
+
+    loadStream();
 
     return () => {
+      isMounted = false;
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     };
   }, [ch?.id]);

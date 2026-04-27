@@ -1,14 +1,12 @@
 import type { MovieInfo } from '../services/api';
 
-// API base — must match VITE_API_URL in .env
-const getProxyBase = () => {
+const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  // If no env var, use the known production backend URL for absolute reliability on mobile
   if (!envUrl) {
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'http://localhost:8000/api';
-    }
-    return 'https://cinevina-backend.vercel.app/api';
+    return typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? '/api'
+      : 'https://cinevina-backend.vercel.app/api';
   }
   
   if (envUrl.startsWith('http')) {
@@ -18,7 +16,7 @@ const getProxyBase = () => {
   return envUrl;
 };
 
-const PROXY_BASE = getProxyBase();
+const PROXY_BASE = getBaseUrl();
 
 /**
  * Wrap any image URL through the backend image proxy.
@@ -29,6 +27,19 @@ const PROXY_BASE = getProxyBase();
 export const getProxiedImageUrl = (url: string): string => {
   if (!url || url.trim() === '') return '';
   
+  // Case 0: Intercept proxy URLs and extract the raw URL directly!
+  if (url.includes('proxy/image') && url.includes('url=')) {
+    try {
+      const parsedUrl = new URL(url.startsWith('http') ? url : `https://dummy.com${url}`);
+      const rawUrl = parsedUrl.searchParams.get('url');
+      if (rawUrl && rawUrl.startsWith('http')) {
+        return rawUrl;
+      }
+    } catch (e) {
+      console.warn('[getProxiedImageUrl] Failed to parse proxy URL:', url, e);
+    }
+  }
+
   // Case 1: Already a full absolute proxied URL
   if (url.startsWith('http') && (url.includes('/proxy/image') || url.includes('/api/proxy/image'))) {
     return url;
@@ -47,10 +58,9 @@ export const getProxiedImageUrl = (url: string): string => {
     return sanitizedUrl;
   }
 
-  // Case 3: Absolute external URL (phimimg, etc.) -> Wrap it through our proxy
+  // Case 3: Absolute external URL (phimimg, etc.) -> Use raw URL directly!
   if (url.startsWith('http')) {
-    const sanitizedBase = PROXY_BASE.startsWith('http') ? PROXY_BASE : '/api';
-    return `${sanitizedBase}/proxy/image?url=${encodeURIComponent(url)}`;
+    return url;
   }
 
   // Case 4: Other relative paths

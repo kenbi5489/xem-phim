@@ -1,15 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
-import { movieApi, type MovieListParams } from '../services/api';
+import { movieApi, type MovieListParams, BASE_URL } from '../services/api';
 import axios from 'axios';
 
-// Resolve API base URL (same logic as api.ts)
-const _envUrl = import.meta.env.VITE_API_URL;
-const API_BASE = _envUrl
-  ? (_envUrl.startsWith('http')
-      ? (_envUrl.replace(/\/$/, '').endsWith('/api') ? _envUrl.replace(/\/$/, '') : `${_envUrl.replace(/\/$/, '')}/api`)
-      : _envUrl)
-  : '/api';
+// Use shared API base URL
+const API_BASE = BASE_URL;
 
 const STALE_30M = 1000 * 60 * 30;
 const STALE_1H  = 1000 * 60 * 60;
@@ -140,8 +135,8 @@ export const useLiveChannels = (type?: string, group?: string, network?: string)
       const res = await axios.get(`${API_BASE}/live/channels`, { params });
       return res.data as LiveChannel[];
     },
-    staleTime: STALE_30M,
-    gcTime: GC_1H,
+    staleTime: 10 * 1000, // 10 seconds for live data
+    gcTime: 1 * 60 * 1000, // 1 minute garbage collection
   });
 
 export interface LiveNetwork {
@@ -158,6 +153,6 @@ export const useLiveNetworks = () =>
       const res = await axios.get(`${API_BASE}/live/networks`);
       return res.data as LiveNetwork[];
     },
-    staleTime: STALE_1H,
-    gcTime: GC_1H,
+    staleTime: 30 * 1000, // 30 seconds for live networks
+    gcTime: 5 * 60 * 1000, // 5 minutes garbage collection
   });

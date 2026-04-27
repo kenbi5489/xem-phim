@@ -53,7 +53,7 @@ def _fix_image(path: Optional[str]) -> str:
     else:
         full = normalized_url
         
-    return f"/api/proxy/image?url={urllib.parse.quote(full, safe='')}"
+    return full
 
 
 def _to_str(val, key: str = "name") -> str:

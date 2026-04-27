@@ -3,15 +3,17 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   MagnifyingGlassIcon, UserCircleIcon, 
   ChevronDownIcon, ArrowDownTrayIcon, XMarkIcon,
-  HomeIcon, FilmIcon, TvIcon, TrophyIcon,
+  HomeIcon, FilmIcon, TvIcon,
   GlobeAltIcon,
   RectangleGroupIcon,
-  PlayCircleIcon
+  PlayCircleIcon,
+  TrophyIcon
 } from '@heroicons/react/24/outline';
 import {
   HomeIcon as HomeSolid,
   FilmIcon as FilmSolid,
   TvIcon as TvSolid,
+  TrophyIcon as TrophySolid,
   UserCircleIcon as UserSolid
 } from '@heroicons/react/24/solid';
 
@@ -48,15 +50,15 @@ const NAV_LINKS = [
   { name: 'Phim lẻ',        to: '/browse/phim-le' },
   { name: 'Phim chiếu rạp', to: '/browse/phim-chieu-rap' },
   { name: 'Truyền hình',    to: '/live' },
+  { name: 'Thể Thao',       to: '/sports', isSports: true },
 ];
 
 const MOBILE_NAV = [
-  { name: 'Trang chủ', to: '/',        Icon: HomeIcon,       IconSolid: HomeSolid },
+  { name: 'Trang chủ', to: '/',              Icon: HomeIcon,       IconSolid: HomeSolid },
   { name: 'Phim Lẻ',   to: '/browse/phim-le', Icon: FilmIcon,       IconSolid: FilmSolid },
   { name: 'Phim Bộ',   to: '/browse/phim-bo', Icon: TvIcon,         IconSolid: TvSolid },
-  { name: 'TV',        to: '/live',           Icon: PlayCircleIcon, IconSolid: PlayCircleIcon },
-  { name: 'Thể Thao',  to: '/sports',         Icon: TrophyIcon,     IconSolid: TrophyIcon },
-  { name: 'Tài khoản', to: '/account', Icon: UserCircleIcon, IconSolid: UserSolid },
+  { name: 'Thể Thao',  to: '/sports',         Icon: TrophyIcon,     IconSolid: TrophySolid },
+  { name: 'Tài khoản', to: '/account',        Icon: UserCircleIcon, IconSolid: UserSolid },
 ];
 
 export const Navbar: React.FC = () => {
@@ -99,7 +101,7 @@ export const Navbar: React.FC = () => {
           ? 'bg-[#0c0e14]/95 backdrop-blur-2xl shadow-2xl border-b border-white/5 py-2'
           : 'bg-gradient-to-b from-black/90 via-black/40 to-transparent py-4'
       }`}>
-        <div className="max-w-[1440px] mx-auto px-4 md:px-8 flex items-center justify-between">
+        <div className="max-w-[1440px] mx-auto px-4 md:px-8 flex items-center justify-between relative">
           
           {/* Left: Logo + Search + Desktop Menu */}
           <div className="flex items-center gap-6 xl:gap-8 w-full">
@@ -172,6 +174,26 @@ export const Navbar: React.FC = () => {
                     );
                   }
 
+                  if (link.isSports) {
+                    return (
+                      <Link
+                        key={link.name}
+                        to={link.to}
+                        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] xl:text-[13px] font-bold whitespace-nowrap transition-all focus:outline-none ${
+                          isActive
+                            ? 'bg-[#ff922b] text-white shadow-[0_0_16px_rgba(255,146,43,0.45)]'
+                            : 'bg-[#ff922b]/15 text-[#ff922b] border border-[#ff922b]/30 hover:bg-[#ff922b]/30'
+                        }`}
+                      >
+                        <TrophyIcon className="w-3.5 h-3.5 shrink-0" />
+                        {link.name}
+                        <span className="flex items-center gap-0.5 bg-red-600/80 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">
+                          <span className="w-1 h-1 rounded-full bg-white animate-pulse" /> LIVE
+                        </span>
+                      </Link>
+                    );
+                  }
+
                   return (
                     <Link 
                       key={link.name} 
@@ -205,6 +227,31 @@ export const Navbar: React.FC = () => {
               <UserCircleIcon className="w-5 h-5" />
               Thành viên
             </Link>
+          </div>
+
+          {/* Mobile Search Overlay */}
+          <div className={`absolute inset-0 bg-[#0c0e14] lg:hidden z-[70] transition-all duration-300 flex items-center px-4 ${showSearch ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
+            <form onSubmit={handleSearch} className="w-full relative flex items-center">
+              <MagnifyingGlassIcon className="absolute left-3 w-5 h-5 text-white/50 pointer-events-none" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Tìm kiếm phim..."
+                className="w-full bg-[#3a3a3a]/80 hover:bg-[#4a4a4a] border border-transparent rounded-lg py-2 pl-10 pr-10 text-[14px] text-white placeholder:text-white/50 focus:outline-none focus:bg-[#4a4a4a] transition-all"
+              />
+              <button 
+                type="button" 
+                onClick={() => {
+                  setShowSearch(false);
+                  setSearchQuery('');
+                }} 
+                className="absolute right-3 p-1 text-white/50 hover:text-white"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </form>
           </div>
         </div>
       </nav>

@@ -3,7 +3,13 @@ import axios from 'axios';
 // ─── Environment Configuration ───────────────────────────────────────────────
 const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (!envUrl) return '/api'; // Default to local proxy
+  if (!envUrl) {
+    // If on localhost (Vite dev), use local proxy. Otherwise use Vercel production
+    return typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? '/api'
+      : 'https://cinevina-backend.vercel.app/api';
+  }
   
   if (envUrl.startsWith('http')) {
     const sanitized = envUrl.replace(/\/$/, '');
@@ -12,7 +18,7 @@ const getBaseUrl = () => {
   return envUrl;
 };
 
-const BASE_URL = getBaseUrl();
+export const BASE_URL = getBaseUrl();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SignalIcon, MagnifyingGlassIcon, TrophyIcon } from '@heroicons/react/24/outline';
 import { SpeakerWaveIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid';
 import Hls from 'hls.js';
+import axios from 'axios';
 import { useLiveChannels, type LiveChannel } from '../hooks/useMovies';
 
 // ─── Channel Logo ─────────────────────────────────────────────────────────────
@@ -81,36 +82,67 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
     const video = videoRef.current;
-    const url   = ch.stream_url;
+    let isMounted = true;
 
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        maxBufferLength: 30,
-        maxMaxBufferLength: 600,
-        lowLatencyMode: true,
-      });
-      hlsRef.current = hls;
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(() => {});
-        setPlaying(true);
-      });
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) setError(true);
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url;
-      video.addEventListener('loadedmetadata', () => {
-        video.play().catch(() => {});
-        setPlaying(true);
-      });
-      video.addEventListener('error', () => setError(true));
-    } else {
-      setError(true);
-    }
+    const loadStream = async () => {
+      let finalUrl = ch.stream_url;
+      if (finalUrl.startsWith('/api/')) {
+        try {
+          const res = await axios.get(finalUrl);
+          if (!isMounted) return;
+          if (res.data && res.data.url) {
+            finalUrl = res.data.url;
+          } else {
+            setError(true);
+            return;
+          }
+        } catch (err) {
+          if (isMounted) setError(true);
+          return;
+        }
+      }
+
+      if (!isMounted) return;
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          maxBufferLength: 30,
+          maxMaxBufferLength: 600,
+          lowLatencyMode: true,
+        });
+        hlsRef.current = hls;
+        hls.loadSource(finalUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (isMounted) {
+            video.play().catch(() => {});
+            setPlaying(true);
+          }
+        });
+        hls.on(Hls.Events.ERROR, (_e, data) => {
+          if (data.fatal && isMounted) setError(true);
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = finalUrl;
+        const onLoaded = () => {
+          if (isMounted) {
+            video.play().catch(() => {});
+            setPlaying(true);
+          }
+        };
+        const onErr = () => { if (isMounted) setError(true); };
+
+        video.addEventListener('loadedmetadata', onLoaded);
+        video.addEventListener('error', onErr);
+      } else {
+        if (isMounted) setError(true);
+      }
+    };
+
+    loadStream();
 
     return () => {
+      isMounted = false;
       if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     };
   }, [ch?.id]);
@@ -222,6 +254,14 @@ export const Sports: React.FC = () => {
 
   const selectedCh = allChannels.find(c => c.id === selectedId) ?? null;
 
+  // Group channels by sport type
+  const groupedChannels = filtered.reduce<Record<string, LiveChannel[]>>((acc, ch) => {
+    const label = ch.group_label || 'Khác';
+    if (!acc[label]) acc[label] = [];
+    acc[label].push(ch);
+    return acc;
+  }, {});
+
   const now = new Date();
   const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
 
@@ -322,21 +362,26 @@ export const Sports: React.FC = () => {
 
           {!channelsQ.isLoading && !channelsQ.error && (
             <>
-              <p className="text-white/25 text-xs font-bold uppercase tracking-wider px-1">
-                {filtered.length} kênh
-              </p>
               {filtered.length === 0 && (
                 <p className="text-white/30 text-sm text-center py-10">
                   Không tìm thấy sự kiện nào
                 </p>
               )}
-              {filtered.map(ch => (
-                <ChannelCard
-                  key={ch.id}
-                  ch={ch}
-                  selected={selectedId === ch.id}
-                  onClick={() => setSelectedId(selectedId === ch.id ? null : ch.id)}
-                />
+              {Object.entries(groupedChannels).map(([label, items]) => (
+                <div key={label} className="flex flex-col gap-2 mb-6">
+                  <h3 className="text-white font-display font-black text-sm px-1 py-1 flex items-center gap-2 border-b border-white/5 pb-2">
+                    <span>{items[0]?.emoji || '🏆'}</span> {label}
+                    <span className="text-white/35 text-xs font-normal">({items.length})</span>
+                  </h3>
+                  {items.map(ch => (
+                    <ChannelCard
+                      key={ch.id}
+                      ch={ch}
+                      selected={selectedId === ch.id}
+                      onClick={() => setSelectedId(selectedId === ch.id ? null : ch.id)}
+                    />
+                  ))}
+                </div>
               ))}
             </>
           )}

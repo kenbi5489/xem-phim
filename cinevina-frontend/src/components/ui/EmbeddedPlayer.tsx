@@ -50,6 +50,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   const [controlsVisible, setControlsVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isScrubbing, setIsScrubbing] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -140,9 +141,17 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
+    setCurrentTime(time);
+  };
+
+  const handleSeekStart = () => {
+    setIsScrubbing(true);
+  };
+
+  const handleSeekEnd = () => {
+    setIsScrubbing(false);
     if (videoRef.current) {
-      videoRef.current.currentTime = time;
-      setCurrentTime(time);
+      videoRef.current.currentTime = currentTime;
     }
   };
 
@@ -161,7 +170,16 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
         ref={containerRef}
         className="relative flex-1 bg-black aspect-video cursor-pointer min-w-0 group/video"
         onMouseMove={showControls}
-        onClick={streamType === 'hls' ? togglePlay : undefined}
+        onTouchStart={showControls}
+        onClick={() => {
+          if (streamType === 'hls') {
+            if (!controlsVisible) {
+              showControls();
+            } else {
+              togglePlay();
+            }
+          }
+        }}
       >
         {/* HLS Video */}
         {streamType === 'hls' && (
@@ -170,7 +188,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
             className="w-full h-full object-contain"
             muted={muted}
             playsInline
-            onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
+            onTimeUpdate={() => { if (!isScrubbing) setCurrentTime(videoRef.current?.currentTime || 0); }}
             onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)}
             onClick={e => { e.stopPropagation(); togglePlay(); }}
           />
@@ -247,6 +265,10 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                   step="0.1"
                   value={currentTime}
                   onChange={handleSeek}
+                  onMouseDown={handleSeekStart}
+                  onMouseUp={handleSeekEnd}
+                  onTouchStart={handleSeekStart}
+                  onTouchEnd={handleSeekEnd}
                   className="absolute inset-0 w-full h-1.5 opacity-0 cursor-pointer z-10"
                 />
                 <div className="h-1.5 w-full bg-white/20 rounded-full overflow-hidden relative">
@@ -312,9 +334,9 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                   {episodes.length > 1 && (
                     <button
                       onClick={e => { e.stopPropagation(); setShowList(v => !v); }}
-                      className="flex items-center gap-1.5 text-white/70 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
+                      className="flex items-center gap-1.5 p-2 -m-2 text-white/70 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
                     >
-                      <ListBulletIcon className="w-4.5 h-4.5" />
+                      <ListBulletIcon className="w-5 h-5" />
                       <span className="hidden md:inline">Danh sách tập</span>
                     </button>
                   )}

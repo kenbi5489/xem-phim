@@ -81,3 +81,67 @@ async def proxy_image(url: str = Query(..., description="URL of the image to pro
                 continue
 
     raise HTTPException(status_code=404, detail=last_error or "Image not found")
+
+
+@router.get("/stream")
+async def proxy_stream(url: str = Query(..., description="URL of the stream to proxy")):
+    if not url:
+        raise HTTPException(status_code=400, detail="url parameter is required")
+         
+    allowed_stream_domains = [
+        "cdn-hls.taoxanh.biz",
+        "bunchatv4.net",
+    ]
+    from urllib.parse import urlparse, urljoin
+    host = urlparse(url).hostname or ""
+    if not any(host == d or host.endswith("." + d) for d in allowed_stream_domains):
+        raise HTTPException(status_code=403, detail="Domain not allowed for streaming proxy")
+        
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://bunchatv4.net/",
+        }
+        try:
+            r = await client.get(url, headers=headers)
+            if r.status_code == 200:
+                content_type = r.headers.get("content-type", "application/octet-stream")
+                
+                # If it's a playlist, rewrite paths
+                if "mpegurl" in content_type or "m3u8" in content_type or url.endswith(".m3u8"):
+                    content = r.text
+                    lines = []
+                    for line in content.splitlines():
+                        stripped = line.strip()
+                        if stripped and not stripped.startswith('#'):
+                            full_url = urljoin(url, stripped)
+                            lines.append(f"/api/proxy/stream?url={full_url}")
+                        else:
+                            lines.append(line)
+                    
+                    return Response(
+                        content="\n".join(lines),
+                        media_type="application/vnd.apple.mpegurl",
+                        headers={
+                            "Access-Control-Allow-Origin": "*",
+                            "Cache-Control": "no-cache",
+                        }
+                    )
+                else:
+                    # Binary data (segments like .ts)
+                    return Response(
+                        content=r.content,
+                        media_type=content_type,
+                        headers={
+                            "Access-Control-Allow-Origin": "*",
+                            "Cache-Control": "public, max-age=3600",
+                        }
+                    )
+            else:
+                raise HTTPException(status_code=r.status_code, detail=f"Upstream returned {r.status_code}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error fetching stream: {str(e)}")

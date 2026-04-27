@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { Home } from './pages/Home';
 import { Browse } from './pages/Browse';
@@ -12,7 +12,7 @@ import { Search } from './pages/Search';
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
@@ -27,7 +27,7 @@ function App() {
         {/* Player is outside Layout to be full screen without Navbar/Footer */}
         <Route path="/play/:slug/:episode?" element={<Player />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 

@@ -4,6 +4,8 @@ Cung cấp danh sách 60+ kênh truyền hình Việt Nam, Thể thao quốc t�
 Nguồn stream ổn định cập nhật 2024.
 """
 from typing import List, Optional
+import httpx
+from bs4 import BeautifulSoup
 from ..base import BaseSourcePlugin, MovieInfo, EpisodeInfo, StreamInfo
 
 # ── Màu theo nhà mạng / thể loại ───────────────────────────────────────────────
@@ -57,13 +59,17 @@ _CHANNELS = [
 
 # ── Sports Channels ────────────────────────────────────────────────────────────
 _SPORTS_CHANNELS = [
-    # NBA - Nguồn TrucTiepNBA (Dynamic Tokens - Could be unstable without referer)
+    # Kênh Thể thao Quốc gia (100% Ổn định)
+    ("vtv5-the-thao", "VTV5 Quốc Gia", "VTV", "bong-da", "⚽", True, "Thể thao & Bóng đá", "Trực tiếp", "https://live-a.fptplay53.net/live/media/VTV5HD/live_hls_avc/index.m3u8"),
+    ("htv-the-thao", "HTV Thể Thao", "HTV", "bong-da", "⚽", True, "Thể thao Việt Nam", "Thể thao", "https://live.fptplay53.net/epzhd1/htvcthethao_vhls.smil/chunklist.m3u8"),
+    ("on-sports", "On Sports", "VTVCab", "bong-da", "⚽", True, "Trực tiếp bóng đá", "On Sports", "https://liveh12.vtvprime.vn/hls/ONSPORTS/index.m3u8"),
+    
+    # Kênh NBA / Bóng rổ
     ("nba-prime-1", "NBA Prime 1", "TRUCTIEPNBA", "bong-ro", "🏀", True, "Trực tiếp NBA — Server 1", "Sự kiện sắp diễn ra", "https://cc.bluecdn.link/prime1/playlist.m3u8"),
     ("nba-prime-2", "NBA Prime 2", "TRUCTIEPNBA", "bong-ro", "🏀", True, "Trực tiếp NBA — Server 2", "Sự kiện sắp diễn ra", "https://cc.bluecdn.link/prime2/playlist.m3u8"),
-    ("nba-prime-3", "NBA Prime 3", "TRUCTIEPNBA", "bong-ro", "🏀", True, "Trực tiếp NBA — Server 3", "Sự kiện sắp diễn ra", "https://cc.bluecdn.link/prime3/playlist.m3u8"),
     
-    # Public Sports M3U8
-    ("htv-the-thao", "HTV Thể Thao", "HTV", "bong-da", "⚽", True, "Thể thao Việt Nam", "Thể thao", "https://live.fptplay53.net/epzhd1/htvcthethao_vhls.smil/chunklist.m3u8"),
+    # Kênh Thể thao Quốc tế (Public M3U8)
+    ("red-bull-tv", "Red Bull TV", "REDBULL", "the-thao-mao-hiem", "🏂", True, "Thể thao mạo hiểm", "Live Events", "https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master_3360.m3u8"),
     ("t-sports", "T Sports Live", "TSPORTS", "tong-hop", "🏆", True, "Multi-sports", "Events", "https://lb1-live-mv.v2h-cdn.com/hls/ffef/tsport/tsport.m3u8"),
 ]
 
@@ -119,6 +125,149 @@ def _channel_to_movie(ch: tuple) -> MovieInfo:
         year=None, quality="HD" if is_hd else "SD", lang="VI", type="live", is_cinema=False,
         episodes=[EpisodeInfo(id="live", name="Trực tiếp", slug="live")],
     )
+    
+async def _scrape_bunchatv() -> List[dict]:
+    """Scrapes match metadata from bunchatv4.net (without resolving m3u8 yet)."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": "https://bunchatv4.net/",
+    }
+    channels = []
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get("https://bunchatv4.net/", headers=headers, follow_redirects=True)
+            if resp.status_code != 200:
+                return []
+                
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        cards = soup.find_all('div', class_='link-match-full')
+        
+        for div in cards:
+            a_tag = div.find('a', class_='link-match-main')
+            if not a_tag or 'href' not in a_tag.attrs:
+                continue
+                
+            href = a_tag['href']
+            # Reconstruct the slug: substitute '/' with '|'
+            slug_encoded = f"buncha_{href.replace('/', '|')}"
+            
+            # Extract time
+            span_time = div.find('div', class_='span-time')
+            time_str = span_time.get_text(strip=True) if span_time else "Đang diễn ra"
+            
+            # Extract tournament
+            name_tour = div.find('div', class_='name-tour')
+            tour_str = name_tour.get_text(strip=True) if name_tour else "Thể thao"
+            
+            # Extract teams
+            club_left = div.find('div', class_='club-left')
+            team_left = club_left.find('div', class_='name-club').get_text(strip=True) if club_left and club_left.find('div', class_='name-club') else "Đội nhà"
+            
+            club_right = div.find('div', class_='club-right')
+            team_right = club_right.find('div', class_='name-club').get_text(strip=True) if club_right and club_right.find('div', class_='name-club') else "Đội khách"
+            
+            match_name = f"{team_left} vs {team_right}"
+            
+            # Extract first logo
+            logo_url = ""
+            if club_left:
+                img_tag = club_left.find('img')
+                if img_tag and 'src' in img_tag.attrs:
+                    logo_url = img_tag['src']
+            
+            # Deduce sport type
+            sport_type = "bong-da"
+            sport_label = "Bóng đá"
+            emoji = "⚽"
+            
+            # Check for specific sport images or leagues
+            images = div.find_all('img')
+            for img in images:
+                src = img.get('src', '').lower()
+                alt = img.get('alt', '').lower()
+                
+                if 'tennis' in src or 'tennis' in alt:
+                    sport_type = 'tennis'
+                    sport_label = 'Tennis'
+                    emoji = '🎾'
+                    break
+                elif 'basket' in src or 'basket' in alt or 'bong-ro' in src or 'bong-ro' in alt:
+                    sport_type = 'bong-ro'
+                    sport_label = 'Bóng rổ'
+                    emoji = '🏀'
+                    break
+                elif 'volleyball' in src or 'bong-chuyen' in src or 'bong-chuyen' in alt:
+                    sport_type = 'bong-chuyen'
+                    sport_label = 'Bóng chuyền'
+                    emoji = '🏐'
+                    break
+                elif 'badminton' in src or 'cau-long' in src or 'cau-long' in alt:
+                    sport_type = 'cau-long'
+                    sport_label = 'Cầu lông'
+                    emoji = '🏸'
+                    break
+                elif 'billiards' in src or 'bida' in src or 'bida' in alt:
+                    sport_type = 'billiards'
+                    sport_label = 'Billiards'
+                    emoji = '🎱'
+                    break
+                elif 'pingpong' in src or 'bong-ban' in src or 'bong-ban' in alt:
+                    sport_type = 'bong-ban'
+                    sport_label = 'Bóng bàn'
+                    emoji = '🏓'
+                    break
+                elif 'esport' in src or 'esport' in alt:
+                    sport_type = 'esport'
+                    sport_label = 'Esport'
+                    emoji = '🎮'
+                    break
+                elif 'martial' in src or 'vo-thuat' in alt:
+                    sport_type = 'vo-thuat'
+                    sport_label = 'Võ thuật'
+                    emoji = '🥊'
+                    break
+
+            # Fallback based on text match
+            if sport_type == "bong-da":
+                low_tour = tour_str.lower()
+                low_href = href.lower()
+                if 'tennis' in low_tour or 'tennis' in low_href:
+                    sport_type, sport_label, emoji = 'tennis', 'Tennis', '🎾'
+                elif 'bóng rổ' in low_tour or 'nba' in low_tour or 'bong-ro' in low_href:
+                    sport_type, sport_label, emoji = 'bong-ro', 'Bóng rổ', '🏀'
+                elif 'bóng chuyền' in low_tour or 'bong-chuyen' in low_href:
+                    sport_type, sport_label, emoji = 'bong-chuyen', 'Bóng chuyền', '🏐'
+                elif 'cầu lông' in low_tour or 'cau-long' in low_href:
+                    sport_type, sport_label, emoji = 'cau-long', 'Cầu lông', '🏸'
+                elif 'billiards' in low_tour or 'bida' in low_tour or 'billiards' in low_href:
+                    sport_type, sport_label, emoji = 'billiards', 'Billiards', '🎱'
+                elif 'bóng bàn' in low_tour or 'bong-ban' in low_href:
+                    sport_type, sport_label, emoji = 'bong-ban', 'Bóng bàn', '🏓'
+                elif 'esport' in low_tour or 'esport' in low_href:
+                    sport_type, sport_label, emoji = 'esport', 'Esport', '🎮'
+                elif 'võ thuật' in low_tour or 'mma' in low_tour or 'vo-thuat' in low_href:
+                    sport_type, sport_label, emoji = 'vo-thuat', 'Võ thuật', '🥊'
+
+            channels.append({
+                "id": slug_encoded,
+                "name": match_name,
+                "network": "BUNCHATV",
+                "network_label": "Bún Chả TV",
+                "group": sport_type,
+                "group_label": sport_label,
+                "emoji": emoji,
+                "is_hd": True,
+                "logo_url": logo_url,
+                "program_now": f"{tour_str} ({time_str})",
+                "program_next": "Kết thúc trận đấu",
+                "stream_url": f"/api/live/stream/{slug_encoded}", 
+                "color": "#e11d48",
+            })
+            
+    except Exception as e:
+        print(f"[bunchatv] Scrape error: {str(e)}")
+        
+    return channels
 
 class SportLivePlugin(BaseSourcePlugin):
     @property
@@ -130,8 +279,8 @@ class SportLivePlugin(BaseSourcePlugin):
     @property
     def enabled(self) -> bool: return True
 
-    def get_channels(self, type: Optional[str] = None, group: Optional[str] = None, network: Optional[str] = None) -> List[dict]:
-        source_list = _SPORTS_CHANNELS if type == 'sport' else (_CHANNELS if type == 'live' else _CHANNELS + _SPORTS_CHANNELS)
+    async def get_channels(self, type: Optional[str] = None, group: Optional[str] = None, network: Optional[str] = None) -> List[dict]:
+        source_list = [] if type == 'sport' else (_CHANNELS + _SPORTS_CHANNELS if type == 'live' else _CHANNELS + _SPORTS_CHANNELS)
         channels = []
         for ch in source_list:
             cid, cname, cnetwork, cgroup, emoji, is_hd, prog_now, prog_next, stream_url = ch
@@ -145,15 +294,36 @@ class SportLivePlugin(BaseSourcePlugin):
                 "program_now": prog_now, "program_next": prog_next, "stream_url": stream_url,
                 "color": _get_color(cnetwork, cgroup),
             })
+            
+        # Dynamically append BunchaTV matches for sports
+        if type == 'sport' or (type != 'live' and not group):
+            buncha_channels = await _scrape_bunchatv()
+            if group:
+                buncha_channels = [c for c in buncha_channels if c['group'] == group]
+            if network:
+                buncha_channels = [c for c in buncha_channels if c['network'].upper() == network.upper()]
+            channels.extend(buncha_channels)
+            
         return channels
 
-    def get_networks(self) -> List[dict]:
+    async def get_networks(self) -> List[dict]:
         seen = {}
         for ch in _CHANNELS + _SPORTS_CHANNELS:
             _, _, network, group, _, _, _, _, _ = ch
             if network not in seen:
                 seen[network] = {"id": network, "label": _NETWORK_LABELS.get(network, network), "color": _get_color(network, group), "count": 0}
             seen[network]["count"] += 1
+            
+        # Dynamically append BUNCHATV count
+        buncha_channels = await _scrape_bunchatv()
+        if buncha_channels:
+            seen["BUNCHATV"] = {
+                "id": "BUNCHATV",
+                "label": "Bún Chả TV",
+                "color": "#e11d48",
+                "count": len(buncha_channels)
+            }
+            
         return list(seen.values())
 
     async def get_movies(self, category: str, page: int = 1, **kwargs) -> List[MovieInfo]:
@@ -169,6 +339,29 @@ class SportLivePlugin(BaseSourcePlugin):
         return None
 
     async def get_stream(self, movie_slug: str, episode_slug: str) -> Optional[StreamInfo]:
+        if movie_slug.startswith('buncha_'):
+            # Reconstruct original path
+            path = movie_slug.replace('buncha_', '').replace('|', '/')
+            url = f"https://bunchatv4.net{path}"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Referer": "https://bunchatv4.net/",
+            }
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.get(url, headers=headers, follow_redirects=True)
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, 'html.parser')
+                        for div in soup.find_all('div', class_='box-chose-stream'):
+                            fileurl = div.get('data-fileurl', '')
+                            if fileurl and fileurl.startswith('http'):
+                                return StreamInfo(url=f"/api/proxy/stream?url={fileurl}", type="hls", quality="HD")
+            except Exception as e:
+                import traceback
+                print(f"[bunchatv] Stream extraction error: {repr(e)}")
+                traceback.print_exc()
+            return None
+            
         for ch in _CHANNELS + _SPORTS_CHANNELS:
             if ch[0] == movie_slug: return StreamInfo(url=ch[8], type="hls", quality="HD" if ch[5] else "SD")
         return None
