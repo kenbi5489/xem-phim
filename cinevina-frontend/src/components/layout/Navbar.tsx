@@ -61,7 +61,6 @@ const MOBILE_NAV = [
 
 export const Navbar: React.FC = () => {
   const [scrolled, setScrolled]         = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showSearch, setShowSearch]     = useState(false);
   const [searchQuery, setSearchQuery]   = useState('');
   const location  = useLocation();
@@ -75,7 +74,6 @@ export const Navbar: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setActiveDropdown(null);
     setShowSearch(false);
     setSearchQuery('');
   }, [location.pathname]);
@@ -143,24 +141,17 @@ export const Navbar: React.FC = () => {
                     return (
                       <div 
                         key={link.name}
-                        className="relative flex items-center"
-                        onMouseEnter={() => setActiveDropdown(link.name)}
-                        onMouseLeave={() => setActiveDropdown(null)}
+                        className="relative flex items-center group"
                       >
                         <button 
-                          onClick={() => setActiveDropdown(activeDropdown === link.name ? null : link.name)}
-                          className={`relative px-1.5 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg ${
-                            activeDropdown === link.name ? 'text-white' : 'text-white/70 hover:text-white'
-                          }`}
+                          className={`relative px-1.5 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg text-white/70 hover:text-white group-hover:text-white`}
                         >
                           {link.name}
-                          <ChevronDownIcon className={`w-3 h-3 transition-transform ${activeDropdown === link.name ? 'rotate-180 text-white' : 'text-white/50'}`} />
+                          <ChevronDownIcon className={`w-3 h-3 transition-transform text-white/50 group-hover:rotate-180 group-hover:text-white`} />
                         </button>
 
                         {/* Dropdown Content */}
-                        <div className={`absolute top-full left-0 mt-2 min-w-[320px] bg-[#1a1c23]/98 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_40px_100px_-15px_rgba(0,0,0,0.8)] p-6 transition-all duration-300 origin-top-left ${
-                          activeDropdown === link.name ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
-                        }`}>
+                        <div className={`absolute top-full left-0 mt-2 min-w-[320px] bg-[#1a1c23]/98 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_40px_100px_-15px_rgba(0,0,0,0.8)] p-6 transition-all duration-300 origin-top-left opacity-0 -translate-y-4 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto`}>
                           <h3 className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em] mb-4 flex items-center gap-2 border-b border-white/5 pb-2">
                             {link.name === 'Thể loại' ? <RectangleGroupIcon className="w-4 h-4" /> : <GlobeAltIcon className="w-4 h-4" />}
                             {link.name}
@@ -170,7 +161,6 @@ export const Navbar: React.FC = () => {
                               <Link 
                                 key={item.slug} 
                                 to={`/browse/${item.slug}`} 
-                                onClick={() => setActiveDropdown(null)}
                                 className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-[13px] text-white/70 hover:text-white transition-all"
                               >
                                 <span>{item.name}</span>

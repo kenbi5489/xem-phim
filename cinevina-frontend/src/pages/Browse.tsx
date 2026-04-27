@@ -10,7 +10,7 @@ const COUNTRY_SLUGS = [
   "thai-lan", "viet-nam", "an-do", "hong-kong"
 ];
 const CATEGORY_SLUGS = [
-  "phim-le", "phim-bo", "hoat-hinh", "tv-shows", "phim-chieu-rap"
+  "phim-le", "phim-bo", "hoat-hinh", "tv-shows", "phim-chieu-rap", "phim-moi-cap-nhat"
 ];
 
 const GENRE_OPTIONS = [
@@ -102,6 +102,7 @@ export const Browse: React.FC = () => {
     if (slug === 'hoat-hinh') return 'Hoạt Hình / Anime';
     if (slug === 'tv-shows') return 'TV Shows';
     if (slug === 'phim-chieu-rap') return 'Phim Chiếu Rạp';
+    if (slug === 'phim-moi-cap-nhat') return 'Phim Mới Cập Nhật';
     return 'Khám phá';
   };
 
