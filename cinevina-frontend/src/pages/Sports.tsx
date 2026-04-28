@@ -75,6 +75,7 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
   const [error, setError]       = useState(false);
   const [streamType, setStreamType] = useState<'hls' | 'embed'>('hls');
   const [resolvedUrl, setResolvedUrl] = useState<string>('');
+  const [embedUrlBackup, setEmbedUrlBackup] = useState<string>('');
 
   useEffect(() => {
     if (!ch) return;
@@ -82,6 +83,7 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
     setPlaying(false);
     setStreamType('hls');
     setResolvedUrl('');
+    setEmbedUrlBackup('');
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
@@ -98,6 +100,9 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
           if (res.data && res.data.url) {
             finalUrl = res.data.url;
             type = (res.data.type === 'embed') ? 'embed' : 'hls';
+            if (res.data.embed_url) {
+              setEmbedUrlBackup(res.data.embed_url);
+            }
           } else {
             setError(true);
             return;
@@ -246,7 +251,7 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
       </div>
 
       <div className="bg-[#11131a] rounded-2xl p-4 border border-white/8">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
           <div className="flex items-center gap-3">
             <ChannelLogo ch={ch} size="w-12 h-12" />
             <div>
@@ -261,6 +266,45 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
               </p>
             </div>
           </div>
+          
+          {(embedUrlBackup || streamType === 'embed') && (
+            <div className="flex items-center gap-2 bg-white/2 p-1.5 rounded-2xl border border-white/5 w-full sm:w-auto justify-center sm:justify-start">
+              <span className="text-white/30 text-xs font-bold uppercase tracking-wider px-2">Luồng:</span>
+              <button
+                onClick={() => {
+                  setStreamType('hls');
+                  setPlaying(false);
+                  setError(false);
+                  setTimeout(() => {
+                    const video = videoRef.current;
+                    if (video && Hls.isSupported()) {
+                      if (hlsRef.current) hlsRef.current.destroy();
+                      const hls = new Hls({ maxBufferLength: 30, lowLatencyMode: true });
+                      hlsRef.current = hls;
+                      hls.loadSource(resolvedUrl);
+                      hls.attachMedia(video);
+                      hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(()=>{}); setPlaying(true); });
+                      hls.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) setError(true); });
+                    }
+                  }, 100);
+                }}
+                className={`text-xs px-3 py-1.5 rounded-xl font-bold uppercase transition-all ${streamType === 'hls' ? 'bg-red-600 text-white shadow' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+              >
+                HLS (Nhanh)
+              </button>
+              <button
+                onClick={() => {
+                  setStreamType('embed');
+                  setPlaying(true);
+                  setError(false);
+                  if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+                }}
+                className={`text-xs px-3 py-1.5 rounded-xl font-bold uppercase transition-all ${streamType === 'embed' ? 'bg-red-600 text-white shadow' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+              >
+                Iframe (100%)
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

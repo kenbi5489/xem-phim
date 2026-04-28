@@ -7,6 +7,7 @@ class StreamInfo(BaseModel):
     type: str # 'hls', 'mp4', 'embed'
     quality: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
+    embed_url: Optional[str] = None
 
 # ─── Episode models ──────────────────────────────────────────────────────────
 # EpisodeData: Full episode with stream links (used in Detail API response)

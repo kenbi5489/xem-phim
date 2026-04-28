@@ -353,17 +353,27 @@ class SportLivePlugin(BaseSourcePlugin):
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, 'html.parser')
                         
-                        # First try to find data-channel for embed iframe (100% playable fallback with ads)
+                        fileurl = None
+                        channel = None
                         for div in soup.find_all('div', class_='box-chose-stream'):
-                            channel = div.get('data-channel', '')
-                            if channel and channel.startswith('http'):
-                                return StreamInfo(url=channel, type="embed", quality="HD")
-                                
-                        # Fallback to direct HLS fileurl
-                        for div in soup.find_all('div', class_='box-chose-stream'):
-                            fileurl = div.get('data-fileurl', '')
-                            if fileurl and fileurl.startswith('http'):
-                                return StreamInfo(url=f"/api/proxy/stream?url={fileurl}", type="hls", quality="HD")
+                            if not fileurl:
+                                f_url = div.get('data-fileurl', '')
+                                if f_url and f_url.startswith('http'):
+                                    fileurl = f_url
+                            if not channel:
+                                c_url = div.get('data-channel', '')
+                                if c_url and c_url.startswith('http'):
+                                    channel = c_url
+                                    
+                        if fileurl:
+                            return StreamInfo(
+                                url=f"/api/proxy/stream?url={fileurl}",
+                                type="hls",
+                                quality="HD",
+                                embed_url=channel
+                            )
+                        elif channel:
+                            return StreamInfo(url=channel, type="embed", quality="HD")
             except Exception as e:
                 import traceback
                 print(f"[bunchatv] Stream extraction error: {repr(e)}")

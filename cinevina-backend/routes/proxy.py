@@ -88,14 +88,10 @@ async def proxy_stream(url: str = Query(..., description="URL of the stream to p
     if not url:
         raise HTTPException(status_code=400, detail="url parameter is required")
          
-    allowed_stream_domains = [
-        "cdn-hls.taoxanh.biz",
-        "bunchatv4.net",
-    ]
     from urllib.parse import urlparse, urljoin
     host = urlparse(url).hostname or ""
-    if not any(host == d or host.endswith("." + d) for d in allowed_stream_domains):
-        raise HTTPException(status_code=403, detail="Domain not allowed for streaming proxy")
+    # Allowed all domains for full streaming compatibility
+
         
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
         headers = {
