@@ -231,22 +231,28 @@ async def _scrape_bunchatv() -> List[dict]:
             if sport_type == "bong-da":
                 low_tour = tour_str.lower()
                 low_href = href.lower()
-                if 'tennis' in low_tour or 'tennis' in low_href:
+                low_name = match_name.lower()
+                
+                if 'tennis' in low_tour or 'tennis' in low_href or 'tennis' in low_name or 'wta' in low_tour or 'atp' in low_tour:
                     sport_type, sport_label, emoji = 'tennis', 'Tennis', '🎾'
-                elif 'bóng rổ' in low_tour or 'nba' in low_tour or 'bong-ro' in low_href:
+                elif 'bóng rổ' in low_tour or 'nba' in low_tour or 'bong-ro' in low_href or 'basketball' in low_tour or 'basketball' in low_name:
                     sport_type, sport_label, emoji = 'bong-ro', 'Bóng rổ', '🏀'
-                elif 'bóng chuyền' in low_tour or 'bong-chuyen' in low_href:
+                elif 'bóng chuyền' in low_tour or 'bong-chuyen' in low_href or 'volleyball' in low_tour or 'volleyball' in low_name:
                     sport_type, sport_label, emoji = 'bong-chuyen', 'Bóng chuyền', '🏐'
-                elif 'cầu lông' in low_tour or 'cau-long' in low_href:
+                elif 'cầu lông' in low_tour or 'cau-long' in low_href or 'badminton' in low_tour or 'badminton' in low_name:
                     sport_type, sport_label, emoji = 'cau-long', 'Cầu lông', '🏸'
-                elif 'billiards' in low_tour or 'bida' in low_tour or 'billiards' in low_href:
+                elif 'billiards' in low_tour or 'bida' in low_tour or 'billiards' in low_href or 'snooker' in low_tour or 'pool' in low_tour:
                     sport_type, sport_label, emoji = 'billiards', 'Billiards', '🎱'
-                elif 'bóng bàn' in low_tour or 'bong-ban' in low_href:
+                elif 'bóng bàn' in low_tour or 'bong-ban' in low_href or 'table tennis' in low_tour or 'table tennis' in low_name:
                     sport_type, sport_label, emoji = 'bong-ban', 'Bóng bàn', '🏓'
-                elif 'esport' in low_tour or 'esport' in low_href:
+                elif 'esport' in low_tour or 'esport' in low_href or 'lien minh' in low_name or 'dota' in low_name:
                     sport_type, sport_label, emoji = 'esport', 'Esport', '🎮'
-                elif 'võ thuật' in low_tour or 'mma' in low_tour or 'vo-thuat' in low_href:
+                elif 'võ thuật' in low_tour or 'mma' in low_tour or 'ufc' in low_tour or 'boxing' in low_tour:
                     sport_type, sport_label, emoji = 'vo-thuat', 'Võ thuật', '🥊'
+                elif 'golf' in low_tour or 'golf' in low_href or 'golf' in low_name:
+                    sport_type, sport_label, emoji = 'golf', 'Golf', '⛳'
+                elif 'đua xe' in low_tour or 'dua-xe' in low_href or 'racing' in low_tour or 'f1' in low_tour or 'motogp' in low_tour:
+                    sport_type, sport_label, emoji = 'dua-xe', 'Đua xe', '🏎️'
 
             channels.append({
                 "id": slug_encoded,
