@@ -73,25 +73,31 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
   const [muted, setMuted]       = useState(true);
   const [playing, setPlaying]   = useState(false);
   const [error, setError]       = useState(false);
+  const [streamType, setStreamType] = useState<'hls' | 'embed'>('hls');
+  const [resolvedUrl, setResolvedUrl] = useState<string>('');
 
   useEffect(() => {
-    if (!ch || !videoRef.current) return;
+    if (!ch) return;
     setError(false);
     setPlaying(false);
+    setStreamType('hls');
+    setResolvedUrl('');
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
-    const video = videoRef.current;
     let isMounted = true;
 
     const loadStream = async () => {
       let finalUrl = ch.stream_url;
+      let type: 'hls' | 'embed' = 'hls';
+      
       if (finalUrl.startsWith('/api/')) {
         try {
           const res = await axios.get(finalUrl);
           if (!isMounted) return;
           if (res.data && res.data.url) {
             finalUrl = res.data.url;
+            type = (res.data.type === 'embed') ? 'embed' : 'hls';
           } else {
             setError(true);
             return;
@@ -103,40 +109,57 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
       }
 
       if (!isMounted) return;
+      setStreamType(type);
+      setResolvedUrl(finalUrl);
 
-      if (Hls.isSupported()) {
-        const hls = new Hls({
-          maxBufferLength: 30,
-          maxMaxBufferLength: 600,
-          lowLatencyMode: true,
-        });
-        hlsRef.current = hls;
-        hls.loadSource(finalUrl);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (isMounted) {
-            video.play().catch(() => {});
-            setPlaying(true);
-          }
-        });
-        hls.on(Hls.Events.ERROR, (_e, data) => {
-          if (data.fatal && isMounted) setError(true);
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = finalUrl;
-        const onLoaded = () => {
-          if (isMounted) {
-            video.play().catch(() => {});
-            setPlaying(true);
-          }
-        };
-        const onErr = () => { if (isMounted) setError(true); };
-
-        video.addEventListener('loadedmetadata', onLoaded);
-        video.addEventListener('error', onErr);
-      } else {
-        if (isMounted) setError(true);
+      if (type === 'embed') {
+        setPlaying(true);
+        return;
       }
+
+      // HLS logic requires the video ref after re-render
+      setTimeout(() => {
+        if (!isMounted) return;
+        const video = videoRef.current;
+        if (!video) {
+          setError(true);
+          return;
+        }
+
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            maxBufferLength: 30,
+            maxMaxBufferLength: 600,
+            lowLatencyMode: true,
+          });
+          hlsRef.current = hls;
+          hls.loadSource(finalUrl);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            if (isMounted) {
+              video.play().catch(() => {});
+              setPlaying(true);
+            }
+          });
+          hls.on(Hls.Events.ERROR, (_e, data) => {
+            if (data.fatal && isMounted) setError(true);
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = finalUrl;
+          const onLoaded = () => {
+            if (isMounted) {
+              video.play().catch(() => {});
+              setPlaying(true);
+            }
+          };
+          const onErr = () => { if (isMounted) setError(true); };
+
+          video.addEventListener('loadedmetadata', onLoaded);
+          video.addEventListener('error', onErr);
+        } else {
+          if (isMounted) setError(true);
+        }
+      }, 50);
     };
 
     loadStream();
@@ -159,13 +182,23 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
   return (
     <div className="flex flex-col gap-4">
       <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] bg-black">
-        <video
-          ref={videoRef}
-          className="w-full h-full object-contain"
-          muted={muted}
-          playsInline
-          autoPlay
-        />
+        {streamType === 'embed' ? (
+          <iframe
+            src={resolvedUrl}
+            className="w-full h-full border-0"
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            title={ch.name}
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            className="w-full h-full object-contain"
+            muted={muted}
+            playsInline
+            autoPlay
+          />
+        )}
 
         {!playing && !error && (
           <div
@@ -188,7 +221,7 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
           </div>
         )}
 
-        {playing && (
+        {playing && streamType === 'hls' && (
           <div className="absolute bottom-3 right-3 flex gap-2">
             <button
               onClick={() => {

@@ -352,6 +352,14 @@ class SportLivePlugin(BaseSourcePlugin):
                     resp = await client.get(url, headers=headers, follow_redirects=True)
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, 'html.parser')
+                        
+                        # First try to find data-channel for embed iframe (100% playable fallback with ads)
+                        for div in soup.find_all('div', class_='box-chose-stream'):
+                            channel = div.get('data-channel', '')
+                            if channel and channel.startswith('http'):
+                                return StreamInfo(url=channel, type="embed", quality="HD")
+                                
+                        # Fallback to direct HLS fileurl
                         for div in soup.find_all('div', class_='box-chose-stream'):
                             fileurl = div.get('data-fileurl', '')
                             if fileurl and fileurl.startswith('http'):
