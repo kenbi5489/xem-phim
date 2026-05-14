@@ -266,16 +266,16 @@ export const Browse: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="py-32 text-center glass-premium rounded-[40px] flex flex-col items-center gap-4 opacity-50 border border-white/5">
+              <div className="py-12 text-center glass-premium rounded-[40px] flex flex-col items-center gap-4 opacity-70 border border-white/5">
                 <span className="text-4xl">🎬</span>
                 <p className="text-xl font-black text-white/40 uppercase tracking-[0.3em] italic">Trang này không có phim phù hợp</p>
-                <p className="text-sm text-white/30">Hãy chuyển sang trang tiếp theo để tìm kiếm tiếp</p>
+                <p className="text-sm text-white/30">Hãy cuộn xuống và bấm "Tiếp theo" để tìm kiếm ở trang sau</p>
               </div>
             )}
 
             {/* Pagination */}
             {data.total_pages > 1 && (
-              <div className="flex justify-center items-center gap-8 mt-24 pt-12 border-t border-white/5">
+              <div className="flex justify-center items-center gap-8 mt-8 pt-8 border-t border-white/5">
                 <button 
                   disabled={page === 1}
                   onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
