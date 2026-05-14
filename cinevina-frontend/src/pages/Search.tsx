@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, XMarkIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { MovieCard } from '../components/ui/MovieCard';
 import { useSearchMovies, useDebounce } from '../hooks/useMovies';
 import type { MovieInfo } from '../services/api';
@@ -46,6 +46,42 @@ export const Search: React.FC = () => {
   const urlQ = new URLSearchParams(location.search).get('q') || '';
   const [input, setInput] = useState(urlQ);
   const debouncedQuery = useDebounce(input, 300);
+  const [history, setHistory] = useState<string[]>([]);
+
+  // Load history on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('cinevina_search_history');
+      if (stored) {
+        setHistory(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn('Could not load search history');
+    }
+  }, []);
+
+  const addToHistory = (query: string) => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    setHistory(prev => {
+      const next = [q, ...prev.filter(i => i.toLowerCase() !== q.toLowerCase())].slice(0, 10);
+      try {
+        localStorage.setItem('cinevina_search_history', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const removeHistory = (query: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setHistory(prev => {
+      const next = prev.filter(i => i.toLowerCase() !== query.toLowerCase());
+      try {
+        localStorage.setItem('cinevina_search_history', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   // Keep input in sync when URL changes externally (e.g. browser back/forward)
   useEffect(() => { setInput(urlQ); }, [urlQ]);
@@ -56,6 +92,7 @@ export const Search: React.FC = () => {
     const currentQ = new URLSearchParams(location.search).get('q') || '';
     if (q !== currentQ) {
       if (q.length >= 2) {
+        addToHistory(q);
         navigate(`/search?q=${encodeURIComponent(q)}`, { replace: true });
       } else if (!q) {
         navigate('/search', { replace: true });
@@ -227,6 +264,32 @@ export const Search: React.FC = () => {
               <h2 className="font-display text-4xl font-black text-white mb-3 uppercase tracking-tighter italic text-gradient-primary">Tìm kiếm phim</h2>
               <p className="text-white/40 max-w-sm font-bold uppercase tracking-widest text-xs">Nhập tên phim, diễn viên hoặc đạo diễn để bắt đầu</p>
             </div>
+
+            {/* Search History */}
+            {history.length > 0 && (
+              <div className="flex flex-col items-center gap-5 mt-4 w-full max-w-2xl">
+                <div className="flex items-center justify-between w-full px-4">
+                  <p className="text-white/30 text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2">
+                    <ClockIcon className="w-4 h-4" /> Lịch sử tìm kiếm
+                  </p>
+                  <button onClick={() => { setHistory([]); localStorage.removeItem('cinevina_search_history'); }} className="text-white/30 hover:text-white/60 text-[10px] font-black uppercase tracking-[0.3em]">Xóa tất cả</button>
+                </div>
+                <div className="flex flex-wrap gap-3 justify-center w-full">
+                  {history.map(q => (
+                    <div key={q} className="group relative flex items-center">
+                      <button onClick={() => setInput(q)}
+                        className="px-6 py-3 pr-10 rounded-2xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-primary/20 hover:border-primary/40 hover:scale-105 text-sm font-black uppercase tracking-widest transition-all">
+                        {q}
+                      </button>
+                      <button onClick={(e) => removeHistory(q, e)} className="absolute right-2 p-1.5 rounded-full text-white/30 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all">
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Trending searches */}
             <div className="flex flex-col items-center gap-5 mt-4">
               <p className="text-white/30 text-[10px] font-black uppercase tracking-[0.3em]">Xu hướng tìm kiếm</p>

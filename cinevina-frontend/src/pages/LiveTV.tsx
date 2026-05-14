@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { SignalIcon, MagnifyingGlassIcon, TvIcon } from '@heroicons/react/24/outline';
+import { SignalIcon, MagnifyingGlassIcon, TvIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
+
 import { SpeakerWaveIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid';
 import Hls from 'hls.js';
 import axios from 'axios';
@@ -37,35 +38,30 @@ const ChannelCard: React.FC<{
 }> = ({ ch, selected, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-4 p-4 rounded-[24px] border text-left w-full transition-all duration-500 ${
+    className={`flex items-center gap-3 p-3 rounded-2xl border text-left w-full transition-all duration-200 ${
       selected
-        ? 'border-primary/40 bg-primary/10 shadow-[0_0_30px_rgba(175,37,254,0.15)] ring-1 ring-primary/20 scale-[1.02]'
-        : 'border-white/5 bg-surface-container hover:bg-surface-container-high hover:border-white/10 hover:scale-[1.01]'
+        ? 'border-primary/40 bg-primary/10 shadow-[0_0_20px_rgba(175,37,254,0.15)] ring-1 ring-primary/20'
+        : 'border-white/8 bg-[#11131a] hover:bg-[#1d1f27] hover:border-white/15'
     }`}
   >
-    <div className="relative">
-       <ChannelLogo ch={ch} size="w-12 h-12" />
-       {selected && <div className="absolute -inset-1 bg-primary/20 blur-lg rounded-full -z-10 animate-pulse" />}
-    </div>
+    <ChannelLogo ch={ch} size="w-10 h-10" />
     <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="font-display font-black text-white text-[15px] truncate uppercase tracking-tight">{ch.name}</span>
+      <div className="flex items-center gap-2">
+        <span className="font-display font-bold text-white text-sm truncate uppercase">{ch.name}</span>
         {ch.is_hd && (
-          <span className="text-[9px] font-black bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full uppercase shrink-0">
-            4K
+          <span className="text-[8px] font-black bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded uppercase shrink-0">
+            HD
           </span>
         )}
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="flex items-center gap-1.5 bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase shrink-0 animate-pulse">
-           LIVE
+        <span className="flex items-center gap-1 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
+          <span className="w-1 h-1 rounded-full bg-white animate-pulse" /> LIVE
         </span>
-        <p className="text-[12px] font-bold text-white/40 truncate italic">{ch.program_now}</p>
       </div>
+      <p className="text-xs text-white/45 truncate mt-0.5">{ch.program_now}</p>
     </div>
     {selected && (
       <div
-        className="w-2.5 h-2.5 rounded-full shrink-0 bg-primary shadow-[0_0_10px_rgba(175,37,254,0.8)]"
+        className="w-2 h-2 rounded-full shrink-0 bg-primary shadow-[0_0_6px_rgba(175,37,254,0.8)]"
       />
     )}
   </button>
@@ -78,6 +74,42 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
   const [muted, setMuted]       = useState(true);  // Start muted to allow autoplay
   const [playing, setPlaying]   = useState(false);
   const [error, setError]       = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const playerWrapperRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullScreen = () => {
+    const el = playerWrapperRef.current;
+    const videoEl = videoRef.current;
+    if (!el) return;
+
+    if (!fullscreen) {
+      if (el.requestFullscreen) {
+        el.requestFullscreen().then(() => setFullscreen(true)).catch(() => setFullscreen(true));
+      } else if ((el as any).webkitRequestFullscreen) {
+        (el as any).webkitRequestFullscreen();
+        setFullscreen(true);
+      } else if (videoEl && (videoEl as any).webkitEnterFullscreen) {
+        (videoEl as any).webkitEnterFullscreen();
+      } else {
+        setFullscreen(true);
+      }
+    } else {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().then(() => setFullscreen(false)).catch(() => setFullscreen(false));
+      } else if ((document as any).webkitFullscreenElement && (document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+        setFullscreen(false);
+      } else {
+        setFullscreen(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handler = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
 
   useEffect(() => {
     if (!ch || !videoRef.current) return;
@@ -155,17 +187,18 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
 
   if (!ch) {
     return (
-      <div className="aspect-video rounded-[40px] bg-surface-container border border-white/5 flex flex-col items-center justify-center gap-6 text-white/20 glass-premium">
-        <TvIcon className="w-24 h-24 opacity-20" />
-        <p className="font-display text-2xl font-black uppercase tracking-widest italic">Chọn kênh để trải nghiệm</p>
+      <div className="aspect-video rounded-[24px] bg-[#11131a] border border-white/8 flex flex-col items-center justify-center gap-4 text-white/25">
+        <TvIcon className="w-20 h-20" />
+        <p className="font-display text-lg uppercase tracking-widest italic">Chọn kênh để trải nghiệm</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {/* Video / Poster */}
-      <div className="relative w-full aspect-video rounded-[40px] overflow-hidden border border-white/10 shadow-[0_40px_100px_rgba(0,0,0,0.8)] bg-black movie-card-glow">
+      <div ref={playerWrapperRef} className={`relative w-full aspect-video rounded-[24px] overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] bg-black ${fullscreen ? 'fixed !inset-0 !z-[99999] !w-screen !h-[100dvh] !rounded-none' : ''}`}>
+
         <video
           ref={videoRef}
           className="w-full h-full object-contain"
@@ -177,76 +210,50 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
         {/* Placeholder overlay before play */}
         {!playing && !error && (
           <div
-            className="absolute inset-0 flex flex-col items-center justify-center gap-6"
-            style={{ background: `linear-gradient(135deg, ${ch.color}30, ${ch.color}10)` }}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3"
+            style={{ background: `linear-gradient(135deg, ${ch.color}20, ${ch.color}05)` }}
           >
-            <div className="relative">
-              <ChannelLogo ch={ch} size="w-24 h-24" />
-              <div className="absolute -inset-4 bg-white/20 blur-2xl rounded-full animate-pulse" />
-            </div>
-            <span className="font-display font-black text-4xl text-white uppercase italic tracking-tighter drop-shadow-2xl">{ch.name}</span>
-            <div className="flex items-center gap-3 bg-red-600 text-white text-[13px] font-black px-8 py-3 rounded-full uppercase tracking-[0.2em] shadow-2xl animate-pulse">
-              <span className="w-2.5 h-2.5 rounded-full bg-white" /> ĐANG KẾT NỐI...
+            <ChannelLogo ch={ch} size="w-20 h-20" />
+            <span className="font-display font-black text-3xl text-white">{ch.name}</span>
+            <div className="flex items-center gap-2 bg-red-600/90 text-white text-sm font-black px-5 py-2 rounded-full uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" /> ĐANG KẾT NỐI...
             </div>
           </div>
         )}
 
         {/* Error overlay */}
         {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/90 backdrop-blur-md">
-            <SignalIcon className="w-20 h-20 text-white/20 animate-pulse" />
-            <p className="text-white font-display text-2xl font-black uppercase italic">Mất tín hiệu</p>
-            <p className="text-white/40 text-[11px] font-bold uppercase tracking-widest">Vui lòng thử lại sau hoặc chọn kênh khác</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80">
+            <SignalIcon className="w-16 h-16 text-white/30" />
+            <p className="text-white/60 font-display text-lg">Không thể kết nối kênh này</p>
+            <p className="text-white/30 text-xs">Vui lòng thử lại sau hoặc chọn kênh khác</p>
           </div>
         )}
 
         {/* Controls overlay */}
         {playing && (
-          <div className="absolute bottom-6 right-6 flex gap-3">
+          <div className="absolute bottom-4 right-4 flex gap-2">
             <button
               onClick={() => {
                 setMuted(m => !m);
                 if (videoRef.current) videoRef.current.muted = !muted;
               }}
-              className="w-12 h-12 rounded-full glass-premium border border-white/10 text-white hover:bg-primary transition-all flex items-center justify-center shadow-2xl group"
+              className="w-10 h-10 rounded-full bg-black/50 border border-white/10 text-white hover:bg-primary transition-all flex items-center justify-center shadow-lg group backdrop-blur-sm"
             >
               {muted
-                ? <SpeakerXMarkIcon className="w-5 h-5" />
-                : <SpeakerWaveIcon  className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                ? <SpeakerXMarkIcon className="w-4 h-4" />
+                : <SpeakerWaveIcon  className="w-4 h-4 group-hover:scale-110 transition-transform" />
               }
+            </button>
+            <button
+              onClick={toggleFullScreen}
+              className="w-10 h-10 rounded-full bg-black/50 border border-white/10 text-white hover:bg-primary transition-all flex items-center justify-center shadow-lg group backdrop-blur-sm"
+              title="Toàn màn hình"
+            >
+              <ArrowsPointingOutIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
             </button>
           </div>
         )}
-
-        {/* LIVE badge */}
-        {playing && (
-          <div className="absolute top-6 left-6 flex items-center gap-2.5 bg-red-600/90 text-white text-[11px] font-black px-4 py-1.5 rounded-full uppercase backdrop-blur-md shadow-2xl border border-white/10">
-            <span className="w-2 h-2 rounded-full bg-white animate-pulse" /> LIVE
-          </div>
-        )}
-      </div>
-
-      {/* Now playing card */}
-      <div className="glass-premium rounded-[40px] p-8 border border-white/5 relative overflow-hidden group">
-        <div className="absolute -top-10 -right-10 p-12 opacity-[0.05] scale-150 rotate-12 group-hover:rotate-0 transition-transform duration-[2000ms]">
-          <TvIcon className="w-48 h-48 text-primary" />
-        </div>
-        <div className="flex items-start justify-between gap-6 relative">
-          <div className="flex items-center gap-6">
-            <ChannelLogo ch={ch} size="w-16 h-16" />
-            <div>
-              <div className="flex flex-wrap items-center gap-3 mb-3">
-                <span className="text-[11px] font-black text-red-500 bg-red-500/10 border border-red-500/20 px-3 py-1 rounded-full uppercase tracking-widest animate-pulse">Đang phát trực tiếp</span>
-                <span className="text-[11px] font-black text-white/40 bg-white/5 border border-white/10 px-3 py-1 rounded-full uppercase tracking-widest">{ch.network_label}</span>
-                {ch.is_hd && <span className="text-[11px] font-black text-blue-400 bg-blue-400/10 border border-blue-400/20 px-3 py-1 rounded-full uppercase tracking-widest">4K ULTRA HD</span>}
-              </div>
-              <h2 className="font-display text-3xl font-black text-white uppercase italic text-gradient-primary">{ch.program_now}</h2>
-              <p className="text-white/40 text-sm font-bold mt-2 uppercase tracking-wider flex items-center gap-2">
-                Tiếp theo: <span className="text-white/70 italic">{ch.program_next}</span>
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -379,34 +386,31 @@ export const LiveTV: React.FC = () => {
         </div>
 
         {/* ── Main layout */}
-        <div className="flex flex-col lg:grid lg:grid-cols-[1fr,450px] gap-12">
+        <div className="flex flex-col lg:flex-row gap-6">
 
           {/* Player */}
-          <div className="min-w-0">
+          <div className="flex-1 min-w-0">
             <LivePlayer ch={selectedCh} />
           </div>
 
           {/* Channel list */}
-          <div className="flex flex-col gap-4 lg:max-h-[calc(100vh-250px)] lg:overflow-y-auto pr-3 scrollbar-hide">
+          <div className="lg:w-80 xl:w-96 flex flex-col gap-2 lg:max-h-[calc(100vh-200px)] lg:overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 pr-1">
 
             {/* Loading skeleton */}
             {channelsQ.isLoading && Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-20 rounded-[24px] bg-surface-container-highest animate-pulse" />
+              <div key={i} className="h-16 rounded-2xl bg-[#1d1f27] animate-pulse" />
             ))}
 
             {/* Error */}
             {channelsQ.error && (
-              <div className="flex flex-col items-center gap-6 py-20 text-center glass-premium rounded-[40px]">
-                <SignalIcon className="w-16 h-16 text-white/10 animate-pulse" />
-                <div className="flex flex-col gap-2">
-                   <p className="text-xl font-black text-white uppercase italic">Mất kết nối máy chủ</p>
-                   <p className="text-white/30 text-[11px] font-bold uppercase tracking-widest">Không thể tải danh sách kênh</p>
-                </div>
+              <div className="flex flex-col items-center gap-3 py-10 text-center text-white/40">
+                <SignalIcon className="w-10 h-10" />
+                <p>Không thể tải danh sách kênh.</p>
                 <button
                   onClick={() => channelsQ.refetch()}
-                  className="btn-vibrant"
+                  className="px-4 py-2 rounded-lg bg-primary/15 text-primary text-sm font-semibold"
                 >
-                  THỬ LẠI NGAY
+                  Thử lại
                 </button>
               </div>
             )}
@@ -420,12 +424,11 @@ export const LiveTV: React.FC = () => {
                   </p>
                 </div>
                 {filtered.length === 0 && (
-                  <div className="py-20 flex flex-col items-center gap-4 glass-premium rounded-[40px] opacity-40">
-                     <span className="text-4xl">📺</span>
-                     <p className="text-sm font-black text-white uppercase tracking-widest italic text-center">Không tìm thấy kênh</p>
-                  </div>
+                  <p className="text-white/30 text-sm text-center py-10">
+                    Không tìm thấy kênh
+                  </p>
                 )}
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
                   {filtered.map(ch => (
                     <ChannelCard
                       key={ch.id}

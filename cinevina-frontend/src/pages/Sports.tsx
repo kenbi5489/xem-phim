@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { SignalIcon, MagnifyingGlassIcon, TrophyIcon } from '@heroicons/react/24/outline';
+import { SignalIcon, MagnifyingGlassIcon, TrophyIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
+
 import { SpeakerWaveIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid';
 import Hls from 'hls.js';
 import axios from 'axios';
@@ -68,14 +69,73 @@ const ChannelCard: React.FC<{
 
 // ─── HLS Player ───────────────────────────────────────────────────────────────
 const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef   = useRef<Hls | null>(null);
-  const [muted, setMuted]       = useState(true);
-  const [playing, setPlaying]   = useState(false);
-  const [error, setError]       = useState(false);
-  const [streamType, setStreamType] = useState<'hls' | 'embed'>('hls');
-  const [resolvedUrl, setResolvedUrl] = useState<string>('');
+  const [playing, setPlaying]           = useState(false);
+  const [muted, setMuted]               = useState(true);
+  const [error, setError]               = useState(false);
+  const [streamType, setStreamType]     = useState<'hls' | 'embed'>('hls');
+  const [resolvedUrl, setResolvedUrl]   = useState<string>('');
   const [embedUrlBackup, setEmbedUrlBackup] = useState<string>('');
+
+  const videoRef  = useRef<HTMLVideoElement>(null);
+  const hlsRef    = useRef<Hls | null>(null);
+  const playerWrapperRef = useRef<HTMLDivElement>(null);
+
+  const [fullscreen, setFullscreen] = useState(false);
+
+  const toggleFullScreen = () => {
+    const el = playerWrapperRef.current;
+    const videoEl = videoRef.current;
+    if (!el) return;
+
+    if (!fullscreen) {
+      if (el.requestFullscreen) {
+        el.requestFullscreen().then(() => setFullscreen(true)).catch(() => setFullscreen(true));
+      } else if ((el as any).webkitRequestFullscreen) {
+        (el as any).webkitRequestFullscreen();
+        setFullscreen(true);
+      } else if (videoEl && (videoEl as any).webkitEnterFullscreen) {
+        (videoEl as any).webkitEnterFullscreen();
+      } else {
+        setFullscreen(true);
+      }
+    } else {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().then(() => setFullscreen(false)).catch(() => setFullscreen(false));
+      } else if ((document as any).webkitFullscreenElement && (document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+        setFullscreen(false);
+      } else {
+        setFullscreen(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handler = async () => {
+      const isFull = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      setFullscreen(isFull);
+      
+      if (isFull && screen.orientation && screen.orientation.lock) {
+        try {
+          await screen.orientation.lock('landscape');
+        } catch (e) {
+          console.warn('Orientation lock failed', e);
+        }
+      } else if (!isFull && screen.orientation && screen.orientation.unlock) {
+        try {
+          screen.orientation.unlock();
+        } catch (e) {
+          console.warn('Orientation unlock failed', e);
+        }
+      }
+    };
+    document.addEventListener('fullscreenchange', handler);
+    document.addEventListener('webkitfullscreenchange', handler);
+    return () => {
+      document.removeEventListener('fullscreenchange', handler);
+      document.removeEventListener('webkitfullscreenchange', handler);
+    };
+  }, []);
 
   useEffect(() => {
     if (!ch) return;
@@ -186,7 +246,8 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] bg-black">
+      <div ref={playerWrapperRef} className={`relative w-full aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] bg-black ${fullscreen ? 'fixed !inset-0 !z-[99999] !w-screen !h-[100dvh] !rounded-none' : ''}`}>
+
         {streamType === 'embed' ? (
           <iframe
             src={resolvedUrl}
@@ -226,19 +287,28 @@ const LivePlayer: React.FC<{ ch: LiveChannel | null }> = ({ ch }) => {
           </div>
         )}
 
-        {playing && streamType === 'hls' && (
+        {playing && (
           <div className="absolute bottom-3 right-3 flex gap-2">
+            {streamType === 'hls' && (
+              <button
+                onClick={() => {
+                  setMuted(m => !m);
+                  if (videoRef.current) videoRef.current.muted = !muted;
+                }}
+                className="p-2 rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors"
+              >
+                {muted
+                  ? <SpeakerXMarkIcon className="w-4 h-4" />
+                  : <SpeakerWaveIcon  className="w-4 h-4" />
+                }
+              </button>
+            )}
             <button
-              onClick={() => {
-                setMuted(m => !m);
-                if (videoRef.current) videoRef.current.muted = !muted;
-              }}
+              onClick={toggleFullScreen}
               className="p-2 rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors"
+              title="Toàn màn hình"
             >
-              {muted
-                ? <SpeakerXMarkIcon className="w-4 h-4" />
-                : <SpeakerWaveIcon  className="w-4 h-4" />
-              }
+              <ArrowsPointingOutIcon className="w-4 h-4" />
             </button>
           </div>
         )}

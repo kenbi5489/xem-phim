@@ -48,6 +48,11 @@ def _map_listing_item(item: dict) -> MovieInfo:
     genres = []
     if isinstance(raw_categories, list):
         genres = [{"name": c.get("name",""), "slug": c.get("slug","")} for c in raw_categories]
+        
+    # Extract rating
+    tmdb_rating = item.get('tmdb', {})
+    rating_val = tmdb_rating.get('vote_average') if isinstance(tmdb_rating, dict) else None
+    rating_str = str(rating_val) if rating_val else ''
     
     return MovieInfo(
         id=item.get('_id', ''),
@@ -68,6 +73,7 @@ def _map_listing_item(item: dict) -> MovieInfo:
         trailer_url=item.get('trailer_url', ''),
         totalEpisodes=str(item.get('episode_total', '')),
         current_episode=item.get('episode_current', ''),
+        rating=rating_str,
         is_streamable=status != 'trailer',
         modified=item.get('modified', {}).get('time', ''),
         episodes=[],

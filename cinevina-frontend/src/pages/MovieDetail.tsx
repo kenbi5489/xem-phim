@@ -5,8 +5,9 @@ import {
   PlayIcon, InformationCircleIcon, ShareIcon, CalendarIcon, ClockIcon,
   GlobeAltIcon, LanguageIcon, RectangleGroupIcon, ChevronDownIcon,
 } from '@heroicons/react/24/outline';
-import { PlayIcon as PlaySolid } from '@heroicons/react/24/solid';
+import { PlayIcon as PlaySolid, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import { useMovieDetail, useMovieStream } from '../hooks/useMovies';
+import { useFavorites } from '../hooks/useFavorites';
 import { computeIsStreamable } from '../services/api';
 import { EmbeddedPlayer } from '../components/ui/EmbeddedPlayer';
 
@@ -86,6 +87,7 @@ export const MovieDetail: React.FC = () => {
   const [showTrailer, setShowTrailer] = useState(false);
   const [isWatching, setIsWatching]   = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   if (isLoading) return (
     <div className="min-h-screen bg-black flex items-center justify-center">
@@ -185,8 +187,15 @@ export const MovieDetail: React.FC = () => {
                 )}
 
                 <div className="flex gap-2">
-                  <button className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border border-white/10 text-white hover:text-red-500 hover:border-red-500/40 transition-all flex items-center justify-center group">
-                    <HeartIcon className="w-6 h-6 group-hover:fill-red-500 transition-all" />
+                  <button
+                    onClick={() => movie && toggleFavorite({ slug: movie.slug, name: movie.name, posterUrl: movie.posterUrl, thumbUrl: movie.thumbUrl })}
+                    className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border text-white transition-all flex items-center justify-center group ${isFavorite(movie.slug) ? 'border-red-500/40 text-red-500' : 'border-white/10 hover:text-red-500 hover:border-red-500/40'}`}
+                  >
+                    {isFavorite(movie.slug) ? (
+                      <HeartIconSolid className="w-6 h-6 text-red-500" />
+                    ) : (
+                      <HeartIcon className="w-6 h-6 group-hover:fill-red-500 transition-all" />
+                    )}
                   </button>
                   <button className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border border-white/10 text-white hover:text-primary hover:border-primary/40 transition-all flex items-center justify-center group">
                     <PlusIcon className="w-6 h-6 group-hover:scale-110 transition-transform" />

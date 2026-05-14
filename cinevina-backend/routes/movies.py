@@ -83,7 +83,7 @@ def normalize_quality(*sources: Optional[str]) -> str:
         return "CAM"
     if any(k in combined for k in ["SD", "480", "360"]):
         return "SD"
-    return "UNKNOWN"
+    return "HD"
 
 
 def _map_item(item: dict) -> dict:
@@ -114,6 +114,11 @@ def _map_item(item: dict) -> dict:
     mod = item.get("modified") or {}
     modified_time = mod.get("time", "") if isinstance(mod, dict) else ""
 
+    # ── rating ───────────────────────────────
+    tmdb_rating = item.get("tmdb") or {}
+    rating_val = tmdb_rating.get("vote_average") if isinstance(tmdb_rating, dict) else None
+    rating_str = str(rating_val) if rating_val else ""
+
     return {
         "id":             str(item.get("_id") or item.get("id") or ""),
         "slug":           item.get("slug", ""),
@@ -134,6 +139,7 @@ def _map_item(item: dict) -> dict:
         "description":    item.get("content", "") or item.get("description", ""),
         "episode_current": str(item.get("episode_current") or ""),
         "episode_total":   str(item.get("episode_total")   or ""),
+        "rating":         rating_str,
         "modified":       modified_time,
     }
 

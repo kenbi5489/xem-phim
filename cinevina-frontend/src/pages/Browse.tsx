@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { movieApi } from '../services/api';
 import { MovieCard } from '../components/ui/MovieCard';
@@ -47,6 +47,14 @@ const COUNTRY_OPTIONS = [
 
 const YEAR_OPTIONS = ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011", "2010"];
 
+const RATING_OPTIONS = [
+  { value: "10", name: "10 điểm" },
+  { value: "9", name: "Từ 9 điểm" },
+  { value: "8", name: "Từ 8 điểm" },
+  { value: "7", name: "Từ 7 điểm" },
+  { value: "under_6", name: "Dưới 6 điểm" }
+];
+
 const SORT_OPTIONS = [
   { value: "modified.time", name: "Mới cập nhật" },
   { value: "year", name: "Năm phát hành" },
@@ -55,21 +63,38 @@ const SORT_OPTIONS = [
 
 export const Browse: React.FC = () => {
   const { slug = 'phim-le' } = useParams<{ slug: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   const isCountry = COUNTRY_SLUGS.includes(slug);
   const isCategory = CATEGORY_SLUGS.includes(slug);
   const isGenre = !isCountry && !isCategory;
   
-  // Filter states
-  const [genreFilter, setGenreFilter] = useState("");
-  const [countryFilter, setCountryFilter] = useState("");
-  const [yearFilter, setYearFilter] = useState("");
-  const [sortFilter, setSortFilter] = useState("modified.time");
-  const [page, setPage] = useState(1);
+  // Filter states synced with URL
+  const genreFilter = searchParams.get('genre') || '';
+  const countryFilter = searchParams.get('country') || '';
+  const yearFilter = searchParams.get('year') || '';
+  const sortFilter = searchParams.get('sort') || 'modified.time';
+  const ratingFilter = searchParams.get('rating') || '';
+  const page = parseInt(searchParams.get('page') || '1', 10);
 
-  useEffect(() => {
-    setPage(1);
-  }, [slug, genreFilter, countryFilter, yearFilter]);
+  const updateParams = (updates: Record<string, string>) => {
+    const newParams = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([k, v]) => {
+      if (v) newParams.set(k, v);
+      else newParams.delete(k);
+    });
+    setSearchParams(newParams);
+  };
+
+  const setGenreFilter = (val: string) => updateParams({ genre: val, page: '1' });
+  const setCountryFilter = (val: string) => updateParams({ country: val, page: '1' });
+  const setYearFilter = (val: string) => updateParams({ year: val, page: '1' });
+  const setSortFilter = (val: string) => updateParams({ sort: val, page: '1' });
+  const setRatingFilter = (val: string) => updateParams({ rating: val, page: '1' });
+  const setPage = (val: number | ((p: number) => number)) => {
+    const next = typeof val === 'function' ? val(page) : val;
+    updateParams({ page: next.toString() });
+  };
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["browse", slug, page, genreFilter, countryFilter, yearFilter, sortFilter],
@@ -92,6 +117,22 @@ export const Browse: React.FC = () => {
     },
     staleTime: 30_000, // Cache 30s to avoid re-fetching on every minor state change
   });
+
+  // Client-side filtering cho Điểm đánh giá (do API không hỗ trợ)
+  const displayItems = React.useMemo(() => {
+    if (!data?.items) return [];
+    if (!ratingFilter) return data.items;
+
+    return data.items.filter((movie: any) => {
+      const rating = parseFloat(movie.rating) || 0;
+      if (ratingFilter === '10') return rating === 10;
+      if (ratingFilter === '9') return rating >= 9 && rating < 10;
+      if (ratingFilter === '8') return rating >= 8 && rating < 9;
+      if (ratingFilter === '7') return rating >= 7 && rating < 8;
+      if (ratingFilter === 'under_6') return rating > 0 && rating < 6;
+      return true;
+    });
+  }, [data?.items, ratingFilter]);
 
 
   const getTitle = () => {
@@ -171,15 +212,25 @@ export const Browse: React.FC = () => {
             >
               {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.name}</option>)}
             </select>
+
+            <select 
+              value={ratingFilter}
+              onChange={(e) => setRatingFilter(e.target.value)}
+              className="bg-surface-container border border-primary/30 text-primary text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[140px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
+            >
+              <option value="">Tất cả điểm</option>
+              {RATING_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.name}</option>)}
+            </select>
           </div>
 
-          {(genreFilter || countryFilter || yearFilter || sortFilter !== "modified.time") && (
+          {(genreFilter || countryFilter || yearFilter || sortFilter !== "modified.time" || ratingFilter) && (
             <button 
               onClick={() => {
                 setGenreFilter("");
                 setCountryFilter("");
                 setYearFilter("");
                 setSortFilter("modified.time");
+                setRatingFilter("");
               }}
               className="w-12 h-12 rounded-full bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white transition-all shadow-xl flex items-center justify-center border border-red-500/30"
               title="Xóa bộ lọc"
@@ -208,11 +259,19 @@ export const Browse: React.FC = () => {
           </div>
         ) : data?.items?.length ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-12 md:gap-y-16">
-              {data.items.map((movie: any) => (
-                <MovieCard key={movie.slug} {...movie} />
-              ))}
-            </div>
+            {displayItems?.length ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-12 md:gap-y-16">
+                {displayItems.map((movie: any) => (
+                  <MovieCard key={movie.slug} {...movie} />
+                ))}
+              </div>
+            ) : (
+              <div className="py-32 text-center glass-premium rounded-[40px] flex flex-col items-center gap-4 opacity-50 border border-white/5">
+                <span className="text-4xl">🎬</span>
+                <p className="text-xl font-black text-white/40 uppercase tracking-[0.3em] italic">Trang này không có phim phù hợp</p>
+                <p className="text-sm text-white/30">Hãy chuyển sang trang tiếp theo để tìm kiếm tiếp</p>
+              </div>
+            )}
 
             {/* Pagination */}
             {data.total_pages > 1 && (

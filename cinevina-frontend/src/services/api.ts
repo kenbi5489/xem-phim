@@ -4,13 +4,12 @@ import axios from 'axios';
 const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
   if (!envUrl) {
-    // If on localhost (Vite dev), use local proxy. Otherwise use Vercel production
-    return typeof window !== 'undefined' && 
+    return typeof window !== 'undefined' &&
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? '/api'
       : 'https://cinevina-backend.vercel.app/api';
   }
-  
+
   if (envUrl.startsWith('http')) {
     const sanitized = envUrl.replace(/\/$/, '');
     return sanitized.endsWith('/api') ? sanitized : `${sanitized}/api`;
@@ -56,6 +55,7 @@ export interface MovieInfo {
   isCinema?: boolean;
   trailerUrl?: string;
   rating?: string | number;
+  tmdbId?: string;
   categories?: string;
   country?: string;
   cast?: string;
@@ -101,7 +101,6 @@ import { adaptMovieDetail, adaptMovies } from '../utils/movieAdapter';
 export const getFirstStream = (movie: MovieInfo, episodeSlug?: string): { type: 'hls' | 'embed'; url: string } | null => {
   for (const server of movie.servers || []) {
     for (const ep of server.server_data || []) {
-      // If episodeSlug is specified, match it; otherwise take the first available
       if (episodeSlug && ep.slug !== episodeSlug) continue;
       if (ep.link_m3u8) return { type: 'hls', url: ep.link_m3u8 };
       if (ep.link_embed) return { type: 'embed', url: ep.link_embed };
@@ -112,7 +111,6 @@ export const getFirstStream = (movie: MovieInfo, episodeSlug?: string): { type: 
 
 /**
  * Determine the accurate stream status based on server data (for detail pages).
- * More accurate than is_streamable flag from listing.
  */
 export const computeIsStreamable = (movie: MovieInfo): boolean => {
   if (!movie.servers || movie.servers.length === 0) return false;
@@ -124,11 +122,9 @@ export const computeIsStreamable = (movie: MovieInfo): boolean => {
 // ─── API Client ───────────────────────────────────────────────────────────────
 const api = axios.create({ baseURL: BASE_URL, timeout: 15000 });
 
-// Robust normalization for paginated response
 const normalizePaginated = (data: any): PaginatedMovieResponse => {
   const items = adaptMovies(data);
-  
-  // If it was already a paginated object, preserve the metadata
+
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     return {
       items,
@@ -139,7 +135,6 @@ const normalizePaginated = (data: any): PaginatedMovieResponse => {
     };
   }
 
-  // Otherwise default metadata
   return {
     items,
     total: items.length,
@@ -156,7 +151,6 @@ export const movieApi = {
       const res = await api.get('/movies', {
         params: { category, page, country, genre, year, sort, source },
       });
-      console.debug(`[API] getMovies(${category}) response type:`, Array.isArray(res.data) ? 'Array' : typeof res.data);
       return normalizePaginated(res.data);
     } catch (err) {
       console.error(`[API] getMovies error for category ${params.category}:`, err);
@@ -226,18 +220,22 @@ export const movieApi = {
       return normalizePaginated(res.data);
     } catch (err) {
       console.warn(`[API] getCinemaMovies failed, falling back to category:`, err);
-      // Fallback to generic movies with cinema category if specific route doesn't exist
       return movieApi.getMovies({ category: 'phim-chieu-rap', page, source });
     }
   },
-  
-  getTrendingMovies: async (limit: number = 10, source = 'kkphim'): Promise<MovieInfo[]> => {
+
+  /**
+   * Lấy phim mới cập nhật gần nhất.
+   * NOTE: Backend /movies/trending thực chất trả phim-moi-cap-nhat
+   * (sorted by modified.time), không phải ranking popularity thật.
+   * Đặt tên getLatestMovies() để phản ánh đúng nguồn dữ liệu.
+   */
+  getLatestMovies: async (limit: number = 10, source = 'kkphim'): Promise<MovieInfo[]> => {
     try {
       const res = await api.get('/movies/trending', { params: { limit, source } });
       return adaptMovies(res.data);
     } catch (err) {
-      console.warn(`[API] getTrendingMovies failed, falling back to recent list:`, err);
-      // Fallback: use recent movies as trending if /trending doesn't exist yet
+      console.warn(`[API] getLatestMovies failed, falling back to recent list:`, err);
       try {
         const fallback = await movieApi.getMovies({ category: 'phim-moi-cap-nhat', page: 1, source });
         return fallback.items.slice(0, limit);

@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { movieApi, type MovieListParams, BASE_URL } from '../services/api';
 import axios from 'axios';
 
-// Use shared API base URL
 const API_BASE = BASE_URL;
 
 const STALE_30M = 1000 * 60 * 30;
@@ -26,11 +25,10 @@ export const useMovies = (params: MovieListParams) =>
     queryKey: ['movies', params],
     queryFn: async () => {
       const res = await movieApi.getMovies(params);
-      return res.items;
+      return res;
     },
     staleTime: STALE_30M,
     gcTime: GC_1H,
-    // Allow fetch when category is set OR when no country/genre/year (defaults to phim-moi-cap-nhat)
     enabled: !!(params.category || params.country || params.genre || params.year || params.source)
       || (!params.country && !params.genre && !params.year),
   });
@@ -89,18 +87,21 @@ export const useCinemaMovies = (page = 1) =>
     queryKey: ['movies', 'cinema', page],
     queryFn: async () => {
       const res = await movieApi.getCinemaMovies(page);
-      return res.items;
+      return res;
     },
     staleTime: STALE_30M,
     gcTime: GC_1H,
   });
 
-// ─── Trending Movies ──────────────────────────────────────────────────────────
-export const useTrendingMovies = (limit = 10) =>
+// ─── Latest Movies ────────────────────────────────────────────────────────────
+// Đổi tên từ useTrendingMovies → useLatestMovies để phản ánh đúng nguồn dữ liệu.
+// Backend /movies/trending thực chất trả phim-moi-cap-nhat (modified.time DESC),
+// không phải ranking popularity thật.
+export const useLatestMovies = (limit = 10) =>
   useQuery({
-    queryKey: ['movies', 'trending', limit],
+    queryKey: ['movies', 'latest', limit],
     queryFn: async () => {
-      const res = await movieApi.getTrendingMovies(limit);
+      const res = await movieApi.getLatestMovies(limit);
       return res;
     },
     staleTime: STALE_1H,
@@ -135,8 +136,8 @@ export const useLiveChannels = (type?: string, group?: string, network?: string)
       const res = await axios.get(`${API_BASE}/live/channels`, { params });
       return res.data as LiveChannel[];
     },
-    staleTime: 10 * 1000, // 10 seconds for live data
-    gcTime: 1 * 60 * 1000, // 1 minute garbage collection
+    staleTime: 10 * 1000,
+    gcTime: 1 * 60 * 1000,
   });
 
 export interface LiveNetwork {
@@ -153,6 +154,6 @@ export const useLiveNetworks = () =>
       const res = await axios.get(`${API_BASE}/live/networks`);
       return res.data as LiveNetwork[];
     },
-    staleTime: 30 * 1000, // 30 seconds for live networks
-    gcTime: 5 * 60 * 1000, // 5 minutes garbage collection
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
   });

@@ -2,8 +2,11 @@ import React from 'react';
 import { UserCircleIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 import { Carousel } from '../components/ui/Carousel';
 import { MovieCard } from '../components/ui/MovieCard';
+import { useFavorites } from '../hooks/useFavorites';
 
 export const Account: React.FC = () => {
+  const { favorites } = useFavorites();
+
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-8 py-12 flex flex-col gap-12">
       {/* Profile Header */}
@@ -14,7 +17,7 @@ export const Account: React.FC = () => {
         <div className="flex flex-col items-center md:items-start gap-2 flex-1">
           <h1 className="font-display text-4xl font-bold">Người Dùng VIP</h1>
           <p className="text-[var(--color-secondary)] font-semibold">Gói Premium (Còn 120 ngày)</p>
-          <p className="text-[var(--color-on-surface-variant)] text-sm mt-2">user@cinevina.com</p>
+          <p className="text-[var(--color-on-surface-variant)] text-sm mt-2">user@duccine.com</p>
         </div>
         <div className="flex gap-4">
           <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--color-surface-container-high)] hover:bg-[var(--color-surface-container-highest)] transition-colors ghost-border">
@@ -48,9 +51,13 @@ export const Account: React.FC = () => {
       {/* Favorites */}
       <div>
         <Carousel title="Danh Sách Yêu Thích">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <MovieCard key={i} name={`Phim Yêu Thích ${i + 1}`} posterUrl={`https://picsum.photos/seed/fav${i}/300/450`} />
-          ))}
+          {favorites.length > 0 ? (
+            favorites.map((m) => (
+              <MovieCard key={m.slug} slug={m.slug} name={m.name} posterUrl={m.posterUrl} thumbUrl={m.thumbUrl} />
+            ))
+          ) : (
+            <div className="text-white/40 italic px-4 py-8">Chưa có phim yêu thích nào. Hãy khám phá và lưu phim vào danh sách nhé!</div>
+          )}
         </Carousel>
       </div>
     </div>

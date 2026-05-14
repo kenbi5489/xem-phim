@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  MagnifyingGlassIcon, UserCircleIcon, 
-  ChevronDownIcon, ArrowDownTrayIcon, XMarkIcon,
+  MagnifyingGlassIcon, UserCircleIcon,
+  XMarkIcon,
   HomeIcon, FilmIcon, TvIcon,
-  GlobeAltIcon,
-  RectangleGroupIcon,
   PlayCircleIcon,
   TrophyIcon
 } from '@heroicons/react/24/outline';
@@ -13,51 +11,23 @@ import {
   HomeIcon as HomeSolid,
   FilmIcon as FilmSolid,
   TvIcon as TvSolid,
-  TrophyIcon as TrophySolid,
   UserCircleIcon as UserSolid
 } from '@heroicons/react/24/solid';
 
-const GENRES = [
-  { name: 'Hành động', slug: 'hanh-dong', emoji: '⚔️' },
-  { name: 'Tình cảm',  slug: 'tinh-cam',  emoji: '💕' },
-  { name: 'Kinh dị',   slug: 'kinh-di',   emoji: '👻' },
-  { name: 'Hài hước',  slug: 'hai-huoc',  emoji: '😂' },
-  { name: 'Cổ trang',  slug: 'co-trang',  emoji: '👘' },
-  { name: 'Hoạt hình', slug: 'hoat-hinh', emoji: '🎨' },
-  { name: 'Viễn tưởng',slug: 'vien-tuong',emoji: '🚀' },
-  { name: 'Võ thuật',  slug: 'vo-thuat',  emoji: '🥋' },
-  { name: 'Hình sự',   slug: 'hinh-su',   emoji: '🚓' },
-  { name: 'Tâm lý',    slug: 'tam-ly',    emoji: '🧠' },
-];
-
-const COUNTRIES = [
-  { name: 'Trung Quốc', slug: 'trung-quoc', emoji: '🇨🇳' },
-  { name: 'Hàn Quốc', slug: 'han-quoc', emoji: '🇰🇷' },
-  { name: 'Nhật Bản', slug: 'nhat-ban', emoji: '🇯🇵' },
-  { name: 'Thái Lan', slug: 'thai-lan', emoji: '🇹🇭' },
-  { name: 'Âu Mỹ', slug: 'au-my', emoji: '🇺🇸' },
-  { name: 'Việt Nam', slug: 'viet-nam', emoji: '🇻🇳' },
-  { name: 'Ấn Độ', slug: 'an-do', emoji: '🇮🇳' },
-  { name: 'Hồng Kông', slug: 'hong-kong', emoji: '🇭🇰' },
-];
-
 const NAV_LINKS = [
   { name: 'Trang chủ',      to: '/' },
-  { name: 'Thể loại',       to: '#', isDropdown: true },
-  { name: 'Quốc gia',       to: '#', isDropdown: true },
-  { name: 'Phim mới',       to: '/browse/phim-moi-cap-nhat' },
-  { name: 'Phim bộ',        to: '/browse/phim-bo' },
   { name: 'Phim lẻ',        to: '/browse/phim-le' },
-  { name: 'Phim chiếu rạp', to: '/browse/phim-chieu-rap' },
-  { name: 'Truyền hình',    to: '/live' },
-  { name: 'Thể Thao',       to: '/sports', isSports: true },
+  { name: 'Phim bộ',        to: '/browse/phim-bo' },
+  { name: 'Chiếu rạp',      to: '/browse/phim-chieu-rap' },
+  { name: 'Thể thao',       to: '/sports', isSport: true },
+  { name: 'Live TV',        to: '/live', isLive: true },
 ];
 
 const MOBILE_NAV = [
   { name: 'Trang chủ', to: '/',              Icon: HomeIcon,       IconSolid: HomeSolid },
   { name: 'Phim Lẻ',   to: '/browse/phim-le', Icon: FilmIcon,       IconSolid: FilmSolid },
   { name: 'Phim Bộ',   to: '/browse/phim-bo', Icon: TvIcon,         IconSolid: TvSolid },
-  { name: 'Thể Thao',  to: '/sports',         Icon: TrophyIcon,     IconSolid: TrophySolid },
+  { name: 'Live TV',   to: '/live',           Icon: TvIcon,         IconSolid: TvSolid },
   { name: 'Tài khoản', to: '/account',        Icon: UserCircleIcon, IconSolid: UserSolid },
 ];
 
@@ -96,7 +66,7 @@ export const Navbar: React.FC = () => {
 
   return (
     <>
-      <nav className={`fixed top-0 left-0 right-0 z-[60] transition-all duration-500 pt-[env(safe-area-inset-top)] max-w-[100vw] overflow-x-hidden ${
+      <nav className={`fixed top-0 left-0 right-0 z-[60] transition-all duration-500 pt-[env(safe-area-inset-top)] max-w-[100vw] ${
         scrolled
           ? 'bg-[#0c0e14]/95 backdrop-blur-2xl shadow-2xl border-b border-white/5 py-2'
           : 'bg-gradient-to-b from-black/90 via-black/40 to-transparent py-4'
@@ -134,58 +104,20 @@ export const Navbar: React.FC = () => {
             </form>
 
             {/* Desktop Menu */}
-            <div className="hidden lg:flex flex-1 items-center gap-0 xl:gap-2 overflow-x-auto no-scrollbar ml-4">
-              <div className="flex items-center gap-2 xl:gap-3">
+            <div className="hidden lg:flex flex-1 items-center gap-0 xl:gap-2 ml-4 relative z-[100]">
+              <div className="flex items-center gap-1 xl:gap-2">
                 {NAV_LINKS.map(link => {
-                  const isActive = link.to === '/' ? location.pathname === '/' : (link.to !== '#' && location.pathname.startsWith(link.to));
+                  const isActive = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
                   
-                  if (link.isDropdown) {
-                    return (
-                      <div 
-                        key={link.name}
-                        className="relative flex items-center group"
-                      >
-                        <button 
-                          className={`relative px-1.5 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg text-white/70 hover:text-white group-hover:text-white`}
-                        >
-                          {link.name}
-                          <ChevronDownIcon className={`w-3 h-3 transition-transform text-white/50 group-hover:rotate-180 group-hover:text-white`} />
-                        </button>
-
-                        {/* Dropdown Content */}
-                        <div className={`absolute top-full left-0 mt-2 min-w-[320px] bg-[#1a1c23]/98 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_40px_100px_-15px_rgba(0,0,0,0.8)] p-6 transition-all duration-300 origin-top-left opacity-0 -translate-y-4 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto`}>
-                          <h3 className="text-[11px] font-black text-white/50 uppercase tracking-[0.2em] mb-4 flex items-center gap-2 border-b border-white/5 pb-2">
-                            {link.name === 'Thể loại' ? <RectangleGroupIcon className="w-4 h-4" /> : <GlobeAltIcon className="w-4 h-4" />}
-                            {link.name}
-                          </h3>
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                            {(link.name === 'Thể loại' ? GENRES : COUNTRIES).map(item => (
-                              <Link 
-                                key={item.slug} 
-                                to={`/browse/${item.slug}`} 
-                                className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-[13px] text-white/70 hover:text-white transition-all"
-                              >
-                                <span>{item.name}</span>
-                              </Link>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  if (link.isSports) {
+                  if (link.isLive) {
+                    const colorClasses = isActive ? 'bg-red-500 text-white shadow-[0_0_16px_rgba(239,68,68,0.45)]' : 'bg-red-500/15 text-red-500 border border-red-500/30 hover:bg-red-500/30';
                     return (
                       <Link
                         key={link.name}
                         to={link.to}
-                        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] xl:text-[13px] font-bold whitespace-nowrap transition-all focus:outline-none ${
-                          isActive
-                            ? 'bg-[#ff922b] text-white shadow-[0_0_16px_rgba(255,146,43,0.45)]'
-                            : 'bg-[#ff922b]/15 text-[#ff922b] border border-[#ff922b]/30 hover:bg-[#ff922b]/30'
-                        }`}
+                        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] xl:text-[13px] font-bold whitespace-nowrap transition-all focus:outline-none ${colorClasses}`}
                       >
-                        <TrophyIcon className="w-3.5 h-3.5 shrink-0" />
+                        <TvIcon className="w-3.5 h-3.5 shrink-0" />
                         {link.name}
                         <span className="flex items-center gap-0.5 bg-red-600/80 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">
                           <span className="w-1 h-1 rounded-full bg-white animate-pulse" /> LIVE
@@ -194,12 +126,26 @@ export const Navbar: React.FC = () => {
                     );
                   }
 
+                  if (link.isSport) {
+                    const colorClasses = isActive ? 'bg-[#ff922b] text-white shadow-[0_0_16px_rgba(255,146,43,0.45)]' : 'bg-[#ff922b]/15 text-[#ff922b] border border-[#ff922b]/30 hover:bg-[#ff922b]/30';
+                    return (
+                      <Link
+                        key={link.name}
+                        to={link.to}
+                        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] xl:text-[13px] font-bold whitespace-nowrap transition-all focus:outline-none ${colorClasses}`}
+                      >
+                        <TrophyIcon className="w-3.5 h-3.5 shrink-0" />
+                        {link.name}
+                      </Link>
+                    );
+                  }
+
                   return (
                     <Link 
                       key={link.name} 
                       to={link.to}
-                      className={`relative px-1.5 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg ${
-                        isActive ? 'text-white' : 'text-white/70 hover:text-white'
+                      className={`relative px-3 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg ${
+                        isActive ? 'text-white bg-white/10' : 'text-white/70 hover:text-white hover:bg-white/5'
                       }`}
                     >
                       {link.name}
@@ -217,20 +163,15 @@ export const Navbar: React.FC = () => {
               <MagnifyingGlassIcon className="w-6 h-6" />
             </button>
 
-            {/* App Download (Yellow Circle) */}
-            <div className="hidden md:flex w-8 h-8 rounded-full bg-[#f9d854] items-center justify-center cursor-pointer hover:bg-yellow-400 transition-colors">
-              <ArrowDownTrayIcon className="w-4 h-4 text-black font-bold" />
-            </div>
-
             {/* Account Button */}
             <Link to="/account" className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-2 rounded-full font-bold text-[13px] transition-colors">
               <UserCircleIcon className="w-5 h-5" />
-              Thành viên
+              <span className="hidden sm:inline">Thành viên</span>
             </Link>
           </div>
 
           {/* Mobile Search Overlay */}
-          <div className={`absolute inset-0 bg-[#0c0e14] lg:hidden z-[70] transition-all duration-300 flex items-center px-4 ${showSearch ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
+          <div className={`absolute inset-x-0 bottom-0 top-[env(safe-area-inset-top)] bg-[#0c0e14] lg:hidden z-[70] transition-all duration-300 flex items-center px-4 ${showSearch ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
             <form onSubmit={handleSearch} className="w-full relative flex items-center">
               <MagnifyingGlassIcon className="absolute left-3 w-5 h-5 text-white/50 pointer-events-none" />
               <input
@@ -264,8 +205,8 @@ export const Navbar: React.FC = () => {
             const Icon = isActive ? item.IconSolid : item.Icon;
             return (
               <Link key={item.name} to={item.to} className="flex flex-col items-center gap-1 p-2 min-w-[70px]">
-                <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-purple-500 scale-110' : 'text-white/40'}`} />
-                <span className={`text-[9px] font-black uppercase tracking-tighter ${isActive ? 'text-purple-500' : 'text-white/30'}`}>
+                <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-primary scale-110' : 'text-white/40'}`} />
+                <span className={`text-[9px] font-black uppercase tracking-tighter ${isActive ? 'text-primary' : 'text-white/30'}`}>
                   {item.name}
                 </span>
               </Link>

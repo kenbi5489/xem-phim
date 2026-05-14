@@ -8,11 +8,11 @@ export const Footer: React.FC = () => {
         <div className="flex flex-col gap-4 max-w-sm">
           <Link to="/" className="flex items-center gap-2">
             <span className="font-display font-black text-2xl tracking-tight text-[var(--color-primary)]">
-              CINEVINA
+              ĐứcCine
             </span>
           </Link>
           <p className="text-[var(--color-on-surface-variant)] text-sm">
-            Nền tảng xem phim và giải trí trực tuyến chất lượng cao. Trải nghiệm không gian điện ảnh Neon Auteur đích thực.
+            Nền tảng xem phim và giải trí trực tuyến do Đức Nguyễn xây dựng
           </p>
         </div>
         
@@ -32,7 +32,7 @@ export const Footer: React.FC = () => {
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 border-t ghost-border border-b-0 border-l-0 border-r-0 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-[var(--color-on-surface-variant)]">
-        <p>&copy; {new Date().getFullYear()} CINEVINA. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} ĐứcCine. All rights reserved.</p>
         <div className="flex gap-4">
           <a href="#" className="hover:text-[var(--color-primary)] transition-colors">Điều khoản</a>
           <a href="#" className="hover:text-[var(--color-primary)] transition-colors">Bảo mật</a>
