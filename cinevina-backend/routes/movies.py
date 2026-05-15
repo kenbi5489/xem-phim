@@ -245,7 +245,12 @@ async def _fetch_and_merge(path: str, params: dict, page: int, limit: int) -> di
     ophim_items_raw = ophim_data.get("data", {}).get("items", []) or ophim_data.get("items", [])
     
     kkphim_mapped = [_map_item(i) for i in kkphim_items_raw]
-    ophim_path_image = ophim_data.get("pathImage", "")
+    
+    # Lấy path image cho Ophim (tuỳ thuộc vào endpoint trả về format nào)
+    ophim_path_image = ophim_data.get("pathImage") or ophim_data.get("data", {}).get("APP_DOMAIN_CDN_IMAGE", "")
+    if not ophim_path_image:
+        ophim_path_image = "https://img.ophim.live/uploads/movies/"
+        
     ophim_mapped = [_map_item(i, ophim_path_image) for i in ophim_items_raw]
     
     merged_items = _merge_and_dedup(kkphim_mapped, ophim_mapped)
@@ -346,8 +351,12 @@ async def search_movies(
     kk_items = kkphim_data.get("data", {}).get("items") or []
     op_items = ophim_data.get("data", {}).get("items") or []
     
+    ophim_path_image = ophim_data.get("pathImage") or ophim_data.get("data", {}).get("APP_DOMAIN_CDN_IMAGE", "")
+    if not ophim_path_image:
+        ophim_path_image = "https://img.ophim.live/uploads/movies/"
+    
     kk_mapped = [_map_item(i) for i in kk_items]
-    op_mapped = [_map_item(i) for i in op_items]
+    op_mapped = [_map_item(i, ophim_path_image) for i in op_items]
     
     merged_api_items = _merge_and_dedup(kk_mapped, op_mapped)
     
