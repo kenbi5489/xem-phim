@@ -244,12 +244,12 @@ async def _fetch_and_merge(path: str, params: dict, page: int, limit: int) -> di
     kkphim_items_raw = kkphim_data.get("data", {}).get("items", []) or kkphim_data.get("items", [])
     ophim_items_raw = ophim_data.get("data", {}).get("items", []) or ophim_data.get("items", [])
     
-    kkphim_mapped = [_map_item(i) for i in kkphim_items_raw]
-    
     # Lấy path image cho Ophim (tuỳ thuộc vào endpoint trả về format nào)
     ophim_path_image = ophim_data.get("pathImage") or ophim_data.get("data", {}).get("APP_DOMAIN_CDN_IMAGE", "")
-    if not ophim_path_image:
+    if not ophim_path_image or ophim_path_image.strip("/") == "https://img.ophim.live":
         ophim_path_image = "https://img.ophim.live/uploads/movies/"
+    elif not ophim_path_image.endswith("/"):
+        ophim_path_image += "/"
         
     ophim_mapped = [_map_item(i, ophim_path_image) for i in ophim_items_raw]
     
@@ -352,8 +352,10 @@ async def search_movies(
     op_items = ophim_data.get("data", {}).get("items") or []
     
     ophim_path_image = ophim_data.get("pathImage") or ophim_data.get("data", {}).get("APP_DOMAIN_CDN_IMAGE", "")
-    if not ophim_path_image:
+    if not ophim_path_image or ophim_path_image.strip("/") == "https://img.ophim.live":
         ophim_path_image = "https://img.ophim.live/uploads/movies/"
+    elif not ophim_path_image.endswith("/"):
+        ophim_path_image += "/"
     
     kk_mapped = [_map_item(i) for i in kk_items]
     op_mapped = [_map_item(i, ophim_path_image) for i in op_items]
