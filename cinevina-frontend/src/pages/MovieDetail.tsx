@@ -197,9 +197,10 @@ export const MovieDetail: React.FC = () => {
             <div className="grid grid-cols-2 gap-3 mt-4">
               <button 
                 onClick={handleWatchNow}
-                className="flex items-center justify-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white py-2.5 rounded-lg font-bold text-[13px] transition-colors"
+                disabled={!isStreamable}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold text-[13px] transition-colors ${isStreamable ? 'bg-[#3b82f6] hover:bg-[#2563eb] text-white' : 'bg-gray-700/50 text-gray-400 cursor-not-allowed'}`}
               >
-                <PlayIcon className="w-4 h-4" /> Xem Phim
+                {isStreamable ? <><PlayIcon className="w-4 h-4" /> Xem Phim</> : 'Sắp ra mắt'}
               </button>
               <button 
                 onClick={() => setShowTrailer(true)}
