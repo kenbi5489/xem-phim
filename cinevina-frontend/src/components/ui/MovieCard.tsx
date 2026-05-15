@@ -75,6 +75,7 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
     isLoading = false,
     episodeCurrent,
     totalEpisodes,
+    isStreamable = true,
   } = props;
 
   const { src: imgSrc, handleError } = useImgSrc(posterUrl, thumbUrl);
@@ -118,14 +119,20 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
           )}
         </div>
 
-        {/* Bottom Right Episode Badge */}
-        {(episodeCurrent || totalEpisodes) && (
+        {/* Bottom Right Episode Badge or Sắp ra mắt */}
+        {(!isStreamable) ? (
+          <div className="absolute bottom-3 right-3 z-10">
+            <div className="bg-gray-800/90 backdrop-blur-md text-gray-300 text-[11px] font-black px-2.5 py-1 rounded-lg shadow-xl border border-white/10 uppercase">
+              Sắp ra mắt
+            </div>
+          </div>
+        ) : (episodeCurrent || totalEpisodes) ? (
           <div className="absolute bottom-3 right-3 z-10">
             <div className="bg-primary/90 backdrop-blur-md text-white text-[11px] font-black px-2.5 py-1 rounded-lg shadow-xl border border-white/10">
               {episodeCurrent || (String(totalEpisodes).includes('/') ? `Tập ${String(totalEpisodes).split('/')[0]}` : totalEpisodes)}
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Bottom Left Rating Badge */}
         {rating && rating !== '' && (
