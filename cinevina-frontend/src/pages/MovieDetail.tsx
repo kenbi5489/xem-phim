@@ -187,7 +187,7 @@ export const MovieDetail: React.FC = () => {
           </div>
 
           {/* Right: Info */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-w-0">
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight tracking-tight">
               {movie.name}
             </h1>
@@ -208,7 +208,7 @@ export const MovieDetail: React.FC = () => {
             </div>
 
             {/* Info Cards Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-8">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-8">
               
               <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
                 <div className="flex items-center justify-between mb-3">
