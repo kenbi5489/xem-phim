@@ -14,6 +14,7 @@ ALLOWED_DOMAINS = [
     "vnmedia.com.vn",
     "static.vn",
     "mediacloud.vn",
+    "ophim.live",
 ]
 
 DOMAIN_FALLBACKS = [

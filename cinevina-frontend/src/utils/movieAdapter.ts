@@ -18,57 +18,36 @@ const getBaseUrl = () => {
 
 const PROXY_BASE = getBaseUrl();
 
-/**
- * Wrap any image URL through the backend image proxy.
- * - Backend already sends proxied URLs (http://localhost:8000/...) → pass through
- * - Raw phimimg/phimapi URLs → wrap through proxy
- * - Empty → return empty
- */
 export const getProxiedImageUrl = (url: string): string => {
   if (!url || url.trim() === '') return '';
   
-  // Case 0: Intercept proxy URLs and extract the raw URL directly!
+  // Clean up any double proxying first
+  let targetUrl = url;
   if (url.includes('proxy/image') && url.includes('url=')) {
     try {
       const parsedUrl = new URL(url.startsWith('http') ? url : `https://dummy.com${url}`);
       const rawUrl = parsedUrl.searchParams.get('url');
       if (rawUrl && rawUrl.startsWith('http')) {
-        return rawUrl;
+        targetUrl = rawUrl;
       }
     } catch (e) {
       console.warn('[getProxiedImageUrl] Failed to parse proxy URL:', url, e);
     }
   }
 
-  // Case 1: Already a full absolute proxied URL
-  if (url.startsWith('http') && (url.includes('/proxy/image') || url.includes('/api/proxy/image'))) {
-    return url;
-  }
-
-  // Case 2: Relative proxied URL (e.g. from backend response)
-  // We want to ensure it starts with /api if we are on Vercel and PROXY_BASE is /api
-  if (url.startsWith('/api/proxy/image') || url.startsWith('/proxy/image')) {
-    const sanitizedUrl = url.startsWith('/api/') ? url : `/api${url.startsWith('/') ? '' : '/'}${url}`;
-    
-    // If we are on local dev (localhost:8000), we might need the full domain.
-    // But on Vercel, a relative path /api/... works perfectly with rewrites.
-    if (PROXY_BASE.startsWith('http')) {
-      return `${PROXY_BASE.replace(/\/api$/, '')}${sanitizedUrl}`;
+  // If it's already a local relative proxy URL, format it properly
+  if (!targetUrl.startsWith('http') && targetUrl.startsWith('/')) {
+    if (targetUrl.includes('proxy/image')) {
+      return `${PROXY_BASE.startsWith('http') ? PROXY_BASE : '/api'}${targetUrl.replace('/api', '')}`;
     }
-    return sanitizedUrl;
   }
 
-  // Case 3: Absolute external URL (phimimg, etc.) -> Use raw URL directly!
-  if (url.startsWith('http')) {
-    return url;
+  // Force all external URLs through our proxy to bypass hotlink protection!
+  if (targetUrl.startsWith('http')) {
+    return `${PROXY_BASE.startsWith('http') ? PROXY_BASE : '/api'}/proxy/image?url=${encodeURIComponent(targetUrl)}`;
   }
 
-  // Case 4: Other relative paths
-  if (url.startsWith('/')) {
-    return `${PROXY_BASE.startsWith('http') ? PROXY_BASE : '/api'}${url}`;
-  }
-
-  return url;
+  return targetUrl;
 };
 
 /**
