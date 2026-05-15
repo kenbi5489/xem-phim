@@ -117,7 +117,16 @@ def _map_item(item: dict) -> dict:
     # ── rating ───────────────────────────────
     tmdb_rating = item.get("tmdb") or {}
     rating_val = tmdb_rating.get("vote_average") if isinstance(tmdb_rating, dict) else None
-    rating_str = str(rating_val) if rating_val else ""
+    
+    if rating_val is None or rating_val == 0 or rating_val == "0" or rating_val == 0.0:
+        rating_str = "N/A"
+    else:
+        # Handle float precision
+        try:
+            r = float(rating_val)
+            rating_str = f"{r:.1f}" if r % 1 != 0 else str(int(r))
+        except (ValueError, TypeError):
+            rating_str = str(rating_val)
 
     return {
         "id":             str(item.get("_id") or item.get("id") or ""),
@@ -375,6 +384,18 @@ async def get_movie_detail(slug: str):
     if final_quality == "UNKNOWN":
         final_quality = "HD"
 
+    # Lấy rating từ detail movie
+    detail_tmdb = movie.get("tmdb") or {}
+    detail_rating_val = detail_tmdb.get("vote_average") if isinstance(detail_tmdb, dict) else None
+    if detail_rating_val is None or detail_rating_val == 0 or detail_rating_val == "0" or detail_rating_val == 0.0:
+        detail_rating_str = "N/A"
+    else:
+        try:
+            r = float(detail_rating_val)
+            detail_rating_str = f"{r:.1f}" if r % 1 != 0 else str(int(r))
+        except (ValueError, TypeError):
+            detail_rating_str = str(detail_rating_val)
+
     return {
         "id":             str(movie.get("_id") or ""),
         "slug":           movie.get("slug", ""),
@@ -393,7 +414,7 @@ async def get_movie_detail(slug: str):
         "country":        movie.get("country", []),
         "cast":           movie.get("actor", []),
         "director":       movie.get("director", []),
-        "rating":         str(movie.get("tmdb", {}).get("vote_average", "") or ""),
+        "rating":         detail_rating_str,
         "total_episodes": str(movie.get("episode_total", "")),
         "is_streamable":  True,
         "episodes":       [],

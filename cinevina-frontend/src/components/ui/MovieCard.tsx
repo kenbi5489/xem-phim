@@ -116,11 +116,21 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
           )}
         </div>
 
-        {/* Bottom Episode Badge */}
+        {/* Bottom Right Episode Badge */}
         {totalEpisodes && (
           <div className="absolute bottom-3 right-3 z-10">
             <div className="bg-primary/90 backdrop-blur-md text-white text-[11px] font-black px-2.5 py-1 rounded-lg shadow-xl border border-white/10">
               {String(totalEpisodes).includes('/') ? `Tập ${String(totalEpisodes).split('/')[0]}` : totalEpisodes}
+            </div>
+          </div>
+        )}
+
+        {/* Bottom Left Rating Badge */}
+        {rating && rating !== '' && (
+          <div className="absolute bottom-3 left-3 z-10">
+            <div className="bg-black/70 backdrop-blur-md text-yellow-400 text-[11px] font-bold px-1.5 py-0.5 rounded shadow-xl flex items-center gap-1 border border-white/10">
+              <StarIcon className="w-3.5 h-3.5" />
+              <span className={rating === 'N/A' ? 'text-white/80' : 'text-white'}>{rating}</span>
             </div>
           </div>
         )}
@@ -139,11 +149,6 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
         </h3>
         <div className="flex items-center gap-3 mt-1.5">
           {year ? <span className="text-[12px] text-white/40 font-medium tracking-tight">{year}</span> : null}
-          {rating && rating !== '0' && rating !== 0 && (
-            <span className="flex items-center gap-1 text-[12px] text-yellow-400 font-bold">
-              <StarIcon className="w-3.5 h-3.5" /> {rating}
-            </span>
-          )}
         </div>
       </Link>
     </div>
