@@ -58,6 +58,7 @@ export interface MovieCardProps {
   isCinema?: boolean;
   isStreamable?: boolean;
   trailerUrl?: string;
+  episodeCurrent?: string;
   totalEpisodes?: string | number;
 }
 
@@ -72,6 +73,7 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
     slug,
     className,
     isLoading = false,
+    episodeCurrent,
     totalEpisodes,
   } = props;
 
@@ -117,10 +119,10 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
         </div>
 
         {/* Bottom Right Episode Badge */}
-        {totalEpisodes && (
+        {(episodeCurrent || totalEpisodes) && (
           <div className="absolute bottom-3 right-3 z-10">
             <div className="bg-primary/90 backdrop-blur-md text-white text-[11px] font-black px-2.5 py-1 rounded-lg shadow-xl border border-white/10">
-              {String(totalEpisodes).includes('/') ? `Tập ${String(totalEpisodes).split('/')[0]}` : totalEpisodes}
+              {episodeCurrent || (String(totalEpisodes).includes('/') ? `Tập ${String(totalEpisodes).split('/')[0]}` : totalEpisodes)}
             </div>
           </div>
         )}
