@@ -244,6 +244,8 @@ async def _fetch_and_merge(path: str, params: dict, page: int, limit: int) -> di
     kkphim_items_raw = kkphim_data.get("data", {}).get("items", []) or kkphim_data.get("items", [])
     ophim_items_raw = ophim_data.get("data", {}).get("items", []) or ophim_data.get("items", [])
     
+    kkphim_mapped = [_map_item(i) for i in kkphim_items_raw]
+    
     # Lấy path image cho Ophim (tuỳ thuộc vào endpoint trả về format nào)
     ophim_path_image = ophim_data.get("pathImage") or ophim_data.get("data", {}).get("APP_DOMAIN_CDN_IMAGE", "")
     if not ophim_path_image or ophim_path_image.strip("/") == "https://img.ophim.live":
