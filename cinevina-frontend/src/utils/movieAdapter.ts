@@ -42,7 +42,13 @@ export const getProxiedImageUrl = (url: string): string => {
     }
   }
 
-  // Force all external URLs through our proxy to bypass hotlink protection!
+  // DO NOT proxy Ophim images because Cloudflare blocks Vercel IPs.
+  // Ophim images work directly in the browser.
+  if (targetUrl.includes('ophim.live') || targetUrl.includes('ophim1.com')) {
+    return targetUrl;
+  }
+
+  // Force other external URLs through our proxy to bypass hotlink/ISP blocks!
   if (targetUrl.startsWith('http')) {
     return `${PROXY_BASE.startsWith('http') ? PROXY_BASE : '/api'}/proxy/image?url=${encodeURIComponent(targetUrl)}`;
   }
