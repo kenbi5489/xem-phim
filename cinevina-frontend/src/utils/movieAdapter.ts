@@ -160,7 +160,7 @@ export const adaptMovieDetail = (raw: any): MovieInfo => {
     rating: raw?.rating || (raw?.tmdb?.vote_average ? String(raw.tmdb.vote_average) : '') || '',
     tmdbId: raw?.tmdb?.id ? String(raw.tmdb.id) : undefined,
     episodeCurrent: raw?.episode_current || '',
-    totalEpisodes: raw?.totalEpisodes || raw?.episode_total || '',
+    totalEpisodes: raw?.totalEpisodes || raw?.total_episodes || raw?.episode_total || '',
     isStreamable,
     episodes: Array.isArray(raw?.episodes) ? raw.episodes : [],
     servers,
