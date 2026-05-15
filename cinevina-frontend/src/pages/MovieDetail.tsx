@@ -1,17 +1,11 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import {
-  HeartIcon, PlusIcon, StarIcon, XMarkIcon,
-  PlayIcon, InformationCircleIcon, ShareIcon, CalendarIcon, ClockIcon,
-  GlobeAltIcon, LanguageIcon, RectangleGroupIcon, ChevronDownIcon,
-} from '@heroicons/react/24/outline';
-import { PlayIcon as PlaySolid, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
+import { PlayIcon, LinkIcon, XMarkIcon } from '@heroicons/react/24/solid';
 import { useMovieDetail, useMovieStream } from '../hooks/useMovies';
-import { useFavorites } from '../hooks/useFavorites';
 import { computeIsStreamable } from '../services/api';
 import { EmbeddedPlayer } from '../components/ui/EmbeddedPlayer';
 
-// ── YouTube embed helper ───────────────────────────────────────────────────────
+// ── Trailer Modal ─────────────────────────────────────────────────────────────
 const extractYouTubeId = (url: string): string | null => {
   if (!url) return null;
   const patterns = [/youtu\.be\/([^?&]+)/, /youtube\.com\/watch\?v=([^&]+)/, /youtube\.com\/embed\/([^?&]+)/];
@@ -22,7 +16,6 @@ const extractYouTubeId = (url: string): string | null => {
   return null;
 };
 
-// ── Trailer Modal ─────────────────────────────────────────────────────────────
 const TrailerModal: React.FC<{ videoId: string; onClose: () => void }> = ({ videoId, onClose }) => (
   <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md p-4" onClick={onClose}>
     <div className="relative w-full max-w-5xl aspect-video rounded-3xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-white/20" onClick={e => e.stopPropagation()}>
@@ -34,7 +27,7 @@ const TrailerModal: React.FC<{ videoId: string; onClose: () => void }> = ({ vide
   </div>
 );
 
-// ── PlayerSection — inline stream with EmbeddedPlayer ─────────────────────────
+// ── PlayerSection ─────────────────────────────────────────────────────────────
 const PlayerSection: React.FC<{
   movieSlug: string;
   movieName: string;
@@ -47,14 +40,13 @@ const PlayerSection: React.FC<{
 
   const handleEpisodeChange = (_serverIdx: number, epSlug: string) => {
     setActiveEpSlug(epSlug);
-    // Scroll to player smoothly
     document.getElementById('cinevina-player')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   if (isLoading) {
     return (
-      <div id="cinevina-player" className="w-full aspect-video bg-black rounded-[32px] flex items-center justify-center border border-white/10">
-        <div className="relative w-16 h-16">
+      <div id="cinevina-player" className="w-full aspect-video bg-black rounded-2xl flex items-center justify-center border border-white/5 mt-10">
+        <div className="relative w-12 h-12">
           <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
           <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -65,7 +57,7 @@ const PlayerSection: React.FC<{
   if (!stream) return null;
 
   return (
-    <div id="cinevina-player" className="scroll-mt-24">
+    <div id="cinevina-player" className="scroll-mt-24 mt-10 max-w-[1200px] mx-auto px-4 sm:px-6">
       <EmbeddedPlayer
         streamUrl={stream.url}
         streamType={stream.type as 'hls' | 'embed'}
@@ -80,26 +72,59 @@ const PlayerSection: React.FC<{
   );
 };
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const getInitials = (name: string) => {
+  if (!name) return '?';
+  const parts = name.trim().split(' ');
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+};
+
+const CastList: React.FC<{ castString: string; directorString: string }> = ({ castString, directorString }) => {
+  const actors = castString ? castString.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const directors = directorString ? directorString.split(',').map(s => s.trim()).filter(Boolean) : [];
+  
+  const allCrew = [
+    ...directors.map(name => ({ name, role: 'Director / Writing' })),
+    ...actors.map(name => ({ name, role: 'Acting' }))
+  ];
+
+  if (!allCrew.length) return null;
+
+  return (
+    <div className="relative mt-6 group">
+      <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x">
+        {allCrew.map((c, i) => (
+          <div key={i} className="w-[84px] md:w-24 shrink-0 flex flex-col items-center gap-2 snap-start">
+            <div className="w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-[#2a2a2a] flex items-center justify-center text-lg md:text-xl font-black text-white/60 border border-white/5 shadow-inner">
+              {getInitials(c.name)}
+            </div>
+            <div className="w-full text-center">
+              <p className="text-[13px] font-bold text-white/90 line-clamp-1">{c.name}</p>
+              <p className="text-[11px] text-white/40 line-clamp-1">{c.role}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export const MovieDetail: React.FC = () => {
   const { slug } = useParams();
   const { data: movie, isLoading, error, refetch } = useMovieDetail(slug || '');
   const [showTrailer, setShowTrailer] = useState(false);
   const [isWatching, setIsWatching]   = useState(false);
-  const [descExpanded, setDescExpanded] = useState(false);
-  const { isFavorite, toggleFavorite } = useFavorites();
 
   if (isLoading) return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <div className="relative w-24 h-24">
-        <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
-        <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
+    <div className="min-h-screen bg-[#121212] flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
     </div>
   );
   if (error || !movie) return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
-      <p className="text-white/40 font-bold uppercase tracking-widest">Lỗi tải dữ liệu...</p>
+    <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center gap-6">
+      <p className="text-white/40 font-bold uppercase tracking-widest">Không tìm thấy phim</p>
       <button onClick={() => refetch()} className="btn-vibrant">THỬ LẠI</button>
     </div>
   );
@@ -109,204 +134,230 @@ export const MovieDetail: React.FC = () => {
   const trailerYtId  = extractYouTubeId(movie.trailerUrl || '');
   const is4K         = movie.quality?.toUpperCase().includes('4K');
 
-  const getEpisodeDisplay = () => {
-    const curr = (movie.episodeCurrent || '').trim();
-    const tot = String(movie.totalEpisodes || '').trim();
-    
-    if (curr.toLowerCase() === 'full' || curr.toLowerCase() === 'hoàn tất') {
-      return tot && tot !== '?' && tot !== '1' ? `Hoàn tất (${tot} tập)` : 'Hoàn tất';
-    }
-    
-    if (curr && tot && tot !== '?' && curr !== tot) {
-      return `${curr} / ${tot} tập`;
-    }
-    
-    if (curr) return curr;
-    if (tot && tot !== '?') return `${tot} tập`;
-    
-    return 'Đang cập nhật';
-  };
-
   const handleWatchNow = () => {
     setIsWatching(true);
-    // Give React a tick to render, then scroll
     setTimeout(() => {
       document.getElementById('cinevina-player')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   };
 
+  const genres = movie.categories ? movie.categories.split(',').map(s => s.trim()) : [];
+  const countries = movie.country ? movie.country.split(',').map(s => s.trim()) : [];
+
+  const getEpisodeDisplay = () => {
+    const curr = (movie.episodeCurrent || '').trim();
+    const tot = String(movie.totalEpisodes || '').trim();
+    if (curr.toLowerCase() === 'full' || curr.toLowerCase() === 'hoàn tất') {
+      return tot && tot !== '?' && tot !== '1' ? `Hoàn tất (${tot} tập)` : 'Full';
+    }
+    if (curr && tot && tot !== '?' && curr !== tot) return `${curr} / ${tot} tập`;
+    if (curr) return curr;
+    if (tot && tot !== '?') return `${tot} tập`;
+    return 'Đang cập nhật';
+  };
+
   return (
-    <div className="flex flex-col pb-24 bg-background min-h-screen">
+    <div className="min-h-screen bg-[#121212] pb-24 font-sans text-white">
       {showTrailer && trailerYtId && <TrailerModal videoId={trailerYtId} onClose={() => setShowTrailer(false)} />}
 
-      {/* ── Dynamic Hero Background ── */}
-      <div className="relative w-full h-[60vh] md:h-[80vh] overflow-hidden">
-        <div className="absolute inset-0">
-          <img src={movie.posterUrl || movie.thumbUrl || ""} className="w-full h-full object-cover object-top opacity-25 blur-3xl scale-110" alt="" />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-transparent" />
-        </div>
+      <div className="max-w-[1200px] mx-auto pt-[100px] px-4 md:px-6">
+        
+        {/* TOP SECTION: Poster & Info */}
+        <div className="flex flex-col md:flex-row gap-8 lg:gap-10">
+          
+          {/* Left: Poster & Buttons */}
+          <div className="w-[200px] sm:w-[240px] md:w-[280px] shrink-0 mx-auto md:mx-0">
+            <div className="relative aspect-[2/3] rounded-xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5">
+              <img src={movie.posterUrl || movie.thumbUrl || ''} className="w-full h-full object-cover" alt={movie.name} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <button 
+                onClick={handleWatchNow}
+                className="flex items-center justify-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white py-2.5 rounded-lg font-bold text-[13px] transition-colors"
+              >
+                <PlayIcon className="w-4 h-4" /> Xem Phim
+              </button>
+              <button 
+                onClick={() => setShowTrailer(true)}
+                className="flex items-center justify-center gap-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white py-2.5 rounded-lg font-bold text-[13px] transition-colors"
+              >
+                <LinkIcon className="w-4 h-4" /> Trailer
+              </button>
+            </div>
+          </div>
 
-        {/* Content Overlay */}
-        <div className="absolute inset-0 flex items-end">
-          <div className="max-w-[1500px] mx-auto px-4 sm:px-6 md:px-12 w-full pb-10 md:pb-20 flex flex-col md:grid md:grid-cols-[auto,1fr] gap-8 md:gap-12 items-end">
-            
-            {/* Poster */}
-            <div className="hidden md:block shrink-0 w-56 lg:w-72 aspect-[2/3] rounded-[32px] overflow-hidden border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.9)] -rotate-2 hover:rotate-0 transition-all duration-700 movie-card-glow">
-              <img src={movie.thumbUrl || movie.posterUrl || ""} className="w-full h-full object-cover" alt={movie.name} />
-              {movie.isCinema && (
-                <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_20px_rgba(220,38,38,0.5)] animate-pulse">ĐANG CHIẾU</div>
+          {/* Right: Info */}
+          <div className="flex-1 flex flex-col">
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight tracking-tight">
+              {movie.name}
+            </h1>
+            {movie.originalName && (
+              <p className="text-white/60 text-lg md:text-xl font-medium mt-2">{movie.originalName}</p>
+            )}
+
+            {/* Badges */}
+            <div className="flex flex-wrap gap-2 mt-5">
+              <span className="bg-[#2a2a2a] border border-white/5 text-white/80 px-3 py-1 rounded-full text-xs font-bold uppercase">{movie.type || 'single'}</span>
+              {movie.year && <span className="bg-[#2a2a2a] border border-white/5 text-white/80 px-3 py-1 rounded-full text-xs font-bold">{movie.year}</span>}
+              {movie.lang && <span className="bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/20 px-3 py-1 rounded-full text-xs font-bold uppercase">{movie.lang}</span>}
+              {movie.quality && (
+                <span className={`px-3 py-1 rounded-full text-xs font-bold border ${is4K ? 'bg-amber-500/20 text-amber-500 border-amber-500/20' : 'bg-[#eab308]/20 text-[#eab308] border-[#eab308]/20'} uppercase`}>
+                  {movie.quality}
+                </span>
               )}
             </div>
 
-            {/* Info Block */}
-            <div className="flex flex-col gap-5 md:gap-7 max-w-4xl glass-premium p-6 md:p-10 rounded-[32px] md:rounded-[40px]">
-              {/* Badges */}
-              <div className="flex flex-wrap items-center gap-3">
-                {movie.quality && (
-                  <span className={`text-[11px] font-black px-3 py-1.5 rounded-full uppercase shadow-lg ${is4K ? 'bg-gradient-to-r from-yellow-500 to-amber-400 text-black' : 'bg-primary text-white shadow-[0_0_15px_rgba(175,37,254,0.4)]'}`}>
-                    {movie.quality}
-                  </span>
-                )}
-                {movie.lang && <span className="bg-white/5 text-white/70 text-[11px] font-black px-3 py-1.5 rounded-full border border-white/10 uppercase">{movie.lang}</span>}
-                <span className="flex items-center gap-1.5 text-yellow-400 font-black text-sm px-3 py-1.5 bg-yellow-400/10 rounded-full border border-yellow-400/20">
-                  <StarIcon className="w-4 h-4 fill-current" /> {movie.rating || '8.5'}
-                </span>
-                {movie.year && <span className="text-white/40 text-[12px] font-black tracking-[0.2em] uppercase">{movie.year}</span>}
-              </div>
-
-              <div>
-                <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white leading-[1] uppercase tracking-tighter italic drop-shadow-2xl">
-                  {movie.name}
-                </h1>
-                {movie.originalName && <p className="text-primary font-black text-base md:text-xl tracking-tight uppercase italic mt-2 opacity-90">{movie.originalName}</p>}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3 md:gap-4">
-                {isStreamable && firstEp ? (
-                  <button
-                    onClick={handleWatchNow}
-                    className="btn-vibrant !px-8 md:!px-12 !py-4 md:!py-5 flex items-center gap-3 group"
-                  >
-                    <PlaySolid className="w-6 h-6 md:w-7 md:h-7 group-hover:scale-125 transition-transform" />
-                    {isWatching ? 'ĐANG PHÁT' : 'XEM NGAY'}
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-3 px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white/40 font-black text-xs uppercase tracking-widest italic">
-                    <InformationCircleIcon className="w-5 h-5" /> Sắp ra mắt
+            {/* Info Cards Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-8">
+              
+              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#3b82f6]"></span>
+                    <span className="text-[13px] text-white/70 font-semibold">Thể loại</span>
                   </div>
-                )}
-
-                {trailerYtId && (
-                  <button onClick={() => setShowTrailer(true)} className="flex items-center gap-2 px-6 py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all font-black text-xs tracking-widest uppercase group">
-                    <PlayIcon className="w-5 h-5 text-red-500" /> Trailer
-                  </button>
-                )}
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => movie && toggleFavorite({ slug: movie.slug, name: movie.name, posterUrl: movie.posterUrl, thumbUrl: movie.thumbUrl })}
-                    className={`w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border text-white transition-all flex items-center justify-center group ${isFavorite(movie.slug) ? 'border-red-500/40 text-red-500' : 'border-white/10 hover:text-red-500 hover:border-red-500/40'}`}
-                  >
-                    {isFavorite(movie.slug) ? (
-                      <HeartIconSolid className="w-6 h-6 text-red-500" />
-                    ) : (
-                      <HeartIcon className="w-6 h-6 group-hover:fill-red-500 transition-all" />
-                    )}
-                  </button>
-                  <button className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border border-white/10 text-white hover:text-primary hover:border-primary/40 transition-all flex items-center justify-center group">
-                    <PlusIcon className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                  </button>
+                  <span className="text-[10px] font-bold bg-[#2a2a2a] text-white/50 px-2 py-0.5 rounded-full">{genres.length}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {genres.length > 0 ? genres.slice(0,3).map(g => (
+                    <span key={g} className="px-2 py-1 rounded-md border border-white/10 text-[11px] text-white/80 whitespace-nowrap">{g}</span>
+                  )) : <span className="text-[11px] text-white/30">N/A</span>}
                 </div>
               </div>
+
+              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#a855f7]"></span>
+                    <span className="text-[13px] text-white/70 font-semibold">Quốc gia</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-[#2a2a2a] text-white/50 px-2 py-0.5 rounded-full">{countries.length}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {countries.length > 0 ? countries.slice(0,3).map(c => (
+                    <span key={c} className="px-2 py-1 rounded-md border border-[#a855f7]/20 text-[#a855f7] bg-[#a855f7]/5 text-[11px] whitespace-nowrap">{c}</span>
+                  )) : <span className="text-[11px] text-white/30">N/A</span>}
+                </div>
+              </div>
+
+              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#22c55e]"></span>
+                    <span className="text-[13px] text-white/70 font-semibold">Thông tin</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-[#22c55e]/20 text-[#22c55e] px-2 py-0.5 rounded-full uppercase">Completed</span>
+                </div>
+                <div className="flex flex-col gap-1.5 mt-2">
+                  <div className="flex justify-between text-[12px]">
+                    <span className="text-white/40">Thời lượng:</span>
+                    <span className="text-white/90 font-medium">{movie.duration || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between text-[12px]">
+                    <span className="text-white/40">Tập hiện tại:</span>
+                    <span className="text-[#22c55e] font-bold">{getEpisodeDisplay()}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#06b6d4]"></span>
+                    <span className="text-[13px] text-white/70 font-semibold">TMDB</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-[#3b82f6]/20 text-[#3b82f6] px-2 py-0.5 rounded-full">movie</span>
+                </div>
+                <div className="flex flex-col gap-1.5 mt-2">
+                  <div className="flex justify-between text-[12px]">
+                    <span className="text-white/40">ID:</span>
+                    <span className="text-white/70">{movie.tmdbId || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-[#3b82f6] font-bold text-lg">{movie.rating || 'N/A'}</span>
+                    <span className="text-white/40 text-[11px]">/10</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#eab308]"></span>
+                    <span className="text-[13px] text-white/70 font-semibold">IMDB</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-[#eab308]/20 text-[#eab308] px-2 py-0.5 rounded-full">Rating</span>
+                </div>
+                <div className="flex flex-col gap-1.5 mt-2">
+                  <div className="flex justify-between text-[12px]">
+                    <span className="text-white/40">ID:</span>
+                    <span className="text-white/70">{movie.imdbId || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-[#eab308] font-bold text-lg">{movie.imdbRating || 'N/A'}</span>
+                    <span className="text-white/40 text-[11px]">/10</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
+
+            {/* Cast List */}
+            <CastList castString={movie.cast || ''} directorString={movie.director || ''} />
+
           </div>
         </div>
       </div>
 
-      {/* ── Inline Player (renders when Watch Now is clicked) ── */}
+      {/* Inline Player Section */}
       {isWatching && isStreamable && movie.servers && firstEp && (
-        <div className="max-w-[1500px] mx-auto px-4 sm:px-6 md:px-12 w-full mt-8 md:mt-12">
-          <PlayerSection
-            movieSlug={movie.slug}
-            movieName={movie.name}
-            servers={movie.servers}
-            initialEpSlug={firstEp}
-          />
-        </div>
+        <PlayerSection
+          movieSlug={movie.slug}
+          movieName={movie.name}
+          servers={movie.servers}
+          initialEpSlug={firstEp}
+        />
       )}
 
-      {/* ── Content Details ── */}
-      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 md:px-12 grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-10 md:gap-16 mt-10 md:mt-16">
-        
-        {/* Left: Description */}
-        <div className="flex flex-col gap-10 md:gap-16">
-          {movie.description && (
-            <section className="glass-premium p-6 md:p-10 rounded-[32px] md:rounded-[40px] relative overflow-hidden">
-              <div className="flex flex-col gap-2 mb-6">
-                <h3 className="font-display text-2xl md:text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-4 text-gradient-primary">
-                  <InformationCircleIcon className="w-7 h-7 md:w-8 md:h-8 shrink-0" /> Nội Dung Phim
-                </h3>
-                <div className="h-1 w-16 bg-primary rounded-full" />
-              </div>
-              <div className={`text-white/70 leading-[1.8] text-base md:text-lg font-medium italic overflow-hidden transition-all duration-500 ${descExpanded ? '' : 'max-h-48 md:max-h-none'}`}
-                dangerouslySetInnerHTML={{ __html: movie.description }}
-              />
-              {/* Mobile expand button for long descriptions */}
-              <button
-                className="md:hidden mt-4 flex items-center gap-2 text-primary font-black text-xs uppercase tracking-widest"
-                onClick={() => setDescExpanded(v => !v)}
-              >
-                {descExpanded ? 'Thu gọn' : 'Đọc thêm'} <ChevronDownIcon className={`w-4 h-4 transition-transform ${descExpanded ? 'rotate-180' : ''}`} />
-              </button>
-            </section>
+      {/* Bottom Content Section */}
+      <div className="max-w-[1200px] mx-auto mt-16 px-4 md:px-6">
+        <h2 className="text-2xl md:text-3xl font-bold mb-6 border-l-4 border-primary pl-4">Nội dung phim</h2>
+        <div className="text-white/50 text-[15px] mb-4">
+          Tên khác: <span className="text-white/80">{movie.originalName || 'Đang cập nhật'}</span>
+        </div>
+        <div className="text-white/70 leading-[1.8] text-[15px] md:text-[16px] font-medium"
+          dangerouslySetInnerHTML={{ __html: movie.description || 'Đang cập nhật nội dung...' }}
+        />
+
+        <div className="mt-12">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            Từ khóa <span className="text-white/40 text-sm font-normal">({genres.length} từ khóa)</span>
+          </h2>
+          {genres.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {genres.map(g => (
+                <span key={g} className="px-3 py-1.5 bg-[#1c1c1c] text-white/60 text-[13px] rounded-md hover:bg-[#2a2a2a] transition-colors cursor-pointer border border-white/5">{g}</span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-white/40 text-[14px]">Không có từ khóa nào được tìm thấy</p>
           )}
         </div>
 
-        {/* Right: Metadata Sidebar */}
-        <div className="flex flex-col gap-8 md:gap-10">
-          <section className="glass-premium p-6 md:p-10 rounded-[32px] md:rounded-[40px] flex flex-col gap-6 md:gap-8">
-            <h3 className="font-display text-lg font-black text-white uppercase tracking-[0.2em] italic border-b border-white/5 pb-5 text-gradient-primary">Thông tin phim</h3>
-            
-            <div className="flex flex-col gap-5 md:gap-8">
-              {[
-                { icon: CalendarIcon, label: 'Phát hành', val: movie.year },
-                { icon: GlobeAltIcon, label: 'Quốc gia', val: movie.country },
-                { icon: RectangleGroupIcon, label: 'Thể loại', val: movie.categories },
-                { icon: LanguageIcon, label: 'Ngôn ngữ', val: movie.lang },
-                { icon: ClockIcon, label: 'Số tập', val: getEpisodeDisplay() },
-              ].map((item, idx) => item.val ? (
-                <div key={idx} className="flex gap-4 group">
-                  <div className="shrink-0 w-11 h-11 md:w-12 md:h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-500">
-                    <item.icon className="w-5 h-5 md:w-6 md:h-6" />
-                  </div>
-                  <div className="flex flex-col justify-center">
-                    <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">{item.label}</p>
-                    <p className="text-sm md:text-[15px] font-extrabold text-white/90 mt-0.5">{item.val}</p>
-                  </div>
-                </div>
-              ) : null)}
-
-              {movie.cast && (
-                <div className="pt-6 border-t border-white/5">
-                  <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-4">Diễn viên chính</p>
-                  <div className="flex flex-wrap gap-2">
-                    {movie.cast.split(',').slice(0, 8).map(name => (
-                      <span key={name} className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-[12px] md:text-[13px] font-bold text-white/60 hover:text-white hover:border-primary/40 hover:bg-primary/10 transition-all cursor-default">
-                        {name.trim()}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+        <div className="mt-12">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            Hình ảnh <span className="text-white/40 text-sm font-normal">(2 ảnh)</span>
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
+              <img src={movie.thumbUrl} alt="Backdrop 1" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
             </div>
-            
-            <button className="w-full flex items-center justify-center gap-3 py-4 md:py-5 rounded-2xl md:rounded-[24px] bg-white/5 border border-white/10 text-white/60 font-black text-xs md:text-[13px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all group">
-              <ShareIcon className="w-5 h-5 md:w-6 md:h-6 group-hover:rotate-12 transition-transform" /> Chia sẻ phim
-            </button>
-          </section>
+            <div className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
+              <img src={movie.posterUrl} alt="Backdrop 2" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 object-top" />
+            </div>
+          </div>
         </div>
+
       </div>
     </div>
   );

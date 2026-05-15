@@ -12,6 +12,7 @@ from services.sources.registry import SourceRegistry
 router = APIRouter(prefix="/api/movies", tags=["movies"])
 
 KKPHIM_BASE = "https://phimapi.com"
+OPHIM_BASE = "https://ophim1.com"
 
 # ─────────────────────────────────────────
 # HELPERS
@@ -191,9 +192,69 @@ async def _kkphim_get(path: str, params: dict) -> dict:
             raise HTTPException(502, "KKPhim API timeout")
         except httpx.HTTPStatusError as e:
             raise HTTPException(502, f"KKPhim API error: {e.response.status_code}")
+async def _ophim_get(path: str, params: dict) -> dict:
+    """Wrapper gọi Ophim API với error handling."""
+    url = f"{OPHIM_BASE}{path}"
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        try:
+            resp = await client.get(url, params=params)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.TimeoutException:
+            return {} # Fallback
+        except httpx.HTTPStatusError as e:
+            return {} # Fallback
         except Exception as e:
-            raise HTTPException(502, f"KKPhim connection error: {str(e)}")
+            return {} # Fallback
 
+def _merge_and_dedup(items1: list, items2: list) -> list:
+    """Gộp 2 danh sách phim và loại bỏ các phim trùng lặp dựa trên slug."""
+    seen_slugs = set()
+    merged = []
+    for item in items1 + items2:
+        slug = item.get("slug")
+        if slug and slug not in seen_slugs:
+            seen_slugs.add(slug)
+            merged.append(item)
+    return merged
+
+async def _fetch_and_merge(path: str, params: dict, page: int, limit: int) -> dict:
+    """Fetch dữ liệu từ KKPhim và Ophim, sau đó gộp lại."""
+    import asyncio
+    kkphim_task = _kkphim_get(path, params)
+    ophim_task = _ophim_get(path, params)
+    
+    # KKPhim có thể throw Exception, Ophim trả về {} nếu lỗi
+    try:
+        kkphim_data, ophim_data = await asyncio.gather(kkphim_task, ophim_task)
+    except Exception as e:
+        raise HTTPException(502, f"Lỗi fetch dữ liệu: {str(e)}")
+
+    # Trích xuất items
+    kkphim_items_raw = kkphim_data.get("data", {}).get("items", []) or kkphim_data.get("items", [])
+    ophim_items_raw = ophim_data.get("data", {}).get("items", []) or ophim_data.get("items", [])
+    
+    kkphim_mapped = [_map_item(i) for i in kkphim_items_raw]
+    ophim_mapped = [_map_item(i) for i in ophim_items_raw]
+    
+    merged_items = _merge_and_dedup(kkphim_mapped, ophim_mapped)
+    
+    # Tính toán pagination
+    kk_pagination = kkphim_data.get("data", {}).get("params", {}).get("pagination", {}) or kkphim_data.get("pagination", {})
+    op_pagination = ophim_data.get("data", {}).get("params", {}).get("pagination", {}) or ophim_data.get("pagination", {})
+    
+    total = max(kk_pagination.get("totalItems", 0), op_pagination.get("totalItems", 0))
+    if not total: total = len(merged_items)
+    
+    total_pages = max(kk_pagination.get("totalPages", 1), op_pagination.get("totalPages", 1))
+
+    return {
+        "items": merged_items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+    }
 
 # ─────────────────────────────────────────
 # ROUTES — thứ tự QUAN TRỌNG: specific trước generic
@@ -201,12 +262,9 @@ async def _kkphim_get(path: str, params: dict) -> dict:
 
 @router.get("/trending")
 async def get_trending(limit: int = 10):
-    """Lấy top phim trending — dùng phim mới nhất làm trending proxy."""
-    # Dùng endpoint cũ cho phim mới cập nhật vì ổn định hơn
-    data = await _kkphim_get("/danh-sach/phim-moi-cap-nhat", {"page": 1, "limit": limit})
-    # Map kết quả
-    items_raw = data.get("items", [])
-    return [_map_item(i) for i in items_raw]
+    """Lấy top phim trending — dùng phim mới cập nhật từ cả 2 nguồn làm trending proxy."""
+    data = await _fetch_and_merge("/danh-sach/phim-moi-cap-nhat", {"page": 1, "limit": limit}, 1, limit)
+    return data.get("items", [])[:limit]
 
 
 @router.get("")
@@ -228,24 +286,20 @@ async def get_movies(
     if country:
         endpoint = f"/v1/api/quoc-gia/{country}"
         if genre: base_params["category"] = genre
-        data = await _kkphim_get(endpoint, base_params)
-        return _paginate(data, page, limit)
+        return await _fetch_and_merge(endpoint, base_params, page, limit)
 
     # Ưu tiên tiếp theo theo Genre
     if genre:
         endpoint = f"/v1/api/the-loai/{genre}"
-        data = await _kkphim_get(endpoint, base_params)
-        return _paginate(data, page, limit)
+        return await _fetch_and_merge(endpoint, base_params, page, limit)
 
     # Cuối cùng theo Category
     cat = category or "phim-moi-cap-nhat"
     if cat == "phim-moi-cap-nhat":
-        data = await _kkphim_get("/danh-sach/phim-moi-cap-nhat", {"page": page, "limit": limit})
-        return _paginate(data, page, limit)
+        return await _fetch_and_merge("/danh-sach/phim-moi-cap-nhat", {"page": page, "limit": limit}, page, limit)
     
     endpoint = f"/v1/api/danh-sach/{cat}"
-    data = await _kkphim_get(endpoint, base_params)
-    return _paginate(data, page, limit)
+    return await _fetch_and_merge(endpoint, base_params, page, limit)
 
 
 
@@ -268,22 +322,33 @@ async def search_movies(
             pass  # Plugin errors should never break main search
 
 
-    # 2. Fetch KKPhim items
-    data = await _kkphim_get(
-        "/v1/api/tim-kiem",
-        {"keyword": keyword, "page": page, "limit": limit}
-    )
-    data_dict = data.get("data") or {}
-    items_raw = data_dict.get("items") or []
-    pagination = data_dict.get("params", {}).get("pagination", {})
+    # 2. Fetch từ cả KKPhim và Ophim
+    import asyncio
+    kkphim_task = _kkphim_get("/v1/api/tim-kiem", {"keyword": keyword, "page": page, "limit": limit})
+    ophim_task = _ophim_get("/v1/api/tim-kiem", {"keyword": keyword, "page": page, "limit": limit})
     
-    # 3. Combine results
-    kkphim_items = [_map_item(i) for i in items_raw]
-    combined_items = live_items + kkphim_items
+    try:
+        kkphim_data, ophim_data = await asyncio.gather(kkphim_task, ophim_task)
+    except Exception:
+        kkphim_data, ophim_data = {}, {}
+
+    kk_items = kkphim_data.get("data", {}).get("items") or []
+    op_items = ophim_data.get("data", {}).get("items") or []
+    
+    kk_mapped = [_map_item(i) for i in kk_items]
+    op_mapped = [_map_item(i) for i in op_items]
+    
+    merged_api_items = _merge_and_dedup(kk_mapped, op_mapped)
+    
+    pagination = kkphim_data.get("data", {}).get("params", {}).get("pagination", {})
+    if not pagination:
+        pagination = ophim_data.get("data", {}).get("params", {}).get("pagination", {})
+
+    combined_items = live_items + merged_api_items
 
     return {
         "items":       combined_items,
-        "total":       pagination.get("totalItems", len(items_raw)) + len(live_items),
+        "total":       pagination.get("totalItems", len(merged_api_items)) + len(live_items),
         "page":        page,
         "limit":       limit,
         "total_pages": pagination.get("totalPages", 1),
@@ -295,11 +360,7 @@ async def get_cinema_movies(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=24, ge=1, le=100),
 ):
-    data = await _kkphim_get(
-        "/v1/api/danh-sach/phim-chieu-rap",
-        {"page": page, "limit": limit, "sort_field": "modified.time"}
-    )
-    return _paginate(data, page, limit)
+    return await _fetch_and_merge("/v1/api/danh-sach/phim-chieu-rap", {"page": page, "limit": limit, "sort_field": "modified.time"}, page, limit)
 
 
 @router.get("/by-country/{country_slug}")
@@ -314,8 +375,7 @@ async def get_by_country(
     params = {"page": page, "limit": limit, "sort_field": sort}
     if genre: params["category"] = genre
     if year:  params["year"] = year
-    data = await _kkphim_get(f"/v1/api/quoc-gia/{country_slug}", params)
-    return _paginate(data, page, limit)
+    return await _fetch_and_merge(f"/v1/api/quoc-gia/{country_slug}", params, page, limit)
 
 
 @router.get("/by-genre/{genre_slug}")
@@ -330,54 +390,78 @@ async def get_by_genre(
     params = {"page": page, "limit": limit, "sort_field": sort}
     if country: params["country"] = country
     if year:    params["year"] = year
-    data = await _kkphim_get(f"/v1/api/the-loai/{genre_slug}", params)
-    return _paginate(data, page, limit)
+    return await _fetch_and_merge(f"/v1/api/the-loai/{genre_slug}", params, page, limit)
 
 
 @router.get("/{slug}/stream/{episode_slug}")
 async def get_stream(slug: str, episode_slug: str):
-    data = await _kkphim_get(f"/phim/{slug}", {})
-    movie = data.get("movie", {})
-    for ep_group in (data.get("episodes") or []):
-        for ep in (ep_group.get("server_data") or []):
-            if ep.get("slug") == episode_slug or ep.get("filename") == episode_slug:
-                return {
-                    "url":   ep.get("link_m3u8") or ep.get("link_embed", ""),
-                    "type":  "hls" if ep.get("link_m3u8") else "embed",
-                    "title": ep.get("name", ""),
-                }
+    import asyncio
+    kk_task = _kkphim_get(f"/phim/{slug}", {})
+    op_task = _ophim_get(f"/phim/{slug}", {})
+    
+    try:
+        kk_data, op_data = await asyncio.gather(kk_task, op_task)
+    except Exception:
+        kk_data, op_data = {}, {}
+
+    for data in [kk_data, op_data]:
+        for ep_group in (data.get("episodes") or []):
+            for ep in (ep_group.get("server_data") or []):
+                if ep.get("slug") == episode_slug or ep.get("filename") == episode_slug:
+                    return {
+                        "url":   ep.get("link_m3u8") or ep.get("link_embed", ""),
+                        "type":  "hls" if ep.get("link_m3u8") else "embed",
+                        "title": ep.get("name", ""),
+                    }
     raise HTTPException(404, "Episode not found")
 
 
 @router.get("/{slug}")
 async def get_movie_detail(slug: str):
-    data = await _kkphim_get(f"/phim/{slug}", {})
-    if not data.get("status"):
-        raise HTTPException(404, "Movie not found")
-    movie   = data.get("movie", {})
-    episodes= data.get("episodes", [])
+    import asyncio
+    kk_task = _kkphim_get(f"/phim/{slug}", {})
+    op_task = _ophim_get(f"/phim/{slug}", {})
+    
+    try:
+        kk_data, op_data = await asyncio.gather(kk_task, op_task)
+    except Exception:
+        kk_data, op_data = {}, {}
 
-    # Build servers với full stream links
+    if not kk_data.get("status") and not op_data.get("status"):
+        raise HTTPException(404, "Movie not found")
+
+    # Ưu tiên lấy movie metadata từ KKPhim, nếu không có thì lấy Ophim
+    movie = kk_data.get("movie", {}) if kk_data.get("status") else op_data.get("movie", {})
+    
+    # Build servers từ cả 2 nguồn
     servers = []
     stream_texts = []
-    for ep_group in episodes:
-        server_name = ep_group.get("server_name", "")
-        stream_texts.append(server_name)
-        eps = []
-        for ep in (ep_group.get("server_data") or []):
-            name = ep.get("name", "")
-            filename = ep.get("filename", "")
-            stream_texts.append(name)
-            stream_texts.append(filename)
-            eps.append({
-                "name":       name,
-                "slug":       ep.get("slug", ""),
-                "filename":   filename,
-                "link_m3u8":  ep.get("link_m3u8", ""),
-                "link_embed": ep.get("link_embed", ""),
-            })
-        if eps:
-            servers.append({"server_name": server_name, "server_data": eps})
+    
+    def process_episodes(episodes_list, prefix=""):
+        for ep_group in episodes_list:
+            server_name = ep_group.get("server_name", "")
+            display_name = f"{prefix} {server_name}".strip()
+            stream_texts.append(server_name)
+            eps = []
+            for ep in (ep_group.get("server_data") or []):
+                name = ep.get("name", "")
+                filename = ep.get("filename", "")
+                stream_texts.append(name)
+                stream_texts.append(filename)
+                eps.append({
+                    "name":       name,
+                    "slug":       ep.get("slug", ""),
+                    "filename":   filename,
+                    "link_m3u8":  ep.get("link_m3u8", ""),
+                    "link_embed": ep.get("link_embed", ""),
+                })
+            if eps:
+                servers.append({"server_name": display_name, "server_data": eps})
+
+    if kk_data.get("status"):
+        process_episodes(kk_data.get("episodes", []), "KKP")
+    if op_data.get("status"):
+        process_episodes(op_data.get("episodes", []), "OP")
 
     # Phân tích quality từ toàn bộ metadata của phim và stream
     final_quality = normalize_quality(movie.get("quality", ""), *stream_texts)
@@ -386,15 +470,32 @@ async def get_movie_detail(slug: str):
 
     # Lấy rating từ detail movie
     detail_tmdb = movie.get("tmdb") or {}
-    detail_rating_val = detail_tmdb.get("vote_average") if isinstance(detail_tmdb, dict) else None
-    if detail_rating_val is None or detail_rating_val == 0 or detail_rating_val == "0" or detail_rating_val == 0.0:
+    detail_imdb = movie.get("imdb") or {}
+    
+    # TMDB Rating
+    tmdb_rating_val = detail_tmdb.get("vote_average") if isinstance(detail_tmdb, dict) else None
+    if tmdb_rating_val is None or tmdb_rating_val == 0 or tmdb_rating_val == "0" or tmdb_rating_val == 0.0:
         detail_rating_str = "N/A"
     else:
         try:
-            r = float(detail_rating_val)
+            r = float(tmdb_rating_val)
             detail_rating_str = f"{r:.1f}" if r % 1 != 0 else str(int(r))
         except (ValueError, TypeError):
-            detail_rating_str = str(detail_rating_val)
+            detail_rating_str = str(tmdb_rating_val)
+
+    # IMDB Rating
+    imdb_rating_val = detail_imdb.get("vote_average") if isinstance(detail_imdb, dict) else None
+    if imdb_rating_val is None or imdb_rating_val == 0 or imdb_rating_val == "0" or imdb_rating_val == 0.0:
+        imdb_rating_str = "N/A"
+    else:
+        try:
+            r = float(imdb_rating_val)
+            imdb_rating_str = f"{r:.1f}" if r % 1 != 0 else str(int(r))
+        except (ValueError, TypeError):
+            imdb_rating_str = str(imdb_rating_val)
+
+    # Lấy thêm trường duration từ "time"
+    duration = movie.get("time", "")
 
     return {
         "id":             str(movie.get("_id") or ""),
@@ -415,6 +516,10 @@ async def get_movie_detail(slug: str):
         "cast":           movie.get("actor", []),
         "director":       movie.get("director", []),
         "rating":         detail_rating_str,
+        "imdb_rating":    imdb_rating_str,
+        "tmdb_id":        detail_tmdb.get("id", ""),
+        "imdb_id":        detail_imdb.get("id", ""),
+        "duration":       duration,
         "episode_current": str(movie.get("episode_current", "")),
         "total_episodes": str(movie.get("episode_total", "")),
         "is_streamable":  True,
