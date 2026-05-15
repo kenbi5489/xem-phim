@@ -4,6 +4,8 @@ import { PlayIcon, LinkIcon, XMarkIcon } from '@heroicons/react/24/solid';
 import { useMovieDetail, useMovieStream } from '../hooks/useMovies';
 import { computeIsStreamable } from '../services/api';
 import { EmbeddedPlayer } from '../components/ui/EmbeddedPlayer';
+import { getTMDBInfo } from '../services/tmdb';
+import type { TMDBData, TMDBCast } from '../services/tmdb';
 
 // ── Trailer Modal ─────────────────────────────────────────────────────────────
 const extractYouTubeId = (url: string): string | null => {
@@ -80,14 +82,24 @@ const getInitials = (name: string) => {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 };
 
-const CastList: React.FC<{ castString: string; directorString: string }> = ({ castString, directorString }) => {
-  const actors = castString ? castString.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const directors = directorString ? directorString.split(',').map(s => s.trim()).filter(Boolean) : [];
-  
-  const allCrew = [
-    ...directors.map(name => ({ name, role: 'Director / Writing' })),
-    ...actors.map(name => ({ name, role: 'Acting' }))
-  ];
+const CastList: React.FC<{ castString: string; directorString: string; tmdbCast?: TMDBCast[] }> = ({ castString, directorString, tmdbCast }) => {
+  let allCrew: { name: string; role: string; photo?: string | null }[] = [];
+
+  if (tmdbCast && tmdbCast.length > 0) {
+    allCrew = tmdbCast.slice(0, 15).map(c => ({
+      name: c.name,
+      role: c.character || 'Acting',
+      photo: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null,
+    }));
+  } else {
+    const actors = castString ? castString.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const directors = directorString ? directorString.split(',').map(s => s.trim()).filter(Boolean) : [];
+    
+    allCrew = [
+      ...directors.map(name => ({ name, role: 'Director / Writing' })),
+      ...actors.map(name => ({ name, role: 'Acting' }))
+    ];
+  }
 
   if (!allCrew.length) return null;
 
@@ -95,10 +107,14 @@ const CastList: React.FC<{ castString: string; directorString: string }> = ({ ca
     <div className="relative mt-6 group">
       <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x">
         {allCrew.map((c, i) => (
-          <div key={i} className="w-[84px] md:w-24 shrink-0 flex flex-col items-center gap-2 snap-start">
-            <div className="w-16 h-16 md:w-[72px] md:h-[72px] rounded-full bg-[#2a2a2a] flex items-center justify-center text-lg md:text-xl font-black text-white/60 border border-white/5 shadow-inner">
-              {getInitials(c.name)}
-            </div>
+          <div key={i} className="w-[84px] md:w-[90px] shrink-0 flex flex-col items-center gap-2 snap-start">
+            {c.photo ? (
+              <img src={c.photo} alt={c.name} className="w-16 h-16 md:w-[76px] md:h-[76px] rounded-full object-cover shadow-inner" />
+            ) : (
+              <div className="w-16 h-16 md:w-[76px] md:h-[76px] rounded-full bg-[#2a2a2a] flex items-center justify-center text-lg md:text-xl font-black text-white/60 border border-white/5 shadow-inner">
+                {getInitials(c.name)}
+              </div>
+            )}
             <div className="w-full text-center">
               <p className="text-[13px] font-bold text-white/90 line-clamp-1">{c.name}</p>
               <p className="text-[11px] text-white/40 line-clamp-1">{c.role}</p>
@@ -116,6 +132,14 @@ export const MovieDetail: React.FC = () => {
   const { data: movie, isLoading, error, refetch } = useMovieDetail(slug || '');
   const [showTrailer, setShowTrailer] = useState(false);
   const [isWatching, setIsWatching]   = useState(false);
+  const [tmdbData, setTmdbData]       = useState<TMDBData | null>(null);
+
+  React.useEffect(() => {
+    if (movie?.tmdbId) {
+      const isSeries = movie.type?.toLowerCase().includes('series') || movie.type?.toLowerCase().includes('tv') || movie.type?.toLowerCase().includes('hoathinh');
+      getTMDBInfo(movie.tmdbId, !!isSeries).then(setTmdbData);
+    }
+  }, [movie]);
 
   if (isLoading) return (
     <div className="min-h-screen bg-[#121212] flex items-center justify-center">
@@ -188,12 +212,27 @@ export const MovieDetail: React.FC = () => {
 
           {/* Right: Info */}
           <div className="flex-1 flex flex-col min-w-0">
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight tracking-tight">
-              {movie.name}
-            </h1>
-            {movie.originalName && (
-              <p className="text-white/60 text-lg md:text-xl font-medium mt-2">{movie.originalName}</p>
-            )}
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+              <div>
+                <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight tracking-tight">
+                  {movie.name}
+                </h1>
+                {movie.originalName && (
+                  <p className="text-white/60 text-lg md:text-xl font-medium mt-2">{movie.originalName}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="flex items-center gap-1 bg-[#2a2a2a] hover:bg-[#333] cursor-pointer text-white/70 px-3 py-1.5 rounded-md text-xs font-bold transition-colors">
+                  <LinkIcon className="w-3 h-3" /> API
+                </span>
+                <span className="flex items-center gap-1 bg-[#1a2533] text-[#3b82f6] border border-[#3b82f6]/20 px-3 py-1.5 rounded-md text-xs font-bold">
+                  TMDB
+                </span>
+                <span className="flex items-center gap-1 bg-[#332a13] text-[#eab308] border border-[#eab308]/20 px-3 py-1.5 rounded-md text-xs font-bold">
+                  IMDB
+                </span>
+              </div>
+            </div>
 
             {/* Badges */}
             <div className="flex flex-wrap gap-2 mt-5">
@@ -216,11 +255,11 @@ export const MovieDetail: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-[#3b82f6]"></span>
                     <span className="text-[13px] text-white/70 font-semibold">Thể loại</span>
                   </div>
-                  <span className="text-[10px] font-bold bg-[#2a2a2a] text-white/50 px-2 py-0.5 rounded-full">{genres.length}</span>
+                  <span className="w-5 h-5 flex items-center justify-center font-bold bg-[#2a2a2a] text-white/50 rounded-full text-[10px]">{genres.length}</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {genres.length > 0 ? genres.slice(0,3).map(g => (
-                    <span key={g} className="px-2 py-1 rounded-md border border-white/10 text-[11px] text-white/80 whitespace-nowrap">{g}</span>
+                    <span key={g} className="px-2 py-1 rounded-full border border-white/20 text-[11px] text-white/70 whitespace-nowrap">{g}</span>
                   )) : <span className="text-[11px] text-white/30">N/A</span>}
                 </div>
               </div>
@@ -231,11 +270,11 @@ export const MovieDetail: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-[#a855f7]"></span>
                     <span className="text-[13px] text-white/70 font-semibold">Quốc gia</span>
                   </div>
-                  <span className="text-[10px] font-bold bg-[#2a2a2a] text-white/50 px-2 py-0.5 rounded-full">{countries.length}</span>
+                  <span className="w-5 h-5 flex items-center justify-center font-bold bg-[#2a2a2a] text-white/50 rounded-full text-[10px]">{countries.length}</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {countries.length > 0 ? countries.slice(0,3).map(c => (
-                    <span key={c} className="px-2 py-1 rounded-md border border-[#a855f7]/20 text-[#a855f7] bg-[#a855f7]/5 text-[11px] whitespace-nowrap">{c}</span>
+                    <span key={c} className="px-2 py-1 rounded-full border border-[#a855f7]/30 text-[#a855f7] text-[11px] whitespace-nowrap">{c}</span>
                   )) : <span className="text-[11px] text-white/30">N/A</span>}
                 </div>
               </div>
@@ -246,16 +285,16 @@ export const MovieDetail: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-[#22c55e]"></span>
                     <span className="text-[13px] text-white/70 font-semibold">Thông tin</span>
                   </div>
-                  <span className="text-[10px] font-bold bg-[#22c55e]/20 text-[#22c55e] px-2 py-0.5 rounded-full uppercase">Completed</span>
+                  <span className="text-[10px] font-bold bg-[#22c55e]/10 text-[#22c55e] px-2 py-0.5 rounded-md uppercase">ongoing</span>
                 </div>
                 <div className="flex flex-col gap-1.5 mt-2">
                   <div className="flex justify-between text-[12px]">
                     <span className="text-white/40">Thời lượng:</span>
-                    <span className="text-white/90 font-medium">{movie.duration || 'N/A'}</span>
+                    <span className="text-white/90 font-medium truncate ml-2 text-right">{movie.duration || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between text-[12px]">
                     <span className="text-white/40">Tập hiện tại:</span>
-                    <span className="text-[#22c55e] font-bold">{getEpisodeDisplay()}</span>
+                    <span className="text-[#22c55e] font-bold truncate ml-2 text-right">{getEpisodeDisplay()}</span>
                   </div>
                 </div>
               </div>
@@ -303,7 +342,7 @@ export const MovieDetail: React.FC = () => {
             </div>
 
             {/* Cast List */}
-            <CastList castString={movie.cast || ''} directorString={movie.director || ''} />
+            <CastList castString={movie.cast || ''} directorString={movie.director || ''} tmdbCast={tmdbData?.cast} />
 
           </div>
         </div>
@@ -321,7 +360,7 @@ export const MovieDetail: React.FC = () => {
 
       {/* Bottom Content Section */}
       <div className="max-w-[1200px] mx-auto mt-16 px-4 md:px-6">
-        <h2 className="text-2xl md:text-3xl font-bold mb-6 border-l-4 border-primary pl-4">Nội dung phim</h2>
+        <h2 className="text-2xl md:text-3xl font-bold mb-6 border-l-4 border-[#a855f7] pl-4">Nội dung phim</h2>
         <div className="text-white/50 text-[15px] mb-4">
           Tên khác: <span className="text-white/80">{movie.originalName || 'Đang cập nhật'}</span>
         </div>
@@ -330,13 +369,13 @@ export const MovieDetail: React.FC = () => {
         />
 
         <div className="mt-12">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            Từ khóa <span className="text-white/40 text-sm font-normal">({genres.length} từ khóa)</span>
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 border-l-4 border-[#a855f7] pl-4">
+            Từ khóa <span className="text-white/40 text-sm font-normal">({tmdbData?.keywords?.length || genres.length} từ khóa)</span>
           </h2>
-          {genres.length > 0 ? (
+          {(tmdbData?.keywords?.length ? tmdbData.keywords : genres).length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {genres.map(g => (
-                <span key={g} className="px-3 py-1.5 bg-[#1c1c1c] text-white/60 text-[13px] rounded-md hover:bg-[#2a2a2a] transition-colors cursor-pointer border border-white/5">{g}</span>
+              {(tmdbData?.keywords?.length ? tmdbData.keywords : genres).map(g => (
+                <span key={g} className="px-3 py-1.5 bg-transparent text-white/60 text-[13px] rounded-full border border-white/10 hover:text-white transition-colors cursor-pointer">{g}</span>
               ))}
             </div>
           ) : (
@@ -345,16 +384,26 @@ export const MovieDetail: React.FC = () => {
         </div>
 
         <div className="mt-12">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            Hình ảnh <span className="text-white/40 text-sm font-normal">(2 ảnh)</span>
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 border-l-4 border-[#a855f7] pl-4">
+            Hình ảnh <span className="text-white/40 text-sm font-normal">({tmdbData?.backdrops?.length || 2} ảnh)</span>
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
-              <img src={movie.thumbUrl} alt="Backdrop 1" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-            </div>
-            <div className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
-              <img src={movie.posterUrl} alt="Backdrop 2" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 object-top" />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {tmdbData?.backdrops && tmdbData.backdrops.length > 0 ? (
+              tmdbData.backdrops.slice(0, 6).map((img, i) => (
+                <div key={i} className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
+                  <img src={`https://image.tmdb.org/t/p/w780${img.file_path}`} alt={`Backdrop ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                </div>
+              ))
+            ) : (
+              <>
+                <div className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
+                  <img src={movie.thumbUrl} alt="Backdrop 1" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                </div>
+                <div className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
+                  <img src={movie.posterUrl} alt="Backdrop 2" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 object-top" />
+                </div>
+              </>
+            )}
           </div>
         </div>
 
