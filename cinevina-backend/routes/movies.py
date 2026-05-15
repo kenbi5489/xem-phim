@@ -87,8 +87,8 @@ def normalize_quality(*sources: Optional[str]) -> str:
     return "HD"
 
 
-def _map_item(item: dict) -> dict:
-    """Map 1 item từ KKPhim listing → CINEVINA format."""
+def _map_item(item: dict, path_image: str = "") -> dict:
+    """Map 1 item từ KKPhim/Ophim listing → CINEVINA format."""
     # ── country ──────────────────────────────
     cr = item.get("country") or []
     if isinstance(cr, list) and cr:
@@ -129,19 +129,28 @@ def _map_item(item: dict) -> dict:
         except (ValueError, TypeError):
             rating_str = str(rating_val)
 
+    poster_raw = item.get("poster_url") or item.get("poster")
+    thumb_raw = item.get("thumb_url") or item.get("thumb")
+
+    if path_image:
+        if poster_raw and not str(poster_raw).startswith("http"):
+            poster_raw = f"{path_image.rstrip('/')}/{str(poster_raw).lstrip('/')}"
+        if thumb_raw and not str(thumb_raw).startswith("http"):
+            thumb_raw = f"{path_image.rstrip('/')}/{str(thumb_raw).lstrip('/')}"
+
     return {
         "id":             str(item.get("_id") or item.get("id") or ""),
         "slug":           item.get("slug", ""),
         "title":          item.get("name", ""),
         "original_title": item.get("origin_name", ""),
-        "poster_url":     _fix_image(item.get("poster_url") or item.get("poster")),
-        "thumb_url":      _fix_image(item.get("thumb_url")  or item.get("thumb")),
+        "poster_url":     _fix_image(poster_raw),
+        "thumb_url":      _fix_image(thumb_raw),
         "year":           item.get("year"),
         "quality":        normalize_quality(item.get("quality", "")),
         "lang":           item.get("lang", "Vietsub"),
         "type":           item.get("type", "single"),
         "is_cinema":      bool(item.get("chieurap", False)),
-        "is_streamable":  True,
+        "is_streamable":  item.get("status") != "trailer",
         "country":        country_name,
         "country_slug":   country_slug,
         "category":       cat_str,
@@ -171,8 +180,9 @@ def _paginate(data: dict, page: int, limit: int) -> dict:
         total = pagination.get("totalItems", len(items_raw))
         total_pages = pagination.get("totalPages", 1)
         
+    path_image = data.get("pathImage", "")
     return {
-        "items":       [_map_item(i) for i in items_raw],
+        "items":       [_map_item(i, path_image) for i in items_raw],
         "total":       total,
         "page":        page,
         "limit":       limit,
@@ -235,7 +245,8 @@ async def _fetch_and_merge(path: str, params: dict, page: int, limit: int) -> di
     ophim_items_raw = ophim_data.get("data", {}).get("items", []) or ophim_data.get("items", [])
     
     kkphim_mapped = [_map_item(i) for i in kkphim_items_raw]
-    ophim_mapped = [_map_item(i) for i in ophim_items_raw]
+    ophim_path_image = ophim_data.get("pathImage", "")
+    ophim_mapped = [_map_item(i, ophim_path_image) for i in ophim_items_raw]
     
     merged_items = _merge_and_dedup(kkphim_mapped, ophim_mapped)
     
@@ -522,7 +533,7 @@ async def get_movie_detail(slug: str):
         "duration":       duration,
         "episode_current": str(movie.get("episode_current", "")),
         "total_episodes": str(movie.get("episode_total", "")),
-        "is_streamable":  True,
+        "is_streamable":  movie.get("status") != "trailer",
         "episodes":       [],
         "servers":        servers,
     }
