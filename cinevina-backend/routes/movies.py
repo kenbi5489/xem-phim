@@ -415,6 +415,7 @@ async def get_movie_detail(slug: str):
         "cast":           movie.get("actor", []),
         "director":       movie.get("director", []),
         "rating":         detail_rating_str,
+        "episode_current": str(movie.get("episode_current", "")),
         "total_episodes": str(movie.get("episode_total", "")),
         "is_streamable":  True,
         "episodes":       [],

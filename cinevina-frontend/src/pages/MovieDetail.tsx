@@ -109,6 +109,24 @@ export const MovieDetail: React.FC = () => {
   const trailerYtId  = extractYouTubeId(movie.trailerUrl || '');
   const is4K         = movie.quality?.toUpperCase().includes('4K');
 
+  const getEpisodeDisplay = () => {
+    const curr = (movie.episodeCurrent || '').trim();
+    const tot = String(movie.totalEpisodes || '').trim();
+    
+    if (curr.toLowerCase() === 'full' || curr.toLowerCase() === 'hoàn tất') {
+      return tot && tot !== '?' && tot !== '1' ? `Hoàn tất (${tot} tập)` : 'Hoàn tất';
+    }
+    
+    if (curr && tot && tot !== '?' && curr !== tot) {
+      return `${curr} / ${tot} tập`;
+    }
+    
+    if (curr) return curr;
+    if (tot && tot !== '?') return `${tot} tập`;
+    
+    return 'Đang cập nhật';
+  };
+
   const handleWatchNow = () => {
     setIsWatching(true);
     // Give React a tick to render, then scroll
@@ -257,9 +275,9 @@ export const MovieDetail: React.FC = () => {
                 { icon: GlobeAltIcon, label: 'Quốc gia', val: movie.country },
                 { icon: RectangleGroupIcon, label: 'Thể loại', val: movie.categories },
                 { icon: LanguageIcon, label: 'Ngôn ngữ', val: movie.lang },
-                { icon: ClockIcon, label: 'Số tập', val: movie.totalEpisodes ? `${movie.totalEpisodes} tập` : 'Đang cập nhật' },
-              ].map(item => item.val ? (
-                <div key={item.label} className="flex gap-4 group">
+                { icon: ClockIcon, label: 'Số tập', val: getEpisodeDisplay() },
+              ].map((item, idx) => item.val ? (
+                <div key={idx} className="flex gap-4 group">
                   <div className="shrink-0 w-11 h-11 md:w-12 md:h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-500">
                     <item.icon className="w-5 h-5 md:w-6 md:h-6" />
                   </div>

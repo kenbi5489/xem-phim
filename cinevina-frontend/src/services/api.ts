@@ -60,6 +60,7 @@ export interface MovieInfo {
   country?: string;
   cast?: string;
   director?: string;
+  episodeCurrent?: string;
   totalEpisodes?: string | number;
   isStreamable: boolean;
   episodes: EpisodeInfo[];
