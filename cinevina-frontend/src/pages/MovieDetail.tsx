@@ -139,7 +139,7 @@ export const MovieDetail: React.FC = () => {
       const isSeries = movie.type?.toLowerCase().includes('series') || movie.type?.toLowerCase().includes('tv') || movie.type?.toLowerCase().includes('hoathinh');
       getTMDBInfo(movie.tmdbId, !!isSeries).then(setTmdbData);
     }
-  }, [movie]);
+  }, [movie?.tmdbId, movie?.type]);
 
   if (isLoading) return (
     <div className="min-h-screen bg-[#121212] flex items-center justify-center">
