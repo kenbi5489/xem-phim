@@ -1,13 +1,23 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { PlayIcon, LinkIcon, XMarkIcon } from '@heroicons/react/24/solid';
-import { useMovieDetail, useMovieStream } from '../hooks/useMovies';
+import { useParams, useNavigate } from 'react-router-dom';
+import { PlayIcon, LinkIcon, XMarkIcon, Cog6ToothIcon, HeartIcon as HeartSolid, StarIcon } from '@heroicons/react/24/solid';
+import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
+import { useMovieDetail, useSeriesDetail } from '../hooks/useMovies';
+import { useFavorites } from '../hooks/useFavorites';
 import { computeIsStreamable } from '../services/api';
-import { EmbeddedPlayer } from '../components/ui/EmbeddedPlayer';
+import { Button } from '../components/ui/Button';
+import { Chip } from '../components/ui/Chip';
 import { getTMDBInfo } from '../services/tmdb';
 import type { TMDBData, TMDBCast } from '../services/tmdb';
 
-// ── Trailer Modal ─────────────────────────────────────────────────────────────
+const decodeHtmlEntities = (text: string): string => {
+  if (!text) return '';
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+};
+
+// ── Trailer Modal ──
 const extractYouTubeId = (url: string): string | null => {
   if (!url) return null;
   const patterns = [/youtu\.be\/([^?&]+)/, /youtube\.com\/watch\?v=([^&]+)/, /youtube\.com\/embed\/([^?&]+)/];
@@ -16,72 +26,20 @@ const extractYouTubeId = (url: string): string | null => {
     if (m) return m[1];
   }
   return null;
-};
+}
 
 const TrailerModal: React.FC<{ videoId: string; onClose: () => void }> = ({ videoId, onClose }) => (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md p-4" onClick={onClose}>
-    <div className="relative w-full max-w-5xl aspect-video rounded-3xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-white/20" onClick={e => e.stopPropagation()}>
-      <button onClick={onClose} className="absolute top-4 right-4 z-10 p-3 rounded-full bg-black/60 text-white hover:bg-red-600 transition-all shadow-xl">
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--color-bg-base)]/90 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="relative w-full max-w-[900px] aspect-video bg-[var(--color-bg-surface)] rounded-[16px] overflow-hidden shadow-2xl border border-[var(--color-border)]" onClick={e => e.stopPropagation()}>
+      <button onClick={onClose} className="absolute top-4 right-4 z-10 p-2 rounded-full bg-[var(--color-bg-base)]/50 text-[var(--color-text-1)] hover:bg-[var(--color-bg-hover)] transition-colors">
         <XMarkIcon className="w-6 h-6" />
       </button>
-      <iframe src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`} title="Trailer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="w-full h-full" />
+      <iframe src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`} title="Trailer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="w-full h-full border-0" />
     </div>
   </div>
 );
 
-// ── PlayerSection ─────────────────────────────────────────────────────────────
-const PlayerSection: React.FC<{
-  movieSlug: string;
-  movieName: string;
-  servers: any[];
-  initialEpSlug: string;
-}> = ({ movieSlug, movieName, servers, initialEpSlug }) => {
-  const [activeEpSlug, setActiveEpSlug] = useState(initialEpSlug);
-
-  const { data: stream, isLoading } = useMovieStream(movieSlug, activeEpSlug);
-
-  const handleEpisodeChange = (_serverIdx: number, epSlug: string) => {
-    setActiveEpSlug(epSlug);
-    document.getElementById('cinevina-player')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  if (isLoading) {
-    return (
-      <div id="cinevina-player" className="w-full aspect-video bg-black rounded-2xl flex items-center justify-center border border-white/5 mt-10">
-        <div className="relative w-12 h-12">
-          <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
-          <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!stream) return null;
-
-  return (
-    <div id="cinevina-player" className="scroll-mt-24 mt-10 max-w-[1200px] mx-auto px-4 sm:px-6">
-      <EmbeddedPlayer
-        streamUrl={stream.url}
-        streamType={stream.type as 'hls' | 'embed'}
-        movieSlug={movieSlug}
-        movieName={movieName}
-        currentEpisode={activeEpSlug}
-        servers={servers}
-        onEpisodeChange={handleEpisodeChange}
-        className="w-full"
-      />
-    </div>
-  );
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const getInitials = (name: string) => {
-  if (!name) return '?';
-  const parts = name.trim().split(' ');
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-};
-
+// ── Helpers ──
 const CastList: React.FC<{ castString: string; directorString: string; tmdbCast?: TMDBCast[] }> = ({ castString, directorString, tmdbCast }) => {
   let allCrew: { name: string; role: string; photo?: string | null }[] = [];
 
@@ -94,7 +52,6 @@ const CastList: React.FC<{ castString: string; directorString: string; tmdbCast?
   } else {
     const actors = castString ? castString.split(',').map(s => s.trim()).filter(Boolean) : [];
     const directors = directorString ? directorString.split(',').map(s => s.trim()).filter(Boolean) : [];
-    
     allCrew = [
       ...directors.map(name => ({ name, role: 'Director / Writing' })),
       ...actors.map(name => ({ name, role: 'Acting' }))
@@ -104,20 +61,23 @@ const CastList: React.FC<{ castString: string; directorString: string; tmdbCast?
   if (!allCrew.length) return null;
 
   return (
-    <div className="relative mt-6 group">
-      <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x">
+    <div className="mt-8">
+      <h3 className="text-[16px] font-semibold text-[var(--color-text-1)] mb-4">Diễn viên & Đạo diễn</h3>
+      <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
         {allCrew.map((c, i) => (
-          <div key={i} className="w-[84px] md:w-[90px] shrink-0 flex flex-col items-center gap-2 snap-start">
+          <div key={i} className="w-[100px] shrink-0 flex flex-col items-center gap-2 snap-start">
             {c.photo ? (
-              <img src={c.photo} alt={c.name} className="w-16 h-16 md:w-[76px] md:h-[76px] rounded-full object-cover shadow-inner" />
+              <img src={c.photo} alt={decodeHtmlEntities(c.name)} className="w-[64px] h-[64px] rounded-full object-cover bg-[var(--color-surface)]" />
             ) : (
-              <div className="w-16 h-16 md:w-[76px] md:h-[76px] rounded-full bg-[#2a2a2a] flex items-center justify-center text-lg md:text-xl font-black text-white/60 border border-white/5 shadow-inner">
-                {getInitials(c.name)}
+              <div className="w-[64px] h-[64px] rounded-full bg-[var(--color-surface-elevated)] flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-[var(--color-text-disabled)]">
+                  <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clipRule="evenodd" />
+                </svg>
               </div>
             )}
-            <div className="w-full text-center">
-              <p className="text-[13px] font-bold text-white/90 line-clamp-1">{c.name}</p>
-              <p className="text-[11px] text-white/40 line-clamp-1">{c.role}</p>
+            <div className="text-center w-full">
+              <p className="text-[13px] font-medium text-[var(--color-text-primary)] line-clamp-2 leading-tight">{decodeHtmlEntities(c.name)}</p>
+              <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 line-clamp-1">{decodeHtmlEntities(c.role)}</p>
             </div>
           </div>
         ))}
@@ -126,13 +86,43 @@ const CastList: React.FC<{ castString: string; directorString: string; tmdbCast?
   );
 };
 
-// ── Main Component ────────────────────────────────────────────────────────────
+const SeasonSelector: React.FC<{ seasons: any[]; activeSlug: string }> = ({ seasons, activeSlug }) => {
+  const navigate = useNavigate();
+  if (!seasons || seasons.length <= 1) return null;
+  return (
+    <div className="mt-8">
+      <h3 className="text-[16px] font-semibold text-[var(--color-text-1)] mb-3">Phần phim</h3>
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        {seasons.map((s) => (
+          <button
+            key={s.slug}
+            onClick={() => navigate(`/phim/${s.slug}?season=${s.season_number}`)}
+            className={`shrink-0 px-4 py-2 rounded-[8px] text-[13px] font-medium transition-colors border border-transparent ${
+              s.slug === activeSlug 
+                ? 'bg-[var(--color-primary)] text-white' 
+                : 'bg-[var(--color-bg-surface)] text-[var(--color-text-2)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-1)]'
+            }`}
+          >
+            Phần {s.season_number}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Main Component ──
 export const MovieDetail: React.FC = () => {
   const { slug } = useParams();
   const { data: movie, isLoading, error, refetch } = useMovieDetail(slug || '');
+  const { data: seriesDetail } = useSeriesDetail(movie?.seriesId || '');
+  const { isFavorite, toggleFavorite } = useFavorites();
+  
+  const navigate = useNavigate();
   const [showTrailer, setShowTrailer] = useState(false);
-  const [isWatching, setIsWatching]   = useState(false);
   const [tmdbData, setTmdbData]       = useState<TMDBData | null>(null);
+  const [showDevMenu, setShowDevMenu] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   React.useEffect(() => {
     if (movie?.tmdbId) {
@@ -142,27 +132,37 @@ export const MovieDetail: React.FC = () => {
   }, [movie?.tmdbId, movie?.type]);
 
   if (isLoading) return (
-    <div className="min-h-screen bg-[#121212] flex items-center justify-center">
-      <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+    <div className="min-h-screen bg-[var(--color-bg-base)] flex items-center justify-center">
+      <div className="w-10 h-10 border-2 border-[var(--color-bg-hover)] border-t-[var(--color-primary)] rounded-full animate-spin" />
     </div>
   );
   if (error || !movie) return (
-    <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center gap-6">
-      <p className="text-white/40 font-bold uppercase tracking-widest">Không tìm thấy phim</p>
-      <button onClick={() => refetch()} className="btn-vibrant">THỬ LẠI</button>
+    <div className="min-h-screen bg-[var(--color-bg-base)] flex flex-col items-center justify-center gap-4">
+      <p className="text-[var(--color-text-3)] text-sm">Không tìm thấy phim</p>
+      <Button variant="primary" onClick={() => refetch()}>Thử lại</Button>
     </div>
   );
 
   const isStreamable = computeIsStreamable(movie);
   const firstEp      = movie.servers?.[0]?.server_data?.[0]?.slug || movie.episodes?.[0]?.slug || '';
   const trailerYtId  = extractYouTubeId(movie.trailerUrl || '');
-  const is4K         = movie.quality?.toUpperCase().includes('4K');
+
+  const lastWatchedEp = localStorage.getItem(`last_watched_ep_${movie?.slug}`) || '';
+  const initialEpToPlay = lastWatchedEp || firstEp;
 
   const handleWatchNow = () => {
-    setIsWatching(true);
-    setTimeout(() => {
-      document.getElementById('cinevina-player')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    navigate(`/play/${movie.slug}/${initialEpToPlay}`);
+  };
+
+  const handleToggleFavorite = () => {
+    if (movie) {
+      toggleFavorite({
+        slug: movie.slug,
+        name: movie.name,
+        posterUrl: movie.posterUrl,
+        thumbUrl: movie.thumbUrl
+      });
+    }
   };
 
   const genres = movie.categories ? movie.categories.split(',').map(s => s.trim()) : [];
@@ -172,7 +172,7 @@ export const MovieDetail: React.FC = () => {
     const curr = (movie.episodeCurrent || '').trim();
     const tot = String(movie.totalEpisodes || '').trim();
     if (curr.toLowerCase() === 'full' || curr.toLowerCase() === 'hoàn tất') {
-      return tot && tot !== '?' && tot !== '1' ? `Hoàn tất (${tot} tập)` : 'Full';
+      return tot && tot !== '?' && tot !== '1' ? `Hoàn tất ${tot}/${tot} tập` : 'Đã hoàn tất';
     }
     if (curr && tot && tot !== '?' && curr !== tot) return `${curr} / ${tot} tập`;
     if (curr) return curr;
@@ -180,232 +180,197 @@ export const MovieDetail: React.FC = () => {
     return 'Đang cập nhật';
   };
 
+  const isDev = import.meta.env.DEV;
+
   return (
-    <div className="min-h-screen bg-[#121212] pb-24 font-sans text-white">
+    <div className="min-h-screen bg-[var(--color-bg-base)] w-full flex flex-col items-center">
       {showTrailer && trailerYtId && <TrailerModal videoId={trailerYtId} onClose={() => setShowTrailer(false)} />}
 
-      <div className="max-w-[1200px] mx-auto pt-[100px] px-4 md:px-6">
+      {/* TOP BACKDROP (30vh) */}
+      <div className="relative w-full h-[30vh] min-h-[250px] overflow-hidden">
+        <img 
+          src={tmdbData?.backdrops?.[0]?.file_path ? `https://image.tmdb.org/t/p/w1280${tmdbData.backdrops[0].file_path}` : movie.posterUrl || movie.thumbUrl} 
+          className="w-full h-full object-cover blur-[40px] scale-110" 
+          alt="" 
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-bg-base)] via-[var(--color-bg-base)]/80 to-[var(--color-bg-base)]/40" />
+      </div>
+
+      <div className="w-full max-w-[1000px] mx-auto px-4 lg:px-8 -mt-[120px] relative z-10">
         
-        {/* TOP SECTION: Poster & Info */}
-        <div className="flex flex-col md:flex-row gap-8 lg:gap-10">
+        {/* LAYOUT: Left Poster + Right Metadata */}
+        <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
           
-          {/* Left: Poster & Buttons */}
-          <div className="w-[200px] sm:w-[240px] md:w-[280px] shrink-0 mx-auto md:mx-0">
-            <div className="relative aspect-[2/3] rounded-xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/5">
-              <img src={movie.posterUrl || movie.thumbUrl || ''} className="w-full h-full object-cover" alt={movie.name} />
-            </div>
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <button 
-                onClick={handleWatchNow}
-                disabled={!isStreamable}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold text-[13px] transition-colors ${isStreamable ? 'bg-[#3b82f6] hover:bg-[#2563eb] text-white' : 'bg-gray-700/50 text-gray-400 cursor-not-allowed'}`}
-              >
-                {isStreamable ? <><PlayIcon className="w-4 h-4" /> Xem Phim</> : 'Sắp ra mắt'}
-              </button>
-              <button 
-                onClick={() => setShowTrailer(true)}
-                className="flex items-center justify-center gap-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white py-2.5 rounded-lg font-bold text-[13px] transition-colors"
-              >
-                <LinkIcon className="w-4 h-4" /> Trailer
-              </button>
+          {/* Left: Poster */}
+          <div className="w-[180px] sm:w-[220px] shrink-0 mx-auto md:mx-0">
+            <div className="relative aspect-[2/3] rounded-[var(--radius-card)] overflow-hidden bg-[var(--color-surface)] shadow-2xl border border-[var(--color-border-strong)]">
+              <img src={movie.posterUrl || movie.thumbUrl || ''} className="w-full h-full object-cover" alt={decodeHtmlEntities(movie.name)} />
             </div>
           </div>
 
-          {/* Right: Info */}
-          <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-              <div>
-                <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight tracking-tight">
-                  {movie.name}
+          {/* Right: Metadata */}
+          <div className="flex-1 flex flex-col">
+            
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col gap-1">
+                <h1 className="font-heading text-[28px] md:text-[36px] lg:text-[42px] leading-none text-[var(--color-text-primary)] drop-shadow-md">
+                  {decodeHtmlEntities(movie.name)}
                 </h1>
                 {movie.originalName && (
-                  <p className="text-white/60 text-lg md:text-xl font-medium mt-2">{movie.originalName}</p>
+                  <p className="font-body text-[16px] font-medium text-[var(--color-text-secondary)]">{decodeHtmlEntities(movie.originalName)}</p>
                 )}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="flex items-center gap-1 bg-[#2a2a2a] hover:bg-[#333] cursor-pointer text-white/70 px-3 py-1.5 rounded-md text-xs font-bold transition-colors">
-                  <LinkIcon className="w-3 h-3" /> API
-                </span>
-                <span className="flex items-center gap-1 bg-[#1a2533] text-[#3b82f6] border border-[#3b82f6]/20 px-3 py-1.5 rounded-md text-xs font-bold">
-                  TMDB
-                </span>
-                <span className="flex items-center gap-1 bg-[#332a13] text-[#eab308] border border-[#eab308]/20 px-3 py-1.5 rounded-md text-xs font-bold">
-                  IMDB
-                </span>
-              </div>
-            </div>
 
-            {/* Badges */}
-            <div className="flex flex-wrap gap-2 mt-5">
-              <span className="bg-[#2a2a2a] border border-white/5 text-white/80 px-3 py-1 rounded-full text-xs font-bold uppercase">{movie.type || 'single'}</span>
-              {movie.year && <span className="bg-[#2a2a2a] border border-white/5 text-white/80 px-3 py-1 rounded-full text-xs font-bold">{movie.year}</span>}
-              {movie.lang && <span className="bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/20 px-3 py-1 rounded-full text-xs font-bold uppercase">{movie.lang}</span>}
-              {movie.quality && (
-                <span className={`px-3 py-1 rounded-full text-xs font-bold border ${is4K ? 'bg-amber-500/20 text-amber-500 border-amber-500/20' : 'bg-[#eab308]/20 text-[#eab308] border-[#eab308]/20'} uppercase`}>
-                  {movie.quality}
-                </span>
+              {/* Dev Tools Dropdown */}
+              {isDev && (
+                <div className="relative">
+                  <button onClick={() => setShowDevMenu(!showDevMenu)} className="p-2 text-[var(--color-text-3)] hover:text-[var(--color-text-1)]">
+                    <Cog6ToothIcon className="w-5 h-5" />
+                  </button>
+                  {showDevMenu && (
+                    <div className="absolute right-0 mt-2 w-32 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[8px] py-1 z-50">
+                      <span className="block px-4 py-2 text-[12px] text-[var(--color-text-2)] hover:bg-[var(--color-bg-hover)]">API Data</span>
+                      <span className="block px-4 py-2 text-[12px] text-[#3b82f6] hover:bg-[var(--color-bg-hover)]">TMDB Data</span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
-            {/* Info Cards Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-8">
-              
-              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#3b82f6]"></span>
-                    <span className="text-[13px] text-white/70 font-semibold">Thể loại</span>
-                  </div>
-                  <span className="w-5 h-5 flex items-center justify-center font-bold bg-[#2a2a2a] text-white/50 rounded-full text-[10px]">{genres.length}</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {genres.length > 0 ? genres.slice(0,3).map(g => (
-                    <span key={g} className="px-2 py-1 rounded-full border border-white/20 text-[11px] text-white/70 whitespace-nowrap">{g}</span>
-                  )) : <span className="text-[11px] text-white/30">N/A</span>}
-                </div>
-              </div>
-
-              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#a855f7]"></span>
-                    <span className="text-[13px] text-white/70 font-semibold">Quốc gia</span>
-                  </div>
-                  <span className="w-5 h-5 flex items-center justify-center font-bold bg-[#2a2a2a] text-white/50 rounded-full text-[10px]">{countries.length}</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {countries.length > 0 ? countries.slice(0,3).map(c => (
-                    <span key={c} className="px-2 py-1 rounded-full border border-[#a855f7]/30 text-[#a855f7] text-[11px] whitespace-nowrap">{c}</span>
-                  )) : <span className="text-[11px] text-white/30">N/A</span>}
-                </div>
-              </div>
-
-              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#22c55e]"></span>
-                    <span className="text-[13px] text-white/70 font-semibold">Thông tin</span>
-                  </div>
-                  <span className="text-[10px] font-bold bg-[#22c55e]/10 text-[#22c55e] px-2 py-0.5 rounded-md uppercase">ongoing</span>
-                </div>
-                <div className="flex flex-col gap-1.5 mt-2">
-                  <div className="flex justify-between text-[12px]">
-                    <span className="text-white/40">Thời lượng:</span>
-                    <span className="text-white/90 font-medium truncate ml-2 text-right">{movie.duration || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between text-[12px]">
-                    <span className="text-white/40">Tập hiện tại:</span>
-                    <span className="text-[#22c55e] font-bold truncate ml-2 text-right">{getEpisodeDisplay()}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#06b6d4]"></span>
-                    <span className="text-[13px] text-white/70 font-semibold">TMDB</span>
-                  </div>
-                  <span className="text-[10px] font-bold bg-[#3b82f6]/20 text-[#3b82f6] px-2 py-0.5 rounded-full">movie</span>
-                </div>
-                <div className="flex flex-col gap-1.5 mt-2">
-                  <div className="flex justify-between text-[12px]">
-                    <span className="text-white/40">ID:</span>
-                    <span className="text-white/70">{movie.tmdbId || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-[#3b82f6] font-bold text-lg">{movie.rating || 'N/A'}</span>
-                    <span className="text-white/40 text-[11px]">/10</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-[#1c1c1c] rounded-xl p-4 border border-white/5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#eab308]"></span>
-                    <span className="text-[13px] text-white/70 font-semibold">IMDB</span>
-                  </div>
-                  <span className="text-[10px] font-bold bg-[#eab308]/20 text-[#eab308] px-2 py-0.5 rounded-full">Rating</span>
-                </div>
-                <div className="flex flex-col gap-1.5 mt-2">
-                  <div className="flex justify-between text-[12px]">
-                    <span className="text-white/40">ID:</span>
-                    <span className="text-white/70">{movie.imdbId || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-[#eab308] font-bold text-lg">{movie.imdbRating || 'N/A'}</span>
-                    <span className="text-white/40 text-[11px]">/10</span>
-                  </div>
-                </div>
-              </div>
-
+            {/* Tags Row */}
+            <div className="flex flex-wrap gap-2 mt-4">
+              {movie.type && <Chip>{movie.type}</Chip>}
+              {movie.year && <Chip>{movie.year}</Chip>}
+              {movie.lang && <Chip>{movie.lang}</Chip>}
+              {movie.quality && <Chip>{movie.quality}</Chip>}
             </div>
+
+            {/* Meta Info (one clean line) */}
+            <div className="flex flex-wrap items-center gap-2 mt-4 text-[14px] text-[var(--color-text-3)] font-medium">
+              {movie.duration && <span>{movie.duration}</span>}
+              {movie.duration && countries.length > 0 && <span>·</span>}
+              {countries.length > 0 && <span>{countries.join(', ')}</span>}
+              {countries.length > 0 && genres.length > 0 && <span>·</span>}
+              {genres.length > 0 && <span>{genres.join(', ')}</span>}
+            </div>
+
+            {/* Status */}
+            <div className="flex items-center gap-2 mt-2 text-[14px] font-medium">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+              <span className="text-[var(--color-text-2)]">Đang phát · {getEpisodeDisplay()}</span>
+            </div>
+
+            {/* CTA Buttons */}
+            <div className="flex items-center gap-3 mt-8">
+              <Button 
+                variant="primary" 
+                size="lg" 
+                onClick={handleWatchNow}
+                disabled={!isStreamable}
+                className="px-8 flex items-center gap-2"
+              >
+                {isStreamable ? <><PlayIcon className="w-5 h-5" /> {lastWatchedEp ? 'Tiếp tục xem' : 'Xem Phim'}</> : 'Sắp ra mắt'}
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="lg"
+                onClick={() => setShowTrailer(true)}
+                className="px-6 flex items-center gap-2"
+              >
+                <LinkIcon className="w-5 h-5" /> Trailer
+              </Button>
+              <Button 
+                variant="ghost"
+                size="lg"
+                onClick={handleToggleFavorite}
+                className="w-[48px] px-0 flex items-center justify-center rounded-full"
+                title={isFavorite(movie.slug) ? "Bỏ lưu" : "Lưu phim"}
+              >
+                {isFavorite(movie.slug) ? <HeartSolid className="w-6 h-6 text-[var(--color-live)]" /> : <HeartOutline className="w-6 h-6" />}
+              </Button>
+            </div>
+
+            {/* Ratings (Clean numbers) */}
+            <div className="flex items-center gap-8 mt-8">
+              <div className="flex items-baseline gap-1">
+                <StarIcon className={`w-5 h-5 self-center ${movie.rating && movie.rating !== 'N/A' ? 'text-[var(--color-rating)]' : 'text-[var(--color-text-disabled)]'}`} />
+                <span className={`font-sans text-[24px] font-bold ${movie.rating && movie.rating !== 'N/A' ? 'text-[var(--color-rating)]' : 'text-[var(--color-text-disabled)]'}`}>
+                  {movie.rating && movie.rating !== 'N/A' ? movie.rating : 'N/A'}
+                </span>
+                <span className="text-[12px] font-medium text-[var(--color-text-muted)] ml-1">TMDB</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <StarIcon className={`w-5 h-5 self-center ${movie.imdbRating && movie.imdbRating !== 'N/A' ? 'text-[var(--color-rating)]' : 'text-[var(--color-text-disabled)]'}`} />
+                <span className={`font-sans text-[24px] font-bold ${movie.imdbRating && movie.imdbRating !== 'N/A' ? 'text-[var(--color-rating)]' : 'text-[var(--color-text-disabled)]'}`}>
+                  {movie.imdbRating && movie.imdbRating !== 'N/A' ? movie.imdbRating : 'Chưa có'}
+                </span>
+                <span className="text-[12px] font-medium text-[var(--color-text-muted)] ml-1">IMDb</span>
+              </div>
+            </div>
+
+            {/* Season Selector */}
+            {seriesDetail?.seasons && (
+              <SeasonSelector seasons={seriesDetail.seasons} activeSlug={movie.slug} />
+            )}
 
             {/* Cast List */}
             <CastList castString={movie.cast || ''} directorString={movie.director || ''} tmdbCast={tmdbData?.cast} />
-
           </div>
         </div>
-      </div>
 
-      {/* Inline Player Section */}
-      {isWatching && isStreamable && movie.servers && firstEp && (
-        <PlayerSection
-          movieSlug={movie.slug}
-          movieName={movie.name}
-          servers={movie.servers}
-          initialEpSlug={firstEp}
-        />
-      )}
+        {/* Player Area (Removed) */}
 
-      {/* Bottom Content Section */}
-      <div className="max-w-[1200px] mx-auto mt-16 px-4 md:px-6">
-        <h2 className="text-2xl md:text-3xl font-bold mb-6 border-l-4 border-[#a855f7] pl-4">Nội dung phim</h2>
-        <div className="text-white/50 text-[15px] mb-4">
-          Tên khác: <span className="text-white/80">{movie.originalName || 'Đang cập nhật'}</span>
-        </div>
-        <div className="text-white/70 leading-[1.8] text-[15px] md:text-[16px] font-medium"
-          dangerouslySetInnerHTML={{ __html: movie.description || 'Đang cập nhật nội dung...' }}
-        />
-
-        <div className="mt-12">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 border-l-4 border-[#a855f7] pl-4">
-            Từ khóa <span className="text-white/40 text-sm font-normal">({tmdbData?.keywords?.length || genres.length} từ khóa)</span>
-          </h2>
-          {(tmdbData?.keywords?.length ? tmdbData.keywords : genres).length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {(tmdbData?.keywords?.length ? tmdbData.keywords : genres).map(g => (
-                <span key={g} className="px-3 py-1.5 bg-transparent text-white/60 text-[13px] rounded-full border border-white/10 hover:text-white transition-colors cursor-pointer">{g}</span>
-              ))}
+        {/* Bottom Content Sections */}
+        <div className="mt-16 flex flex-col gap-12 mb-12">
+          
+          {/* Nội dung phim */}
+          <div>
+            <h3 className="font-body text-[18px] font-semibold text-[var(--color-text-1)] mb-3">Nội dung phim</h3>
+            <div className="relative">
+              <div 
+                className={`text-[15px] leading-[1.65] text-[var(--color-text-secondary)] ${descExpanded ? '' : 'line-clamp-3'}`}
+                dangerouslySetInnerHTML={{ __html: movie.description || 'Chưa có thông tin nội dung.' }}
+              />
+              {!descExpanded && (movie.description?.length || 0) > 150 && (
+                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[var(--color-bg-base)] to-transparent" />
+              )}
             </div>
-          ) : (
-            <p className="text-white/40 text-[14px]">Không có từ khóa nào được tìm thấy</p>
-          )}
-        </div>
-
-        <div className="mt-12">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 border-l-4 border-[#a855f7] pl-4">
-            Hình ảnh <span className="text-white/40 text-sm font-normal">({tmdbData?.backdrops?.length || 2} ảnh)</span>
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tmdbData?.backdrops && tmdbData.backdrops.length > 0 ? (
-              tmdbData.backdrops.slice(0, 6).map((img, i) => (
-                <div key={i} className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
-                  <img src={`https://image.tmdb.org/t/p/w780${img.file_path}`} alt={`Backdrop ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                </div>
-              ))
-            ) : (
-              <>
-                <div className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
-                  <img src={movie.thumbUrl} alt="Backdrop 1" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                </div>
-                <div className="aspect-video rounded-xl overflow-hidden border border-white/5 shadow-lg relative group">
-                  <img src={movie.posterUrl} alt="Backdrop 2" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 object-top" />
-                </div>
-              </>
+            {(movie.description?.length || 0) > 150 && (
+              <button 
+                onClick={() => setDescExpanded(!descExpanded)}
+                className="text-[13px] font-medium text-[var(--color-primary)] mt-2 hover:underline"
+              >
+                {descExpanded ? 'Rút gọn' : 'Xem thêm'}
+              </button>
             )}
           </div>
+
+          {/* Từ khóa */}
+          {(tmdbData?.keywords?.length || genres.length) > 0 && (
+            <div>
+              <h3 className="font-body text-[18px] font-semibold text-[var(--color-text-1)] mb-3">Từ khóa</h3>
+              <div className="flex flex-wrap gap-2">
+                {(tmdbData?.keywords?.length ? tmdbData.keywords : genres).map(g => (
+                  <Chip key={g}>{g}</Chip>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Hình ảnh */}
+          {tmdbData?.backdrops && tmdbData.backdrops.length > 0 && (
+            <div>
+              <h3 className="font-body text-[18px] font-semibold text-[var(--color-text-1)] mb-3">Hình ảnh</h3>
+              <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+                {tmdbData.backdrops.slice(0, 4).map((img, i) => (
+                  <div key={i} className="aspect-video rounded-[12px] overflow-hidden border border-[var(--color-border-strong)] bg-[var(--color-surface)] hover:opacity-90 transition-opacity">
+                    <img src={`https://image.tmdb.org/t/p/w780${img.file_path}`} alt={`Backdrop ${i + 1}`} className="w-full h-full object-cover hover:scale-[1.03] transition-transform duration-500" loading="lazy" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
 
       </div>

@@ -3,7 +3,8 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { movieApi } from '../services/api';
 import { MovieCard } from '../components/ui/MovieCard';
-import { FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { FunnelIcon, XMarkIcon, ExclamationTriangleIcon, FilmIcon } from '@heroicons/react/24/outline';
+import { Button } from '../components/ui/Button';
 
 const COUNTRY_SLUGS = [
   "han-quoc", "trung-quoc", "au-my", "nhat-ban",
@@ -21,7 +22,6 @@ const GENRE_OPTIONS = [
   { slug: "tam-ly", name: "Tâm lý" },
   { slug: "hinh-su", name: "Hình sự" },
   { slug: "chien-tranh", name: "Chiến tranh" },
-  { slug: "the-thao", name: "Thể thao" },
   { slug: "vo-thuat", name: "Võ thuật" },
   { slug: "vien-tuong", name: "Viễn tưởng" },
   { slug: "phieu-luu", name: "Phiêu lưu" },
@@ -69,7 +69,6 @@ export const Browse: React.FC = () => {
   const isCategory = CATEGORY_SLUGS.includes(slug);
   const isGenre = !isCountry && !isCategory;
   
-  // Filter states synced with URL
   const genreFilter = searchParams.get('genre') || '';
   const countryFilter = searchParams.get('country') || '';
   const yearFilter = searchParams.get('year') || '';
@@ -105,7 +104,6 @@ export const Browse: React.FC = () => {
       if (isGenre) return movieApi.getMoviesByGenre(slug, page, {
         country: countryFilter, year: yearFilter, sort: sortFilter
       });
-      // Category route — now properly passes year + sort
       return movieApi.getMovies({
         category: slug,
         page,
@@ -115,10 +113,9 @@ export const Browse: React.FC = () => {
         sort: sortFilter,
       });
     },
-    staleTime: 30_000, // Cache 30s to avoid re-fetching on every minor state change
+    staleTime: 30_000,
   });
 
-  // Client-side filtering cho Điểm đánh giá (do API không hỗ trợ)
   const displayItems = React.useMemo(() => {
     if (!data?.items) return [];
     if (!ratingFilter) return data.items;
@@ -134,7 +131,6 @@ export const Browse: React.FC = () => {
     });
   }, [data?.items, ratingFilter]);
 
-
   const getTitle = () => {
     if (isCountry) return `Phim ${COUNTRY_OPTIONS.find(c => c.slug === slug)?.name || slug}`;
     if (isGenre) return `Phim ${GENRE_OPTIONS.find(g => g.slug === slug)?.name || slug}`;
@@ -148,37 +144,33 @@ export const Browse: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-32 pb-16 px-6 md:px-12">
-      <div className="max-w-[1500px] mx-auto">
+    <div className="min-h-screen bg-[var(--color-bg-base)] pt-24 pb-28 lg:pb-16 px-4 md:px-8">
+      <div className="max-w-[1440px] mx-auto w-full">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
-          <div className="relative">
-            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter italic flex items-center gap-4 text-gradient-primary">
-              <span className="w-2.5 h-10 bg-primary rounded-full inline-block shadow-[0_0_15px_rgba(175,37,254,0.6)]"></span>
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-[36px] md:text-[48px] font-heading text-[var(--color-text-1)] uppercase tracking-wide">
               {getTitle()}
             </h1>
-            <p className="text-white/40 text-[13px] font-black uppercase tracking-[0.3em] mt-3 ml-6 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" />
-              {data?.total ? `${data.total.toLocaleString()} nội dung đỉnh cao` : 'Đang tìm kiếm phim...'}
+            <p className="text-[var(--color-text-3)] text-[14px] font-medium">
+              {data?.total ? `${data.total.toLocaleString()} nội dung` : 'Đang tìm kiếm...'}
             </p>
           </div>
         </div>
 
         {/* Filter Bar */}
-        <div className="glass-premium p-6 md:p-8 rounded-[40px] mb-16 flex flex-wrap gap-5 items-center">
-          <div className="flex items-center gap-3 mr-4">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
-              <FunnelIcon className="w-5 h-5" />
-            </div>
-            <span className="text-[12px] font-black text-white uppercase tracking-[0.2em] italic">Bộ lọc</span>
+        <div className="bg-[var(--color-bg-surface)] p-4 md:p-6 rounded-[16px] mb-12 flex flex-wrap gap-4 items-center border border-[var(--color-border)]">
+          <div className="flex items-center gap-2 mr-2">
+            <FunnelIcon className="w-5 h-5 text-[var(--color-text-2)]" />
+            <span className="text-[14px] font-semibold text-[var(--color-text-2)] uppercase tracking-wider">Bộ lọc</span>
           </div>
 
-          <div className="flex flex-wrap gap-4 flex-1">
+          <div className="flex flex-wrap gap-3 flex-1">
             {(isCountry || isCategory) && (
               <select 
                 value={genreFilter}
                 onChange={(e) => setGenreFilter(e.target.value)}
-                className="bg-surface-container border border-white/5 text-white/70 text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[160px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
+                className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[140px] appearance-none"
               >
                 <option value="">Thể loại</option>
                 {GENRE_OPTIONS.map(g => <option key={g.slug} value={g.slug}>{g.name}</option>)}
@@ -189,7 +181,7 @@ export const Browse: React.FC = () => {
               <select 
                 value={countryFilter}
                 onChange={(e) => setCountryFilter(e.target.value)}
-                className="bg-surface-container border border-white/5 text-white/70 text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[160px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
+                className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[140px] appearance-none"
               >
                 <option value="">Quốc gia</option>
                 {COUNTRY_OPTIONS.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
@@ -199,7 +191,7 @@ export const Browse: React.FC = () => {
             <select 
               value={yearFilter}
               onChange={(e) => setYearFilter(e.target.value)}
-              className="bg-surface-container border border-white/5 text-white/70 text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[120px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
+              className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[100px] appearance-none"
             >
               <option value="">Năm</option>
               {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
@@ -208,7 +200,7 @@ export const Browse: React.FC = () => {
             <select 
               value={sortFilter}
               onChange={(e) => setSortFilter(e.target.value)}
-              className="bg-surface-container border border-white/5 text-white/70 text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[160px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
+              className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[140px] appearance-none"
             >
               {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.name}</option>)}
             </select>
@@ -216,9 +208,9 @@ export const Browse: React.FC = () => {
             <select 
               value={ratingFilter}
               onChange={(e) => setRatingFilter(e.target.value)}
-              className="bg-surface-container border border-primary/30 text-primary text-[12px] font-bold px-6 py-3 rounded-2xl focus:border-primary outline-none transition-all uppercase tracking-wider min-w-[140px] shadow-lg appearance-none cursor-pointer hover:bg-surface-container-high"
+              className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[140px] appearance-none"
             >
-              <option value="">Tất cả điểm</option>
+              <option value="">Điểm đánh giá</option>
               {RATING_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.name}</option>)}
             </select>
           </div>
@@ -232,80 +224,86 @@ export const Browse: React.FC = () => {
                 setSortFilter("modified.time");
                 setRatingFilter("");
               }}
-              className="w-12 h-12 rounded-full bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white transition-all shadow-xl flex items-center justify-center border border-red-500/30"
+              className="p-2 rounded-[8px] text-[var(--color-text-2)] hover:text-[var(--color-live)] hover:bg-[var(--color-live-bg)] transition-colors border border-[var(--color-border-subtle)]"
               title="Xóa bộ lọc"
+              aria-label="Xóa bộ lọc"
             >
-              <XMarkIcon className="w-6 h-6" />
+              <XMarkIcon className="w-5 h-5" />
             </button>
           )}
         </div>
 
         {/* Grid Content */}
         {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-12">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 lg:gap-6">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-4 w-full">
-                <div className="w-full aspect-[2/3] bg-surface-container-highest animate-pulse rounded-[24px]" />
-                <div className="h-4 bg-surface-container-highest animate-pulse rounded-full w-3/4" />
-                <div className="h-3 bg-surface-container-highest animate-pulse rounded-full w-1/2" />
+              <div key={i} className="flex flex-col gap-2 w-full">
+                <div className="w-full aspect-[2/3] bg-[var(--color-surface)] animate-skeleton rounded-[var(--radius-card)]" />
+                <div className="h-3.5 bg-[var(--color-surface)] animate-skeleton rounded w-3/4 mt-1" />
+                <div className="h-3 bg-[var(--color-surface)] animate-skeleton rounded w-1/2" />
               </div>
             ))}
           </div>
         ) : isError ? (
-          <div className="py-32 text-center glass-premium rounded-[40px] flex flex-col items-center gap-6">
-            <span className="text-5xl">📡</span>
-            <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Lỗi kết nối API</h3>
-            <button onClick={() => refetch()} className="btn-vibrant">THỬ LẠI NGAY</button>
+          <div className="py-24 text-center bg-[var(--color-surface)] rounded-[var(--radius-card)] flex flex-col items-center gap-4 border border-[var(--color-border-subtle)]">
+            <ExclamationTriangleIcon className="w-16 h-16 text-[var(--color-text-muted)]" />
+            <h3 className="text-[24px] font-heading text-[var(--color-text-primary)] uppercase">Lỗi kết nối API</h3>
+            <p className="text-[14px] text-[var(--color-text-muted)]">Không thể tải dữ liệu. Vui lòng thử lại.</p>
+            <Button variant="primary" onClick={() => refetch()}>Thử lại</Button>
           </div>
         ) : data?.items?.length ? (
           <>
             {displayItems?.length ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-12 md:gap-y-16">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 lg:gap-6">
                 {displayItems.map((movie: any) => (
-                  <MovieCard key={movie.slug} {...movie} />
+                  <MovieCard key={movie.slug} {...movie} className="w-full" />
                 ))}
               </div>
             ) : (
-              <div className="py-12 text-center glass-premium rounded-[40px] flex flex-col items-center gap-4 opacity-70 border border-white/5">
-                <span className="text-4xl">🎬</span>
-                <p className="text-xl font-black text-white/40 uppercase tracking-[0.3em] italic">Trang này không có phim phù hợp</p>
-                <p className="text-sm text-white/30">Hãy cuộn xuống và bấm "Tiếp theo" để tìm kiếm ở trang sau</p>
+              <div className="py-24 text-center bg-[var(--color-bg-surface)] rounded-[16px] flex flex-col items-center gap-2 border border-[var(--color-border)]">
+                <p className="text-[18px] font-semibold text-[var(--color-text-1)]">Trang này không có phim phù hợp</p>
+                <p className="text-[14px] text-[var(--color-text-3)]">Hãy thử xóa bớt bộ lọc hoặc sang trang tiếp theo.</p>
               </div>
             )}
 
             {/* Pagination */}
             {data.total_pages > 1 && (
-              <div className="flex justify-center items-center gap-8 mt-8 pt-8 border-t border-white/5">
-                <button 
-                  disabled={page === 1}
-                  onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="px-8 py-3 rounded-2xl bg-white/5 text-white/40 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:pointer-events-none transition-all border border-white/10 text-[11px] font-black tracking-widest uppercase"
-                >
-                  Trước
-                </button>
-                
-                <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-black text-sm shadow-[0_0_20px_rgba(175,37,254,0.6)] transform rotate-3">
-                  {page}
-                </div>
+              <div className="flex flex-col items-center gap-3 mt-12 pt-8 border-t border-[var(--color-border-subtle)]">
+                <div className="flex justify-center items-center gap-3">
+                  <Button 
+                    variant="secondary"
+                    disabled={page === 1}
+                    onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="w-[100px]"
+                  >
+                    Trước
+                  </Button>
+                  
+                  <div className="w-10 h-10 rounded-[8px] bg-[var(--color-primary)] flex items-center justify-center text-white font-semibold text-[14px]">
+                    {page}
+                  </div>
 
-                <button 
-                  disabled={page === data.total_pages}
-                  onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="btn-vibrant !px-8 !py-3 !text-[11px] !rounded-2xl disabled:opacity-20"
-                >
-                  Tiếp theo
-                </button>
+                  <Button 
+                    variant="secondary"
+                    disabled={page === data.total_pages}
+                    onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="w-[100px]"
+                  >
+                    Tiếp theo
+                  </Button>
+                </div>
+                <p className="text-[13px] text-[var(--color-text-muted)]">Trang {page} / {data.total_pages}</p>
               </div>
             )}
           </>
         ) : (
-          <div className="py-32 text-center glass-premium rounded-[40px] flex flex-col items-center gap-4 opacity-50">
-            <span className="text-4xl">🎬</span>
-            <p className="text-xl font-black text-white/40 uppercase tracking-[0.3em] italic">Không tìm thấy phim phù hợp</p>
+          <div className="py-24 text-center bg-[var(--color-surface)] rounded-[var(--radius-card)] flex flex-col items-center gap-3 border border-[var(--color-border-subtle)]">
+            <FilmIcon className="w-16 h-16 text-[var(--color-text-muted)]" />
+            <p className="text-[18px] font-semibold text-[var(--color-text-primary)]">Không tìm thấy phim phù hợp</p>
+            <p className="text-[14px] text-[var(--color-text-muted)]">Hãy thử với từ khóa hoặc bộ lọc khác.</p>
           </div>
         )}
       </div>
     </div>
   );
 };
-

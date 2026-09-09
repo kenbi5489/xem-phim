@@ -16,8 +16,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'CINEVINA',
-        short_name: 'CINEVINA',
+        name: 'ĐỨCCINE',
+        short_name: 'ĐỨCCINE',
         description: 'Nền tảng xem phim trực tuyến',
         theme_color: '#0c0e14',
         background_color: '#0c0e14',

@@ -71,6 +71,15 @@ export const useMovieDetail = (slug: string, source?: string) =>
     retry: 2,
   });
 
+export const useSeriesDetail = (seriesId: string) =>
+  useQuery({
+    queryKey: ['series-detail', seriesId],
+    queryFn: () => movieApi.getSeriesDetail(seriesId),
+    enabled: !!seriesId,
+    staleTime: 1000 * 60 * 10,
+    retry: 1,
+  });
+
 // ─── Stream URL ───────────────────────────────────────────────────────────────
 export const useMovieStream = (slug: string, episodeSlug: string, source?: string) =>
   useQuery({

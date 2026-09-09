@@ -3,18 +3,24 @@ import axios from 'axios';
 // ─── Environment Configuration ───────────────────────────────────────────────
 const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (!envUrl) {
-    return typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? '/api'
-      : 'https://cinevina-backend.vercel.app/api';
+  if (envUrl) {
+    if (envUrl.startsWith('http')) {
+      const sanitized = envUrl.replace(/\/$/, '');
+      return sanitized.endsWith('/api') ? sanitized : `${sanitized}/api`;
+    }
+    return envUrl;
   }
-
-  if (envUrl.startsWith('http')) {
-    const sanitized = envUrl.replace(/\/$/, '');
-    return sanitized.endsWith('/api') ? sanitized : `${sanitized}/api`;
+  
+  if (typeof window === 'undefined') return '/api';
+  
+  // Local Vite dev server runs on 5173 or 4173
+  const isViteDev = window.location.port === '5173' || window.location.port === '4173';
+  if (isViteDev) {
+    return '/api';
   }
-  return envUrl;
+  
+  // Production Vercel or Capacitor Android App
+  return 'https://cinevina-backend.vercel.app/api';
 };
 
 export const BASE_URL = getBaseUrl();
@@ -44,6 +50,9 @@ export interface MovieInfo {
   id: string;
   slug: string;
   name: string;
+  baseTitle?: string;
+  seriesId?: string;
+  seasonNumber?: number;
   originalName: string;
   posterUrl: string;
   thumbUrl: string;
@@ -126,8 +135,8 @@ export const computeIsStreamable = (movie: MovieInfo): boolean => {
 // ─── API Client ───────────────────────────────────────────────────────────────
 const api = axios.create({ baseURL: BASE_URL, timeout: 15000 });
 
-const normalizePaginated = (data: any): PaginatedMovieResponse => {
-  const items = adaptMovies(data);
+const normalizePaginated = (data: any, grouped: boolean = false): PaginatedMovieResponse => {
+  const items = adaptMovies(data, grouped);
 
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     return {
@@ -155,7 +164,7 @@ export const movieApi = {
       const res = await api.get('/movies', {
         params: { category, page, country, genre, year, sort, source },
       });
-      return normalizePaginated(res.data);
+      return normalizePaginated(res.data, true);
     } catch (err) {
       console.error(`[API] getMovies error for category ${params.category}:`, err);
       throw err;
@@ -167,7 +176,7 @@ export const movieApi = {
       const res = await api.get(`/movies/by-country/${countrySlug}`, {
         params: { page, ...filters, source },
       });
-      return normalizePaginated(res.data);
+      return normalizePaginated(res.data, true);
     } catch (err) {
       console.error(`[API] getMoviesByCountry error for ${countrySlug}:`, err);
       throw err;
@@ -179,7 +188,7 @@ export const movieApi = {
       const res = await api.get(`/movies/by-genre/${genreSlug}`, {
         params: { page, ...filters, source },
       });
-      return normalizePaginated(res.data);
+      return normalizePaginated(res.data, true);
     } catch (err) {
       console.error(`[API] getMoviesByGenre error for ${genreSlug}:`, err);
       throw err;
@@ -191,7 +200,7 @@ export const movieApi = {
       const res = await api.get('/movies/search', {
         params: { keyword, page, source },
       });
-      return adaptMovies(res.data);
+      return adaptMovies(res.data, true);
     } catch (err) {
       console.error(`[API] searchMovies error for keyword "${keyword}":`, err);
       return [];
@@ -204,6 +213,32 @@ export const movieApi = {
       return adaptMovieDetail(res.data);
     } catch (err) {
       console.error(`[API] getMovieDetail error for ${slug}:`, err);
+      throw err;
+    }
+  },
+
+  getSeriesDetail: async (seriesId: string): Promise<any> => {
+    try {
+      // Vì backend deploy Vercel hiện tại có thể chưa support API /movies/series/{seriesId},
+      // ta fallback bằng cách gọi API search, lấy list, tự parse & group trên client.
+      const keyword = seriesId.replace(/-/g, ' ');
+      const res = await api.get('/movies/search', { params: { keyword, limit: 100 } });
+      const items = adaptMovies(res.data, false); // Không group để lấy full season
+      
+      const seasons = items.filter(m => m.seriesId === seriesId).sort((a, b) => (a.seasonNumber || 1) - (b.seasonNumber || 1));
+      
+      if (!seasons.length) throw new Error('Series not found');
+      const baseMovie = seasons[seasons.length - 1];
+      
+      return {
+        series_id: seriesId,
+        name: baseMovie.baseTitle || baseMovie.name,
+        description: baseMovie.description,
+        poster_url: baseMovie.posterUrl,
+        seasons: seasons.map(s => ({ ...s, season_number: s.seasonNumber }))
+      };
+    } catch (err) {
+      console.error(`[API] getSeriesDetail error for ${seriesId}:`, err);
       throw err;
     }
   },
@@ -221,7 +256,7 @@ export const movieApi = {
   getCinemaMovies: async (page: number = 1, source = 'kkphim'): Promise<PaginatedMovieResponse> => {
     try {
       const res = await api.get('/movies/cinema', { params: { page, source } });
-      return normalizePaginated(res.data);
+      return normalizePaginated(res.data, true);
     } catch (err) {
       console.warn(`[API] getCinemaMovies failed, falling back to category:`, err);
       return movieApi.getMovies({ category: 'phim-chieu-rap', page, source });
@@ -237,7 +272,7 @@ export const movieApi = {
   getLatestMovies: async (limit: number = 10, source = 'kkphim'): Promise<MovieInfo[]> => {
     try {
       const res = await api.get('/movies/trending', { params: { limit, source } });
-      return adaptMovies(res.data);
+      return adaptMovies(res.data, true);
     } catch (err) {
       console.warn(`[API] getLatestMovies failed, falling back to recent list:`, err);
       try {

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from routes import movies, proxy, live
+from routes import movies, proxy
 
 app = FastAPI(
     title="CINEVINA API",
@@ -20,7 +20,6 @@ app.add_middleware(
 
 app.include_router(movies.router)
 app.include_router(proxy.router)
-app.include_router(live.router)
 
 @app.get("/")
 def read_root():

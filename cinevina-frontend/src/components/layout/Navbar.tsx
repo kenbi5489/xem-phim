@@ -2,51 +2,55 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   MagnifyingGlassIcon, UserCircleIcon,
-  XMarkIcon,
-  HomeIcon, FilmIcon, TvIcon,
-  PlayCircleIcon,
-  TrophyIcon
+  XMarkIcon, Bars3Icon,
+  HomeIcon, FilmIcon,
+  PlayCircleIcon
 } from '@heroicons/react/24/outline';
 import {
   HomeIcon as HomeSolid,
   FilmIcon as FilmSolid,
-  TvIcon as TvSolid,
   UserCircleIcon as UserSolid
 } from '@heroicons/react/24/solid';
 
+
 const NAV_LINKS = [
-  { name: 'Trang chủ',      to: '/' },
-  { name: 'Phim lẻ',        to: '/browse/phim-le' },
-  { name: 'Phim bộ',        to: '/browse/phim-bo' },
-  { name: 'Chiếu rạp',      to: '/browse/phim-chieu-rap' },
-  { name: 'Thể thao',       to: '/sports', isSport: true },
-  { name: 'Live TV',        to: '/live', isLive: true },
+  { name: 'Trang chủ', to: '/' },
+  { name: 'Phim lẻ', to: '/browse/phim-le' },
+  { name: 'Phim bộ', to: '/browse/phim-bo' },
+  { name: 'Chiếu rạp', to: '/browse/phim-chieu-rap' },
 ];
 
 const MOBILE_NAV = [
-  { name: 'Trang chủ', to: '/',              Icon: HomeIcon,       IconSolid: HomeSolid },
-  { name: 'Phim Lẻ',   to: '/browse/phim-le', Icon: FilmIcon,       IconSolid: FilmSolid },
-  { name: 'Phim Bộ',   to: '/browse/phim-bo', Icon: TvIcon,         IconSolid: TvSolid },
-  { name: 'Live TV',   to: '/live',           Icon: TvIcon,         IconSolid: TvSolid },
-  { name: 'Tài khoản', to: '/account',        Icon: UserCircleIcon, IconSolid: UserSolid },
+  { name: 'Trang chủ', to: '/', Icon: HomeIcon, IconSolid: HomeSolid },
+  { name: 'Phim lẻ', to: '/browse/phim-le', Icon: FilmIcon, IconSolid: FilmSolid },
+  { name: 'Phim bộ', to: '/browse/phim-bo', Icon: FilmIcon, IconSolid: FilmSolid },
+  { name: 'Tìm kiếm', to: '/search', Icon: MagnifyingGlassIcon, IconSolid: MagnifyingGlassIcon },
+  { name: 'Tài khoản', to: '/account', Icon: UserCircleIcon, IconSolid: UserSolid },
 ];
 
 export const Navbar: React.FC = () => {
-  const [scrolled, setScrolled]         = useState(false);
-  const [showSearch, setShowSearch]     = useState(false);
-  const [searchQuery, setSearchQuery]   = useState('');
-  const location  = useLocation();
-  const navigate  = useNavigate();
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const placeholders = ['Tìm tên phim, diễn viên...', 'Tìm phim chiếu rạp mới...', 'Tìm phim bộ Hàn, Trung...', 'Tìm kiếm Anime...'];
+  const [placeholderIdx, setPlaceholderIdx] = useState(0);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const popularSearches = ['Nữ Hoàng Nước Mắt', 'Gia Đình Mình Vui Bất Thình Lình', 'Mai', 'Lật Mặt 7', 'Dune'];
+
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
+    const interval = setInterval(() => {
+      setPlaceholderIdx(prev => (prev + 1) % placeholders.length);
+    }, 3500);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     setShowSearch(false);
+    setIsMobileMenuOpen(false);
     setSearchQuery('');
   }, [location.pathname]);
 
@@ -60,153 +64,171 @@ export const Navbar: React.FC = () => {
     if (q.length >= 2) {
       navigate(`/search?q=${encodeURIComponent(q)}`);
       setShowSearch(false);
+      setIsMobileMenuOpen(false);
       setSearchQuery('');
     }
   };
 
   return (
     <>
-      <nav className={`fixed top-0 left-0 right-0 z-[60] transition-all duration-500 pt-[env(safe-area-inset-top)] max-w-[100vw] ${
-        scrolled
-          ? 'bg-[#0c0e14]/95 backdrop-blur-2xl shadow-2xl border-b border-white/5 py-2'
-          : 'bg-gradient-to-b from-black/90 via-black/40 to-transparent py-4'
-      }`}>
-        <div className="max-w-[1440px] mx-auto px-4 md:px-8 flex items-center justify-between relative">
+      <nav className="fixed top-0 left-0 right-0 z-[60] bg-[rgba(7,10,18,0.85)] backdrop-blur-[20px] border-b border-[var(--color-border-subtle)] h-[56px] pt-[env(safe-area-inset-top)] flex items-center transition-colors">
+        <div className="w-full max-w-[1440px] mx-auto px-4 lg:px-8 flex items-center justify-between">
           
-          {/* Left: Logo + Search + Desktop Menu */}
-          <div className="flex items-center gap-6 xl:gap-8 w-full">
-            {/* Logo */}
-            <Link to="/" className="shrink-0 flex items-center gap-2 group focus:outline-none focus-visible:ring-4 focus-visible:ring-primary rounded-lg p-1">
-              <PlayCircleIcon className="w-9 h-9 text-[#00E559] fill-[#00E559]/20" />
-              <div className="flex flex-col">
-                <span className="font-display font-black text-xl tracking-tight text-white group-hover:text-gray-200 transition-colors leading-none">
-                  ĐứcCine
-                </span>
-                <span className="text-[8px] text-white/50 tracking-widest font-medium">Kênh siêu giải trí</span>
+          {/* Mobile: Hamburger & Logo */}
+          <div className="flex items-center gap-3 lg:hidden">
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+              className="p-1.5 text-[var(--color-text-1)] rounded-lg hover:bg-white/5 active:scale-95 transition-all"
+              aria-label="Menu"
+            >
+              {isMobileMenuOpen ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
+            </button>
+            <Link to="/" className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-md shadow-purple-500/20">
+                <PlayCircleIcon className="w-4 h-4 text-white" />
               </div>
+              <span className="font-heading text-[20px] tracking-wider font-extrabold bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+                CINE<span className="text-[var(--color-primary)]">VINA</span>
+              </span>
             </Link>
+          </div>
 
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="hidden lg:flex relative items-center w-[240px] xl:w-[280px]">
-              <MagnifyingGlassIcon className="absolute left-3 w-4 h-4 text-white/50" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Tìm kiếm phim"
-                className="w-full bg-[#3a3a3a]/80 hover:bg-[#4a4a4a] border border-transparent rounded-lg py-1.5 pl-9 pr-8 text-[13px] text-white placeholder:text-white/50 focus:outline-none focus:bg-[#4a4a4a] transition-all"
-              />
-              {searchQuery && (
-                <button type="button" onClick={() => setSearchQuery('')} className="absolute right-3 text-white/50 hover:text-white">
-                  <XMarkIcon className="w-4 h-4" />
-                </button>
-              )}
-            </form>
-
-            {/* Desktop Menu */}
-            <div className="hidden lg:flex flex-1 items-center gap-0 xl:gap-2 ml-4 relative z-[100]">
-              <div className="flex items-center gap-1 xl:gap-2">
-                {NAV_LINKS.map(link => {
-                  const isActive = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
-                  
-                  if (link.isLive) {
-                    const colorClasses = isActive ? 'bg-red-500 text-white shadow-[0_0_16px_rgba(239,68,68,0.45)]' : 'bg-red-500/15 text-red-500 border border-red-500/30 hover:bg-red-500/30';
-                    return (
-                      <Link
-                        key={link.name}
-                        to={link.to}
-                        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] xl:text-[13px] font-bold whitespace-nowrap transition-all focus:outline-none ${colorClasses}`}
-                      >
-                        <TvIcon className="w-3.5 h-3.5 shrink-0" />
-                        {link.name}
-                        <span className="flex items-center gap-0.5 bg-red-600/80 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">
-                          <span className="w-1 h-1 rounded-full bg-white animate-pulse" /> LIVE
-                        </span>
-                      </Link>
-                    );
-                  }
-
-                  if (link.isSport) {
-                    const colorClasses = isActive ? 'bg-[#ff922b] text-white shadow-[0_0_16px_rgba(255,146,43,0.45)]' : 'bg-[#ff922b]/15 text-[#ff922b] border border-[#ff922b]/30 hover:bg-[#ff922b]/30';
-                    return (
-                      <Link
-                        key={link.name}
-                        to={link.to}
-                        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] xl:text-[13px] font-bold whitespace-nowrap transition-all focus:outline-none ${colorClasses}`}
-                      >
-                        <TrophyIcon className="w-3.5 h-3.5 shrink-0" />
-                        {link.name}
-                      </Link>
-                    );
-                  }
-
-                  return (
-                    <Link 
-                      key={link.name} 
-                      to={link.to}
-                      className={`relative px-3 py-1.5 text-[12px] xl:text-[13px] font-semibold whitespace-nowrap transition-all flex items-center gap-1 focus:outline-none rounded-lg ${
-                        isActive ? 'text-white bg-white/10' : 'text-white/70 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      {link.name}
-                    </Link>
-                  );
-                })}
+          {/* Desktop: Logo & Center Links */}
+          <div className="hidden lg:flex items-center gap-10">
+            <Link to="/" className="flex items-center gap-2.5 group">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-500/25 group-hover:scale-105 transition-transform duration-300">
+                <PlayCircleIcon className="w-5 h-5 text-white" />
               </div>
+              <span className="font-heading text-[24px] tracking-wider font-extrabold bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+                CINE<span className="text-[var(--color-primary)]">VINA</span>
+              </span>
+            </Link>
+            
+            <div className="flex items-center gap-7">
+              {NAV_LINKS.map(link => {
+                const isActive = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
+                return (
+                  <Link 
+                    key={link.name} 
+                    to={link.to}
+                    className={`text-[14px] font-semibold transition-colors duration-200 ${
+                      isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-2)] hover:text-white'
+                    }`}
+                  >
+                    {link.name}
+                  </Link>
+                );
+              })}
             </div>
           </div>
 
-          {/* Right: Actions */}
-          <div className="flex items-center gap-3 xl:gap-4 shrink-0">
-            {/* Mobile Search Toggle */}
-            <button onClick={() => setShowSearch(!showSearch)} className="lg:hidden p-2 text-white/70">
-              <MagnifyingGlassIcon className="w-6 h-6" />
-            </button>
+          {/* Right: Search, Account */}
+          <div className="flex items-center gap-3 lg:gap-5 shrink-0">
+            {/* Desktop Search */}
+            <div className="hidden lg:block relative">
+              <form onSubmit={handleSearch} className={`relative flex items-center transition-all duration-300 ${showSearch ? 'w-[300px]' : 'w-10'}`}>
+                {showSearch ? (
+                  <>
+                    <MagnifyingGlassIcon className="absolute left-3.5 w-4 h-4 text-[var(--color-text-3)] pointer-events-none" />
+                    <input
+                      ref={searchRef}
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onFocus={() => setIsSearchFocused(true)}
+                      onBlur={() => setTimeout(() => setIsSearchFocused(false), 250)}
+                      placeholder={placeholders[placeholderIdx]}
+                      className="w-full bg-[var(--color-surface)] border border-[var(--color-border-subtle)] rounded-full py-2 pl-10 pr-9 text-[13px] text-[var(--color-text-1)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]/30 transition-all"
+                    />
+                    <button type="button" onClick={() => setShowSearch(false)} className="absolute right-3 p-0.5 text-[var(--color-text-3)] hover:text-white transition-colors">
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                    {/* Search Suggestions */}
+                    {isSearchFocused && !searchQuery && (
+                      <div className="absolute top-full mt-2 right-0 w-[300px] bg-[var(--color-surface)] border border-[var(--color-border-subtle)] rounded-2xl shadow-2xl py-2 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                        <div className="px-4 py-1.5 text-[11px] font-semibold text-[var(--color-text-3)] uppercase tracking-wider">Từ khóa hot</div>
+                        {popularSearches.map((term, i) => (
+                          <button 
+                            key={i} 
+                            type="button"
+                            onClick={() => { setSearchQuery(term); navigate(`/search?q=${encodeURIComponent(term)}`); setShowSearch(false); }}
+                            className="w-full text-left px-4 py-2 text-[13px] text-[var(--color-text-2)] hover:text-white hover:bg-[var(--color-surface-elevated)] flex items-center gap-2.5 transition-colors"
+                          >
+                            <MagnifyingGlassIcon className="w-3.5 h-3.5 text-[var(--color-text-3)]" /> {term}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <button 
+                    type="button" 
+                    onClick={() => setShowSearch(true)} 
+                    className="p-2 text-[var(--color-text-2)] hover:text-white rounded-full hover:bg-white/5 active:scale-95 transition-all"
+                    aria-label="Tìm kiếm"
+                  >
+                    <MagnifyingGlassIcon className="w-5 h-5" />
+                  </button>
+                )}
+              </form>
+            </div>
+
+            {/* Mobile Search Quick Link */}
+            <Link 
+              to="/search" 
+              className="lg:hidden p-2 text-[var(--color-text-2)] hover:text-white active:scale-95 transition-all"
+              aria-label="Tìm kiếm"
+            >
+              <MagnifyingGlassIcon className="w-5 h-5" />
+            </Link>
 
             {/* Account Button */}
-            <Link to="/account" className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-2 rounded-full font-bold text-[13px] transition-colors">
-              <UserCircleIcon className="w-5 h-5" />
-              <span className="hidden sm:inline">Thành viên</span>
+            <Link 
+              to="/account" 
+              className="flex items-center gap-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[var(--color-text-1)] px-3.5 py-1.5 rounded-full font-medium text-[13px] active:scale-95 transition-all"
+            >
+              <UserCircleIcon className="w-5 h-5 text-[var(--color-primary)]" />
+              <span className="hidden sm:inline font-semibold">Tài khoản</span>
             </Link>
-          </div>
-
-          {/* Mobile Search Overlay */}
-          <div className={`absolute inset-x-0 bottom-0 top-[env(safe-area-inset-top)] bg-[#0c0e14] lg:hidden z-[70] transition-all duration-300 flex items-center px-4 ${showSearch ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
-            <form onSubmit={handleSearch} className="w-full relative flex items-center">
-              <MagnifyingGlassIcon className="absolute left-3 w-5 h-5 text-white/50 pointer-events-none" />
-              <input
-                ref={searchRef}
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Tìm kiếm phim..."
-                className="w-full bg-[#3a3a3a]/80 hover:bg-[#4a4a4a] border border-transparent rounded-lg py-2 pl-10 pr-10 text-[14px] text-white placeholder:text-white/50 focus:outline-none focus:bg-[#4a4a4a] transition-all"
-              />
-              <button 
-                type="button" 
-                onClick={() => {
-                  setShowSearch(false);
-                  setSearchQuery('');
-                }} 
-                className="absolute right-3 p-1 text-white/50 hover:text-white"
-              >
-                <XMarkIcon className="w-5 h-5" />
-              </button>
-            </form>
           </div>
         </div>
       </nav>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[60] md:hidden bg-[#0c0e14]/95 backdrop-blur-2xl border-t border-white/5 px-2 pt-1 pb-[env(safe-area-inset-bottom)] max-w-[100vw] overflow-hidden">
-        <div className="flex items-center justify-around">
+      {/* Mobile Slide-down Menu */}
+      <div className={`fixed inset-0 top-[56px] bg-[rgba(7,10,18,0.98)] backdrop-blur-2xl z-[55] transition-all duration-300 lg:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+        <div className="flex flex-col p-6 gap-3">
+          {NAV_LINKS.map(link => {
+            const isActive = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
+            return (
+              <Link 
+                key={link.name} 
+                to={link.to} 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`text-[17px] font-semibold py-3 px-4 rounded-xl border border-transparent transition-all ${
+                  isActive ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/20' : 'text-[var(--color-text-1)] hover:bg-white/5'
+                }`}
+              >
+                {link.name}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Mobile Bottom Navigation (Streamlined 5 Tabs) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-[60] lg:hidden bg-[rgba(7,10,18,0.92)] backdrop-blur-2xl border-t border-[var(--color-border-subtle)] pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center justify-around h-[56px] px-1">
           {MOBILE_NAV.map(item => {
             const isActive = item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to);
             const Icon = isActive ? item.IconSolid : item.Icon;
             return (
-              <Link key={item.name} to={item.to} className="flex flex-col items-center gap-1 p-2 min-w-[70px]">
-                <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-primary scale-110' : 'text-white/40'}`} />
-                <span className={`text-[9px] font-black uppercase tracking-tighter ${isActive ? 'text-primary' : 'text-white/30'}`}>
+              <Link 
+                key={item.name} 
+                to={item.to} 
+                className="flex flex-col items-center justify-center flex-1 h-full py-1 active:scale-90 transition-transform"
+              >
+                <Icon className={`w-5 h-5 transition-colors ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-3)]'}`} />
+                <span className={`text-[10px] mt-1 font-semibold transition-colors ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-3)]'}`}>
                   {item.name}
                 </span>
               </Link>

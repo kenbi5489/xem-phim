@@ -11,59 +11,65 @@ const SOURCES = [
 
 export const Admin: React.FC = () => {
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-8 py-12 flex flex-col gap-8">
-      <div className="flex items-center gap-4 border-b ghost-border border-t-0 border-l-0 border-r-0 pb-6">
-        <ShieldCheckIcon className="w-10 h-10 text-[var(--color-primary)]" />
-        <div>
-          <h1 className="font-display text-4xl font-bold">Admin Panel</h1>
-          <p className="text-[var(--color-on-surface-variant)]">Quản lý hệ thống và nguồn nội dung</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-        {/* Sidebar */}
-        <div className="flex flex-col gap-2">
-          <button className="flex items-center gap-3 p-4 rounded-xl bg-[var(--color-surface-container-high)] border border-[var(--color-primary)]/30 text-[var(--color-primary)] font-semibold text-left">
-            <SignalIcon className="w-5 h-5" />
-            Source Manager
-          </button>
-          <button className="flex items-center gap-3 p-4 rounded-xl hover:bg-[var(--color-surface-container-high)] text-[var(--color-on-surface)] transition-colors text-left ghost-border border-transparent">
-            <CogIcon className="w-5 h-5" />
-            Cấu hình hệ thống
-          </button>
+    <div className="min-h-screen bg-[var(--color-bg-base)] pt-24 pb-16 px-4 md:px-8">
+      <div className="max-w-[1440px] mx-auto w-full flex flex-col gap-8">
+        
+        {/* Header */}
+        <div className="flex items-center gap-4 border-b border-[var(--color-border)] pb-6">
+          <ShieldCheckIcon className="w-10 h-10 text-[var(--color-primary)]" />
+          <div>
+            <h1 className="font-heading text-[32px] md:text-[40px] text-[var(--color-text-1)] uppercase tracking-wide">Admin Panel</h1>
+            <p className="text-[var(--color-text-3)] text-[14px] mt-1">Quản lý hệ thống và nguồn nội dung</p>
+          </div>
         </div>
 
-        {/* Main Content */}
-        <div className="md:col-span-3 flex flex-col gap-6">
-          <div className="bg-[var(--color-surface-container-low)] rounded-3xl p-8 ghost-border">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="font-display text-2xl font-semibold">Plugin Nguồn Nội Dung</h2>
-              <button className="px-4 py-2 rounded-xl bg-[var(--color-surface-container-high)] hover:bg-[var(--color-surface-container-highest)] transition-colors ghost-border text-sm font-semibold">
-                Tải lại Registry
-              </button>
-            </div>
-            
-            <div className="flex flex-col gap-4">
-              {SOURCES.map(source => (
-                <div key={source.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl bg-[var(--color-surface-container-highest)] ghost-border border-transparent hover:border-[var(--color-outline-variant)]/50 transition-colors">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-semibold text-lg">{source.name}</span>
-                    <span className="text-sm text-[var(--color-on-surface-variant)]">{source.type} • ID: {source.id}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${source.status === 'active' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
-                      {source.status}
-                    </span>
-                    <button className="p-2 rounded-xl bg-[var(--color-surface-container-high)] hover:bg-[var(--color-primary-container)] hover:text-[var(--color-on-primary-container)] transition-colors ghost-border">
-                      <CogIcon className="w-5 h-5" />
-                    </button>
-                    <div className="relative inline-flex h-6 w-11 items-center rounded-full bg-[var(--color-surface-container-low)] ghost-border cursor-pointer">
-                      <span className={`inline-block h-4 w-4 transform rounded-full transition ${source.status === 'active' ? 'translate-x-6 bg-[var(--color-primary)]' : 'translate-x-1 bg-[var(--color-outline-variant)]'}`} />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          {/* Sidebar */}
+          <div className="flex flex-col gap-2">
+            <button className="flex items-center gap-3 p-4 rounded-[12px] bg-[var(--color-primary)]/10 border border-[var(--color-primary)] text-[var(--color-primary)] font-semibold text-left transition-colors">
+              <SignalIcon className="w-5 h-5" />
+              Quản lý Nguồn
+            </button>
+            <button className="flex items-center gap-3 p-4 rounded-[12px] hover:bg-[var(--color-bg-hover)] text-[var(--color-text-2)] hover:text-[var(--color-text-1)] transition-colors text-left border border-transparent">
+              <CogIcon className="w-5 h-5" />
+              Cấu hình hệ thống
+            </button>
+          </div>
+
+          {/* Main Content */}
+          <div className="md:col-span-3 flex flex-col gap-6">
+            <div className="bg-[var(--color-bg-surface)] rounded-[24px] p-6 md:p-8 border border-[var(--color-border)]">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                <h2 className="font-heading text-[24px] text-[var(--color-text-1)] uppercase tracking-wide">Plugin Nguồn Nội Dung</h2>
+                <button className="px-4 py-2 rounded-[8px] bg-[var(--color-bg-hover)] hover:bg-[var(--color-border)] transition-colors text-[var(--color-text-1)] text-[13px] font-semibold border border-[var(--color-border)]">
+                  Tải lại Registry
+                </button>
+              </div>
+              
+              <div className="flex flex-col gap-4">
+                {SOURCES.map(source => (
+                  <div key={source.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-[16px] bg-[var(--color-bg-base)] border border-[var(--color-border)] hover:border-[var(--color-text-3)] transition-colors">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-semibold text-[16px] text-[var(--color-text-1)]">{source.name}</span>
+                      <span className="text-[13px] text-[var(--color-text-3)]">{source.type} • ID: <span className="font-mono text-[var(--color-text-2)]">{source.id}</span></span>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      <span className={`px-3 py-1.5 rounded-[6px] text-[11px] font-bold uppercase tracking-wider ${source.status === 'active' ? 'bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/20' : 'bg-red-900/20 text-red-400 border border-red-900/30'}`}>
+                        {source.status}
+                      </span>
+                      <button className="p-2 rounded-[8px] bg-[var(--color-bg-hover)] hover:bg-[var(--color-primary)] hover:text-white transition-colors text-[var(--color-text-2)] border border-[var(--color-border)] hover:border-[var(--color-primary)]">
+                        <CogIcon className="w-5 h-5" />
+                      </button>
+                      
+                      {/* Toggle Switch */}
+                      <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${source.status === 'active' ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-bg-hover)]'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${source.status === 'active' ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>

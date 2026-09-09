@@ -6,64 +6,147 @@ import {
   ListBulletIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  ShareIcon,
+  FilmIcon,
+  Cog6ToothIcon,
+  CheckCircleIcon,
+  ArrowLeftIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
-import { SpeakerWaveIcon, SpeakerXMarkIcon, PlayIcon, PauseIcon, BackwardIcon, ForwardIcon } from '@heroicons/react/24/solid';
+import {
+  SpeakerWaveIcon,
+  SpeakerXMarkIcon,
+  PlayIcon,
+  PauseIcon,
+  BackwardIcon,
+  ForwardIcon,
+} from '@heroicons/react/24/solid';
 import type { ServerData } from '../../services/api';
 
 interface EmbeddedPlayerProps {
-  /** HLS stream URL or embed iframe URL */
   streamUrl: string;
   streamType: 'hls' | 'embed';
   movieSlug: string;
   movieName?: string;
-  /** Current episode slug */
   currentEpisode: string;
-  /** All servers for episode switching */
   servers: ServerData[];
-  /** Called when user picks a different episode */
   onEpisodeChange: (serverIdx: number, episodeSlug: string) => void;
   className?: string;
+  onBack?: () => void;
 }
 
 export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   streamUrl,
   streamType,
+  movieSlug,
   movieName,
   currentEpisode,
   servers,
   onEpisodeChange,
   className = '',
+  onBack,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const videoRef     = useRef<HTMLVideoElement>(null);
-  const hlsRef       = useRef<Hls | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
 
-  const [muted,      setMuted]      = useState(false);
-  const [playing,    setPlaying]    = useState(false);
+  // Core playback states
+  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [playing, setPlaying] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [showList,   setShowList]   = useState(true);   // Episode list open by default
+  const [showList] = useState(true);
   const [showOverlay, setShowOverlay] = useState(false);
   const [activeServer, setActiveServer] = useState(0);
-  const [isLoading,  setIsLoading]  = useState(true);
-  const [hasError,   setHasError]   = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [buffered, setBuffered] = useState(0);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain');
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [isBuffering, setIsBuffering] = useState(false);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // Menus & customization
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [qualityLevels, setQualityLevels] = useState<any[]>([]);
+  const [currentQuality, setCurrentQuality] = useState<number>(-1);
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
+
+  // Scrubber preview
+  const [hoverTime, setHoverTime] = useState(0);
+  const [hoverPos, setHoverPos] = useState(0);
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  // Feedback & prompts
+  const [feedbackMsg, setFeedbackMsg] = useState<{ icon: React.ReactNode; text: string } | null>(null);
+  const [resumeToast, setResumeToast] = useState<{ time: number } | null>(null);
+  const [showNextOverlay, setShowNextOverlay] = useState(false);
+  const [skipEndingVisible, setSkipEndingVisible] = useState(false);
+
+  // Ripple feedback for double taps
+  const [doubleTapFeedback, setDoubleTapFeedback] = useState<{
+    type: 'left' | 'right' | 'center';
+    id: number;
+  } | null>(null);
+
+  // Player view modes
+  const [isMiniPlayer, setIsMiniPlayer] = useState(false);
+  const [cinemaMode, setCinemaMode] = useState(false);
+  const [watchedEps, setWatchedEps] = useState<string[]>([]);
+  const [embedKey, setEmbedKey] = useState(0);
+
+  // Timers and gesture tracking refs
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const skipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const touchStartRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const lastTapRef = useRef<{ time: number; x: number } | null>(null);
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Format seconds to mm:ss or hh:mm:ss
   const formatTime = (seconds: number) => {
-    if (isNaN(seconds)) return "00:00";
-    const mins = Math.floor(seconds / 60);
+    if (isNaN(seconds) || seconds < 0) return '00:00';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
+    if (hrs > 0) {
+      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ── HLS initialisation ──────────────────────────────────────────────────────
+  const currentServer = servers[activeServer];
+  const episodes = currentServer?.server_data ?? [];
+  const currentIdx = episodes.findIndex((e) => e.slug === currentEpisode);
+  const nextEp = currentIdx < episodes.length - 1 ? episodes[currentIdx + 1] : null;
+
+  const showFeedback = (icon: React.ReactNode, text: string) => {
+    setFeedbackMsg({ icon, text });
+    clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = setTimeout(() => setFeedbackMsg(null), 800);
+  };
+
+  // Persistent episode tracking & time param
+  useEffect(() => {
+    const w = localStorage.getItem(`watched_episodes_${movieSlug}`);
+    if (w) {
+      try {
+        setWatchedEps(JSON.parse(w));
+      } catch (e) {}
+    }
+    localStorage.setItem(`last_watched_ep_${movieSlug}`, currentEpisode);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const t = urlParams.get('t');
+    if (t && videoRef.current && !isNaN(Number(t))) {
+      videoRef.current.currentTime = Number(t);
+    }
+  }, [movieSlug, currentEpisode]);
+
+  // HLS stream loader
   useEffect(() => {
     if (streamType !== 'hls' || !videoRef.current) return;
     setIsLoading(true);
@@ -71,60 +154,200 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     setPlaying(false);
     setCurrentTime(0);
     setDuration(0);
+    setBuffered(0);
+    setResumeToast(null);
 
-    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
 
     const video = videoRef.current;
+
+    const checkResume = () => {
+      const savedTime = localStorage.getItem(`resume_${movieSlug}_${currentEpisode}`);
+      if (savedTime && Number(savedTime) > 30) {
+        setResumeToast({ time: Number(savedTime) });
+        setTimeout(() => setResumeToast(null), 8000);
+      }
+    };
+
     if (Hls.isSupported()) {
-      const hls = new Hls({ maxBufferLength: 60, maxMaxBufferLength: 90, lowLatencyMode: false });
+      const hls = new Hls({
+        maxBufferLength: 60,
+        maxMaxBufferLength: 90,
+        lowLatencyMode: false,
+        enableWorker: true,
+      });
       hlsRef.current = hls;
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+
+      hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
         setIsLoading(false);
+        setQualityLevels(data.levels || []);
+        setCurrentQuality(hls.currentLevel);
+        checkResume();
         video.play().catch(() => {});
         setPlaying(true);
       });
+
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+        setCurrentQuality(data.level);
+      });
+
       hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) { setHasError(true); setIsLoading(false); }
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              setHasError(true);
+              setIsLoading(false);
+              break;
+          }
+        }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native Safari iOS/macOS HLS
       video.src = streamUrl;
       video.addEventListener('loadedmetadata', () => {
         setIsLoading(false);
         setDuration(video.duration);
+        checkResume();
         video.play().catch(() => {});
         setPlaying(true);
       });
-      video.addEventListener('error', () => { setHasError(true); setIsLoading(false); });
+      video.addEventListener('error', () => {
+        setHasError(true);
+        setIsLoading(false);
+      });
     } else {
       setHasError(true);
       setIsLoading(false);
     }
-    return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
-  }, [streamUrl, streamType]);
 
-  // ── Fullscreen API ──────────────────────────────────────────────────────────
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [streamUrl, streamType, movieSlug, currentEpisode]);
+
+  // Save progress periodically
+  useEffect(() => {
+    const int = setInterval(() => {
+      if (playing && currentTime > 0) {
+        localStorage.setItem(`resume_${movieSlug}_${currentEpisode}`, currentTime.toString());
+      }
+    }, 5000);
+    return () => clearInterval(int);
+  }, [playing, currentTime, movieSlug, currentEpisode]);
+
+  // Mark watched
+  useEffect(() => {
+    if (duration > 0 && currentTime > duration * 0.9) {
+      if (!watchedEps.includes(currentEpisode)) {
+        const n = [...watchedEps, currentEpisode];
+        setWatchedEps(n);
+        localStorage.setItem(`watched_episodes_${movieSlug}`, JSON.stringify(n));
+      }
+    }
+  }, [currentTime, duration, watchedEps, movieSlug, currentEpisode]);
+
+  // Video state listeners
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onTimeUpdate = () => {
+      if (!isScrubbing) setCurrentTime(video.currentTime);
+      if (video.buffered.length > 0) {
+        setBuffered(video.buffered.end(video.buffered.length - 1));
+      }
+
+      // Auto Next overlay (20s before ending)
+      if (video.duration > 0 && video.duration - video.currentTime <= 20 && nextEp) {
+        setShowNextOverlay(true);
+      } else {
+        setShowNextOverlay(false);
+      }
+
+      // Skip Ending logic (between -120s and -20s)
+      if (
+        video.duration > 120 &&
+        video.currentTime > video.duration - 120 &&
+        video.currentTime < video.duration - 20
+      ) {
+        if (!skipEndingVisible) {
+          setSkipEndingVisible(true);
+          clearTimeout(skipTimer.current);
+          skipTimer.current = setTimeout(() => setSkipEndingVisible(false), 5000);
+        }
+      } else {
+        setSkipEndingVisible(false);
+      }
+    };
+
+    const onWaiting = () => setIsBuffering(true);
+    const onPlaying = () => {
+      setIsBuffering(false);
+      setPlaying(true);
+    };
+    const onPause = () => setPlaying(false);
+
+    video.addEventListener('timeupdate', onTimeUpdate);
+    video.addEventListener('waiting', onWaiting);
+    video.addEventListener('playing', onPlaying);
+    video.addEventListener('pause', onPause);
+
+    return () => {
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      video.removeEventListener('waiting', onWaiting);
+      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('pause', onPause);
+    };
+  }, [isScrubbing, nextEp, skipEndingVisible]);
+
+  // Auto scroll episode into view
+  useEffect(() => {
+    const el = document.getElementById(`ep-${currentEpisode}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [currentEpisode]);
+
+  // Fullscreen controller
   const toggleFullscreen = useCallback(() => {
     const el = containerRef.current;
-    const videoEl = videoRef.current;
     if (!el) return;
-
     if (!fullscreen) {
       if (el.requestFullscreen) {
-        el.requestFullscreen().then(() => setFullscreen(true)).catch(() => setFullscreen(true));
+        el.requestFullscreen()
+          .then(() => {
+            setFullscreen(true);
+            try {
+              if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => {});
+              }
+            } catch (e) {}
+          })
+          .catch(() => setFullscreen(true));
       } else if ((el as any).webkitRequestFullscreen) {
         (el as any).webkitRequestFullscreen();
         setFullscreen(true);
-      } else if (videoEl && (videoEl as any).webkitEnterFullscreen) {
-        (videoEl as any).webkitEnterFullscreen();
+      } else if (videoRef.current && (videoRef.current as any).webkitEnterFullscreen) {
+        (videoRef.current as any).webkitEnterFullscreen();
       } else {
         setFullscreen(true);
       }
     } else {
-      if (document.fullscreenElement && document.exitFullscreen) {
+      if (document.exitFullscreen) {
         document.exitFullscreen().then(() => setFullscreen(false)).catch(() => setFullscreen(false));
-      } else if ((document as any).webkitFullscreenElement && (document as any).webkitExitFullscreen) {
+      } else if ((document as any).webkitExitFullscreen) {
         (document as any).webkitExitFullscreen();
         setFullscreen(false);
       } else {
@@ -139,406 +362,1102 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  // ── Auto-hide controls ──────────────────────────────────────────────────────
-  const showControls = useCallback(() => {
+  // Controls auto-hide (only when playing; never auto-hide when paused)
+  const resetHideTimer = useCallback(() => {
     setControlsVisible(true);
     clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setControlsVisible(false), 3000);
-  }, []);
+    if (playing && !isScrubbing && !showSpeedMenu && !showQualityMenu) {
+      hideTimer.current = setTimeout(() => {
+        setControlsVisible(false);
+      }, 4500);
+    }
+  }, [playing, isScrubbing, showSpeedMenu, showQualityMenu]);
 
   useEffect(() => {
-    showControls();
+    if (playing) {
+      resetHideTimer();
+    } else {
+      // When paused, ensure controls remain visible
+      setControlsVisible(true);
+      clearTimeout(hideTimer.current);
+    }
     return () => clearTimeout(hideTimer.current);
-  }, []);
+  }, [playing, resetHideTimer]);
 
-  // ── Play/Pause toggle ───────────────────────────────────────────────────────
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { v.play().catch(() => {}); setPlaying(true); }
-    else          { v.pause(); setPlaying(false); }
+    if (v.paused) {
+      v.play().catch(() => {});
+      setPlaying(true);
+      showFeedback(<PlayIcon className="w-10 h-10 sm:w-12 sm:h-12" />, 'Phát');
+    } else {
+      v.pause();
+      setPlaying(false);
+      showFeedback(<PauseIcon className="w-10 h-10 sm:w-12 sm:h-12" />, 'Tạm dừng');
+    }
+  }, []);
+
+  const skipTime = useCallback((amount: number) => {
+    if (videoRef.current) {
+      const newTime = Math.max(0, Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + amount));
+      videoRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
+      showFeedback(
+        amount > 0 ? (
+          <ForwardIcon className="w-10 h-10 sm:w-12 sm:h-12" />
+        ) : (
+          <BackwardIcon className="w-10 h-10 sm:w-12 sm:h-12" />
+        ),
+        `${amount > 0 ? '+' : ''}${amount}s`
+      );
+    }
+  }, []);
+
+  // Trigger double-tap ripple animation
+  const triggerDoubleTapFeedback = useCallback((type: 'left' | 'right' | 'center') => {
+    setDoubleTapFeedback({ type, id: Date.now() });
+    setTimeout(() => {
+      setDoubleTapFeedback((prev) => (prev?.type === type ? null : prev));
+    }, 650);
+  }, []);
+
+  // Touch gesture handling (mobile-first, zero-lag tap detection)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      touchStartRef.current = {
+        time: Date.now(),
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const touch = e.changedTouches[0];
+    const duration = Date.now() - touchStartRef.current.time;
+    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+
+    // If movement was small, it's a tap, not a swipe/scroll
+    if (deltaX < 15 && deltaY < 15 && duration < 350) {
+      const now = Date.now();
+      const rect = containerRef.current?.getBoundingClientRect();
+      const clickX = touch.clientX - (rect?.left || 0);
+      const totalWidth = rect?.width || window.innerWidth;
+      const posRatio = clickX / totalWidth;
+
+      if (lastTapRef.current && now - lastTapRef.current.time < 320 && Math.abs(clickX - lastTapRef.current.x) < 50) {
+        // Double Tap confirmed!
+        clearTimeout(singleTapTimer.current);
+        lastTapRef.current = null;
+
+        if (streamType === 'hls') {
+          if (posRatio < 0.35) {
+            skipTime(-10);
+            triggerDoubleTapFeedback('left');
+          } else if (posRatio > 0.65) {
+            skipTime(10);
+            triggerDoubleTapFeedback('right');
+          } else {
+            togglePlay();
+            triggerDoubleTapFeedback('center');
+          }
+        }
+      } else {
+        // First tap: set timer for single tap
+        lastTapRef.current = { time: now, x: clickX };
+        singleTapTimer.current = setTimeout(() => {
+          // Single tap action: toggle controls
+          setControlsVisible((prev) => {
+            const next = !prev;
+            if (next && playing) {
+              clearTimeout(hideTimer.current);
+              hideTimer.current = setTimeout(() => setControlsVisible(false), 4500);
+            }
+            return next;
+          });
+          lastTapRef.current = null;
+        }, 220);
+      }
+    }
+    touchStartRef.current = null;
+  };
+
+  // Mouse double click (desktop)
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (streamType === 'embed') {
+      setFitMode((f) => (f === 'contain' ? 'cover' : 'contain'));
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const ratio = x / rect.width;
+    if (ratio < 0.32) {
+      skipTime(-10);
+      triggerDoubleTapFeedback('left');
+    } else if (ratio > 0.68) {
+      skipTime(10);
+      triggerDoubleTapFeedback('right');
+    } else {
+      toggleFullscreen();
+    }
+  };
+
+  // Mouse click handler (desktop)
+  const handleContainerClick = (e: React.MouseEvent) => {
+    // Check if click originated from interactive controls
+    if ((e.target as HTMLElement).closest('button, input, select, a, [data-interactive="true"]')) {
+      return;
+    }
+    if (streamType === 'hls' && !isMiniPlayer) {
+      setControlsVisible((prev) => {
+        const next = !prev;
+        if (next && playing) {
+          clearTimeout(hideTimer.current);
+          hideTimer.current = setTimeout(() => setControlsVisible(false), 4500);
+        }
+        return next;
+      });
+    }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value);
-    setCurrentTime(time);
+    const val = parseFloat(e.target.value);
+    setCurrentTime(val);
   };
-
   const handleSeekStart = () => {
     setIsScrubbing(true);
+    setControlsVisible(true);
+    clearTimeout(hideTimer.current);
   };
-
   const handleSeekEnd = () => {
     setIsScrubbing(false);
     if (videoRef.current) {
       videoRef.current.currentTime = currentTime;
     }
-  };
-
-  const skipTime = (amount: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime += amount;
-      setCurrentTime(videoRef.current.currentTime);
+    if (playing) {
+      resetHideTimer();
     }
   };
 
-  // ── Episode navigation helpers ──────────────────────────────────────────────
-  const currentServer = servers[activeServer];
-  const episodes      = currentServer?.server_data ?? [];
-  const currentIdx    = episodes.findIndex(e => e.slug === currentEpisode);
-  const prevEp        = currentIdx > 0 ? episodes[currentIdx - 1] : null;
-  const nextEp        = currentIdx < episodes.length - 1 ? episodes[currentIdx + 1] : null;
+  const handleVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    setVolume(val);
+    setMuted(val === 0);
+    if (videoRef.current) videoRef.current.volume = val;
+  };
+
+  // Keyboard controls
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      switch (e.key.toLowerCase()) {
+        case ' ':
+        case 'k':
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'arrowleft':
+          e.preventDefault();
+          skipTime(-10);
+          break;
+        case 'arrowright':
+          e.preventDefault();
+          skipTime(10);
+          break;
+        case 'arrowup':
+          e.preventDefault();
+          setVolume((v) => {
+            const nv = Math.min(1, v + 0.1);
+            if (videoRef.current) videoRef.current.volume = nv;
+            setMuted(nv === 0);
+            showFeedback(<SpeakerWaveIcon className="w-10 h-10" />, `${Math.round(nv * 100)}%`);
+            return nv;
+          });
+          break;
+        case 'arrowdown':
+          e.preventDefault();
+          setVolume((v) => {
+            const nv = Math.max(0, v - 0.1);
+            if (videoRef.current) videoRef.current.volume = nv;
+            setMuted(nv === 0);
+            showFeedback(<SpeakerWaveIcon className="w-10 h-10" />, `${Math.round(nv * 100)}%`);
+            return nv;
+          });
+          break;
+        case 'f':
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'm':
+          e.preventDefault();
+          setMuted((m) => {
+            const nm = !m;
+            if (videoRef.current) videoRef.current.muted = nm;
+            showFeedback(
+              nm ? <SpeakerXMarkIcon className="w-10 h-10" /> : <SpeakerWaveIcon className="w-10 h-10" />,
+              nm ? 'Đã tắt tiếng' : 'Đã bật tiếng'
+            );
+            return nm;
+          });
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleFullscreen, togglePlay, skipTime]);
+
+  // Mini player on viewport scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting && playing && !fullscreen) setIsMiniPlayer(true);
+        else setIsMiniPlayer(false);
+      },
+      { threshold: 0.1 }
+    );
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [playing, fullscreen]);
+
+  const handleShare = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('t', Math.floor(currentTime).toString());
+    navigator.clipboard.writeText(url.toString());
+    showFeedback(<ShareIcon className="w-10 h-10" />, 'Đã sao chép liên kết');
+  };
 
   return (
-    <div className={`flex flex-col lg:flex-row gap-0 rounded-[32px] overflow-hidden shadow-2xl border border-white/10 ${className}`}>
-      
-      {/* ── Video Area ────────────────────────────────────────────────────── */}
+    <>
       <div
-        ref={containerRef}
-        className={`relative flex-1 bg-black aspect-video cursor-pointer min-w-0 group/video ${fullscreen ? 'fixed !inset-0 !z-[99999] !w-screen !h-[100dvh] !rounded-none' : ''}`}
-        onMouseMove={showControls}
-        onTouchStart={showControls}
-        onClick={() => {
-          if (streamType === 'hls') {
-            if (!controlsVisible) {
-              showControls();
-            } else {
-              togglePlay();
-            }
-          }
-        }}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          setFitMode(f => f === 'contain' ? 'cover' : 'contain');
-        }}
+        className={`transition-all duration-500 ease-in-out ${
+          cinemaMode
+            ? 'fixed inset-0 z-[90] bg-[var(--color-bg-base)]/95 p-2 sm:p-4 lg:p-10 flex justify-center items-center'
+            : ''
+        }`}
       >
-        {/* HLS Video */}
-        {streamType === 'hls' && (
-          <video
-            ref={videoRef}
-            className={`w-full h-full transition-all duration-300 ${fitMode === 'contain' ? 'object-contain' : 'object-cover'}`}
-            muted={muted}
-            playsInline
-            onTimeUpdate={() => { if (!isScrubbing) setCurrentTime(videoRef.current?.currentTime || 0); }}
-            onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)}
-            onClick={e => { e.stopPropagation(); togglePlay(); }}
-            onDoubleClick={(e) => { e.stopPropagation(); setFitMode(f => f === 'contain' ? 'cover' : 'contain'); }}
-          />
-        )}
-
-        {/* Embed iFrame */}
-        {streamType === 'embed' && (
-          <iframe
-            src={streamUrl}
-            className={`w-full h-full border-none transition-all duration-300 ${fitMode === 'cover' ? 'scale-110' : ''}`}
-            allowFullScreen
-            allow="autoplay; fullscreen"
-            title={movieName}
-          />
-        )}
-
-        {/* Loading Spinner */}
-        {isLoading && streamType === 'hls' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 pointer-events-none">
-            <div className="relative w-16 h-16">
-              <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
-              <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
-          </div>
-        )}
-
-        {/* Error State */}
-        {hasError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/90 text-white">
-            <ExclamationTriangleIcon className="w-16 h-16 text-yellow-500" />
-            <p className="text-xl font-black uppercase italic">Không thể tải luồng phát</p>
-            <p className="text-white/40 text-xs font-bold uppercase tracking-widest text-center max-w-xs">
-              Thử chọn tập khác hoặc nguồn phát khác
-            </p>
-          </div>
-        )}
-
-        {/* Controls Overlay */}
-        {streamType === 'hls' && (
-          <div className={`absolute inset-0 flex flex-col justify-between transition-opacity duration-500 ${controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            {/* Top Bar */}
-            <div className="flex items-center justify-between p-5 bg-gradient-to-b from-black/80 to-transparent">
-              <div>
-                <h2 className="text-white font-black text-base md:text-lg uppercase italic tracking-tight drop-shadow">{movieName}</h2>
-                {currentEpisode && episodes.length > 1 && (
-                  <p className="text-white/60 text-xs font-bold mt-0.5 uppercase tracking-widest">
-                    {episodes[currentIdx]?.name || `Tập ${currentIdx + 1}`}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
-                className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-primary transition-colors border border-white/10"
-              >
-                {fullscreen ? <ArrowsPointingInIcon className="w-5 h-5" /> : <ArrowsPointingOutIcon className="w-5 h-5" />}
-              </button>
-            </div>
-
-            {/* Center Controls */}
-            <div className="flex items-center justify-center gap-12 md:gap-24 pointer-events-auto">
-              <button
-                onClick={(e) => { e.stopPropagation(); skipTime(-10); }}
-                className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-black/60 hover:bg-black/80 flex flex-col items-center justify-center text-white transition-transform hover:scale-110 active:scale-95 border border-white/10"
-              >
-                <BackwardIcon className="w-5 h-5 md:w-6 md:h-6 mb-0.5" />
-                <span className="text-[9px] md:text-[10px] font-black tracking-tight">-10s</span>
-              </button>
-
-              <div 
-                className={`w-16 h-16 md:w-20 md:h-20 rounded-full bg-black/80 hover:bg-black flex items-center justify-center transition-all duration-300 cursor-pointer border border-white/10 hover:scale-110 active:scale-95 ${playing ? 'opacity-0 scale-75' : 'opacity-100 scale-100'}`}
-                onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-              >
-                {playing ? <PauseIcon className="w-8 h-8 md:w-10 md:h-10 text-white" /> : <PlayIcon className="w-8 h-8 md:w-10 md:h-10 text-white ml-1" />}
-              </div>
-
-              <button
-                onClick={(e) => { e.stopPropagation(); skipTime(10); }}
-                className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-black/60 hover:bg-black/80 flex flex-col items-center justify-center text-white transition-transform hover:scale-110 active:scale-95 border border-white/10"
-              >
-                <ForwardIcon className="w-5 h-5 md:w-6 md:h-6 mb-0.5" />
-                <span className="text-[9px] md:text-[10px] font-black tracking-tight">+10s</span>
-              </button>
-            </div>
-
-            {/* Bottom Bar Container */}
-            <div className="bg-gradient-to-t from-black/90 via-black/40 to-transparent pt-10 pb-4 px-5">
-              {/* Progress Bar */}
-              <div className="relative group/progress mb-4" onClick={e => e.stopPropagation()}>
-                <input
-                  type="range"
-                  min="0"
-                  max={duration || 0}
-                  step="0.1"
-                  value={currentTime}
-                  onChange={handleSeek}
-                  onMouseDown={handleSeekStart}
-                  onMouseUp={handleSeekEnd}
-                  onTouchStart={handleSeekStart}
-                  onTouchEnd={handleSeekEnd}
-                  className="absolute inset-0 w-full h-1.5 opacity-0 cursor-pointer z-10"
-                />
-                <div className="h-1.5 w-full bg-white/20 rounded-full overflow-hidden relative">
-                  <div 
-                    className="absolute inset-y-0 left-0 bg-primary" 
-                    style={{ width: `${(currentTime / duration) * 100}%` }}
-                  />
-                </div>
-                {/* Time Tooltip on Hover could go here */}
-                <div 
-                  className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-lg scale-0 group-hover/progress:scale-100 transition-transform pointer-events-none"
-                  style={{ left: `calc(${(currentTime / duration) * 100}% - 7px)` }}
-                />
-              </div>
-
-              {/* Bottom Controls */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  {/* Play/Pause */}
-                  <button
-                    onClick={e => { e.stopPropagation(); togglePlay(); }}
-                    className="text-white hover:text-primary transition-colors"
-                  >
-                    {playing ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
-                  </button>
-
-                  {/* Mute */}
-                  <button
-                    onClick={e => { e.stopPropagation(); setMuted(m => !m); if (videoRef.current) videoRef.current.muted = !muted; }}
-                    className="text-white/70 hover:text-white transition-all"
-                  >
-                    {muted ? <SpeakerXMarkIcon className="w-5 h-5" /> : <SpeakerWaveIcon className="w-5 h-5" />}
-                  </button>
-
-                  {/* Time Display */}
-                  <div className="text-[11px] font-black text-white/60 tracking-widest uppercase">
-                    <span className="text-white">{formatTime(currentTime)}</span> / {formatTime(duration)}
-                  </div>
-
-                  {/* Prev Episode */}
-                  {prevEp && (
-                    <button
-                      onClick={e => { e.stopPropagation(); onEpisodeChange(activeServer, prevEp.slug); }}
-                      className="hidden sm:flex items-center gap-1 text-white/50 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors ml-2"
-                    >
-                      <ChevronLeftIcon className="w-3.5 h-3.5" /> Tập trước
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-4">
-                  {/* Next Episode */}
-                  {nextEp && (
-                    <button
-                      onClick={e => { e.stopPropagation(); onEpisodeChange(activeServer, nextEp.slug); }}
-                      className="hidden sm:flex items-center gap-1 text-white/50 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors mr-2"
-                    >
-                      Tập tiếp <ChevronRightIcon className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-
-                  {/* Toggle Episode List */}
-                  {episodes.length > 1 && (
-                    <button
-                      onClick={e => { 
-                        e.stopPropagation(); 
-                        setShowOverlay(v => !v);
-                      }}
-                      className="flex items-center gap-1.5 p-2 -m-2 text-white/70 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
-                    >
-                      <ListBulletIcon className="w-5 h-5" />
-                      <span className="hidden md:inline">Danh sách tập</span>
-                    </button>
-                  )}
-
-                  {/* Fullscreen */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={e => { e.stopPropagation(); setFitMode(f => f === 'contain' ? 'cover' : 'contain'); }}
-                      className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white hover:bg-primary transition-all hidden md:flex"
-                      title={fitMode === 'contain' ? 'Phóng to' : 'Thu nhỏ'}
-                    >
-                      <span className="text-[10px] font-black uppercase tracking-widest">{fitMode === 'contain' ? 'Zoom' : 'Fit'}</span>
-                    </button>
-                    <button
-                      onClick={e => { e.stopPropagation(); toggleFullscreen(); }}
-                      className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white hover:bg-primary transition-all"
-                    >
-                      {fullscreen ? <ArrowsPointingInIcon className="w-4 h-4" /> : <ArrowsPointingOutIcon className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Episode Overlay (For Fullscreen/Mobile) ── */}
-        {showOverlay && episodes.length > 0 && (
-          <div 
-            className="absolute inset-0 z-50 bg-black/95 flex flex-col p-6 md:p-12 animate-in fade-in duration-300 pointer-events-auto"
-            onClick={(e) => { e.stopPropagation(); setShowOverlay(false); }}
+        <div
+          className={`flex flex-col lg:flex-row gap-0 rounded-[16px] overflow-hidden shadow-2xl border border-[var(--color-border)] ${
+            cinemaMode ? 'w-full max-w-[1600px] h-full max-h-[92vh]' : className
+          }`}
+        >
+          {/* ── Video Area ── */}
+          <div
+            ref={containerRef}
+            className={`relative flex-1 bg-black aspect-video min-w-0 select-none touch-manipulation group/video ${
+              fullscreen ? 'fixed !inset-0 !z-[99999] !w-screen !h-[100dvh] !rounded-none' : ''
+            } ${
+              isMiniPlayer
+                ? 'fixed !bottom-6 !right-6 !w-[300px] sm:!w-[340px] !h-[170px] sm:!h-[190px] !z-[9999] shadow-2xl !rounded-[12px] border-2 border-[var(--color-primary)]'
+                : ''
+            }`}
+            onMouseMove={resetHideTimer}
+            onMouseLeave={() => playing && !isScrubbing && setControlsVisible(false)}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onClick={handleContainerClick}
+            onDoubleClick={handleDoubleClick}
           >
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-white font-black text-xl md:text-2xl uppercase tracking-widest drop-shadow-lg">Danh sách tập</h3>
-              <button 
-                onClick={(e) => { e.stopPropagation(); setShowOverlay(false); }} 
-                className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 hover:scale-110 active:scale-95 transition-all border border-white/20"
-              >
-                <XMarkIcon className="w-6 h-6" />
-              </button>
-            </div>
-            
-            {servers.length > 1 && (
-              <div className="flex gap-2 mb-6 bg-white/5 p-1.5 rounded-2xl w-max border border-white/10" onClick={e => e.stopPropagation()}>
-                {servers.map((s, i) => (
+            {/* HLS Video Element */}
+            {streamType === 'hls' && (
+              <video
+                ref={videoRef}
+                className={`w-full h-full transition-all duration-300 pointer-events-none ${
+                  fitMode === 'contain' ? 'object-contain' : 'object-cover'
+                }`}
+                muted={muted}
+                playsInline
+                preload="auto"
+                onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+                onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
+              />
+            )}
+
+            {/* Embed Iframe Stream */}
+            {streamType === 'embed' && (
+              <div className="relative w-full h-full">
+                <iframe
+                  key={embedKey}
+                  src={streamUrl}
+                  className={`w-full h-full border-none transition-all duration-300 ${
+                    fitMode === 'cover' ? 'scale-105' : ''
+                  }`}
+                  allowFullScreen
+                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                  title={movieName || 'CINEVINA Player'}
+                />
+
+                {/* Embed Floating Helper Toolbar */}
+                <div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-black/75 backdrop-blur-md p-1.5 rounded-[10px] border border-white/10 shadow-lg">
                   <button
-                    key={i}
-                    onClick={() => setActiveServer(i)}
-                    className={`px-5 py-2.5 rounded-xl text-xs md:text-sm font-black uppercase tracking-widest transition-colors ${activeServer === i ? 'bg-primary text-white shadow-md' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEmbedKey((k) => k + 1);
+                      showFeedback(<ArrowPathIcon className="w-8 h-8" />, 'Đang tải lại');
+                    }}
+                    className="p-2 text-white/80 hover:text-white rounded-[6px] hover:bg-white/10 transition-colors"
+                    title="Tải lại player"
+                    aria-label="Tải lại player"
                   >
-                    {s.server_name?.replace(/vietsub|thuyết minh|server/gi, '').trim() || `S${i + 1}`}
+                    <ArrowPathIcon className="w-5 h-5" />
                   </button>
-                ))}
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFitMode((f) => (f === 'contain' ? 'cover' : 'contain'));
+                    }}
+                    className="px-2.5 py-1 text-white/90 text-[12px] font-semibold rounded-[6px] bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    {fitMode === 'contain' ? 'Phóng to' : 'Vừa khung'}
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFullscreen();
+                    }}
+                    className="p-2 text-white/80 hover:text-white rounded-[6px] hover:bg-white/10 transition-colors"
+                    title="Toàn màn hình"
+                    aria-label="Toàn màn hình"
+                  >
+                    {fullscreen ? <ArrowsPointingInIcon className="w-5 h-5" /> : <ArrowsPointingOutIcon className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto scrollbar-hide grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3 content-start pb-20">
-              {episodes.map((ep, idx) => {
-                const isCurrent = ep.slug === currentEpisode;
-                return (
+            {/* Double Tap Ripple Animations (YouTube Style) */}
+            {doubleTapFeedback && streamType === 'hls' && (
+              <div className="absolute inset-0 pointer-events-none z-40 overflow-hidden">
+                {doubleTapFeedback.type === 'left' && (
+                  <div className="absolute inset-y-0 left-0 w-1/2 flex items-center justify-center bg-white/10 rounded-r-full animate-pulse transition-opacity">
+                    <div className="flex flex-col items-center gap-1 text-white drop-shadow-lg">
+                      <div className="flex items-center gap-0.5">
+                        <BackwardIcon className="w-8 h-8 animate-bounce" />
+                      </div>
+                      <span className="text-[14px] font-extrabold tracking-wider">-10 giây</span>
+                    </div>
+                  </div>
+                )}
+                {doubleTapFeedback.type === 'right' && (
+                  <div className="absolute inset-y-0 right-0 w-1/2 flex items-center justify-center bg-white/10 rounded-l-full animate-pulse transition-opacity">
+                    <div className="flex flex-col items-center gap-1 text-white drop-shadow-lg">
+                      <div className="flex items-center gap-0.5">
+                        <ForwardIcon className="w-8 h-8 animate-bounce" />
+                      </div>
+                      <span className="text-[14px] font-extrabold tracking-wider">+10 giây</span>
+                    </div>
+                  </div>
+                )}
+                {doubleTapFeedback.type === 'center' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    <div className="p-5 rounded-full bg-black/60 text-white animate-ping">
+                      {playing ? <PauseIcon className="w-12 h-12" /> : <PlayIcon className="w-12 h-12" />}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Resume Toast */}
+            {resumeToast && !isMiniPlayer && (
+              <div className="absolute top-6 sm:top-8 left-1/2 -translate-x-1/2 z-50 bg-[var(--color-bg-surface)]/95 backdrop-blur-md border border-[var(--color-border)] px-5 py-3.5 sm:px-6 sm:py-4 rounded-[12px] shadow-2xl flex flex-col items-center gap-3 max-w-[90%] sm:max-w-md">
+                <p className="text-[var(--color-text-1)] text-[13px] sm:text-[14px] font-medium text-center">
+                  Bạn đã xem đến <strong className="text-[var(--color-primary)]">{formatTime(resumeToast.time)}</strong>. Tiếp tục chứ?
+                </p>
+                <div className="flex gap-2.5">
                   <button
-                    key={ep.slug}
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      onEpisodeChange(activeServer, ep.slug); 
-                      setShowOverlay(false); 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (videoRef.current) videoRef.current.currentTime = resumeToast.time;
+                      setResumeToast(null);
+                      videoRef.current?.play();
+                      setPlaying(true);
                     }}
-                    className={`py-3 px-2 rounded-xl text-sm font-black transition-transform duration-300 border ${
-                      isCurrent
-                        ? 'bg-primary text-white border-primary shadow-md scale-105 z-10'
-                        : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/15 hover:text-white hover:border-white/30 hover:scale-105'
-                    }`}
+                    className="px-4 py-2 bg-[var(--color-primary)] text-white text-[13px] font-bold rounded-[8px] hover:bg-[var(--color-primary-hover)] transition-colors active:scale-95"
                   >
-                    {ep.name || `${idx + 1}`}
+                    Tiếp tục xem
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      {/* ── Episode Sidebar ────────────────────────────────────────────────── */}
-      {showList && episodes.length > 0 && (
-        <div className="w-full lg:w-72 xl:w-80 bg-[#0e0f14] border-l border-white/5 flex flex-col shrink-0 max-h-[56.25vw] lg:max-h-none">
-          {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-5 border-b border-white/5 shrink-0">
-            <div className="flex flex-col gap-1">
-              <h3 className="text-white font-black text-sm uppercase tracking-widest">Danh sách tập</h3>
-              <p className="text-white/30 text-[11px] font-bold uppercase">{episodes.length} tập</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Server switcher */}
-              {servers.length > 1 && (
-                <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
-                  {servers.map((s, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setActiveServer(i)}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${activeServer === i ? 'bg-primary text-white shadow-sm' : 'text-white/40 hover:text-white'}`}
-                    >
-                      {s.server_name?.replace(/vietsub|thuyết minh|server/gi, '').trim() || `S${i + 1}`}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <button onClick={() => setShowList(false)} className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition-colors">
-                <XMarkIcon className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Episode Grid */}
-          <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
-            <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-4 gap-2">
-              {episodes.map((ep, idx) => {
-                const isCurrent = ep.slug === currentEpisode;
-                return (
                   <button
-                    key={ep.slug}
-                    onClick={() => onEpisodeChange(activeServer, ep.slug)}
-                    className={`py-2.5 px-1 rounded-xl text-xs font-black transition-colors duration-300 border ${
-                      isCurrent
-                        ? 'bg-primary text-white border-primary shadow-sm'
-                        : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10 hover:text-white hover:border-white/20'
-                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setResumeToast(null);
+                      if (videoRef.current) videoRef.current.currentTime = 0;
+                    }}
+                    className="px-4 py-2 bg-[var(--color-bg-hover)] text-[var(--color-text-1)] text-[13px] font-bold rounded-[8px] hover:bg-[var(--color-border)] transition-colors active:scale-95"
                   >
-                    {ep.name || `${idx + 1}`}
+                    Xem từ đầu
                   </button>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+            )}
+
+            {/* Buffering Spinner */}
+            {(isBuffering || isLoading) && streamType === 'hls' && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none z-30">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 border-4 border-white/20 border-t-[var(--color-primary)] rounded-full animate-spin" />
+                  <span className="text-white/80 text-[13px] font-medium tracking-wide">Đang tải phim...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {hasError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#141414] text-white z-40 p-6 text-center">
+                <ExclamationTriangleIcon className="w-14 h-14 text-[var(--color-primary)]" />
+                <div>
+                  <p className="text-[18px] font-bold tracking-wide mb-1">Không thể tải luồng phát</p>
+                  <p className="text-white/60 text-[13px]">Vui lòng thử chọn server dự phòng hoặc tải lại trang</p>
+                </div>
+                {servers.length > 1 && (
+                  <div className="flex flex-wrap gap-2 justify-center mt-2">
+                    {servers.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveServer(idx);
+                          setHasError(false);
+                          setIsLoading(true);
+                        }}
+                        className={`px-3 py-1.5 rounded-[8px] text-[12px] font-bold transition-colors ${
+                          activeServer === idx
+                            ? 'bg-[var(--color-primary)] text-white'
+                            : 'bg-white/10 text-white hover:bg-white/20'
+                        }`}
+                      >
+                        Chuyển sang Server {idx + 1}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Central Feedback Toast (Volume/Seek/Play) */}
+            {feedbackMsg && !isMiniPlayer && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40 animate-in zoom-in-95 fade-in duration-150">
+                <div className="bg-black/85 backdrop-blur-md px-6 py-4 rounded-[16px] flex flex-col items-center text-white gap-2 border border-white/10 shadow-2xl">
+                  {feedbackMsg.icon}
+                  <span className="font-extrabold text-[14px] tracking-wider">{feedbackMsg.text}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Auto Next Episode Overlay */}
+            {showNextOverlay && !isMiniPlayer && nextEp && (
+              <div className="absolute bottom-20 right-4 sm:bottom-24 sm:right-8 z-40 bg-[var(--color-bg-surface)]/95 backdrop-blur-md border border-[var(--color-border)] p-4 rounded-[12px] shadow-2xl flex flex-col gap-3 max-w-[280px]">
+                <p className="text-[var(--color-text-1)] text-[13px] font-medium">
+                  Tập tiếp theo sẽ phát sau <strong className="text-[var(--color-primary)]">{Math.max(0, Math.ceil(duration - currentTime))}s</strong>
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEpisodeChange(activeServer, nextEp.slug);
+                    }}
+                    className="flex-1 py-2 bg-[var(--color-primary)] text-white text-[12px] font-bold rounded-[8px] hover:bg-[var(--color-primary-hover)] transition-colors active:scale-95"
+                  >
+                    Xem ngay
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowNextOverlay(false);
+                    }}
+                    className="flex-1 py-2 bg-[var(--color-bg-hover)] text-[var(--color-text-1)] text-[12px] font-bold rounded-[8px] hover:bg-[var(--color-border)] transition-colors active:scale-95"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Skip Ending Button */}
+            {skipEndingVisible && !showNextOverlay && !isMiniPlayer && nextEp && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEpisodeChange(activeServer, nextEp.slug);
+                }}
+                className="absolute bottom-20 right-4 sm:bottom-24 sm:right-8 z-40 bg-[var(--color-bg-surface)]/95 hover:bg-[var(--color-bg-hover)] backdrop-blur-md border border-[var(--color-border)] px-4 py-2.5 sm:px-6 sm:py-3 rounded-[10px] text-[var(--color-text-1)] text-[13px] font-bold shadow-2xl transition-all active:scale-95"
+              >
+                Bỏ qua Ending
+              </button>
+            )}
+
+            {/* Mini Player Close Button */}
+            {isMiniPlayer && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMiniPlayer(false);
+                  const el = document.getElementById('cinevina-player');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                className="absolute top-2 right-2 w-8 h-8 bg-black/80 rounded-full flex items-center justify-center text-white hover:bg-[var(--color-primary)] z-50 transition-colors"
+                aria-label="Đóng mini player"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            )}
+
+            {/* ── Native Controls Overlay (HLS) ── */}
+            {streamType === 'hls' && !isMiniPlayer && (
+              <div
+                className={`absolute inset-0 flex flex-col justify-between transition-opacity duration-250 z-30 pointer-events-none ${
+                  controlsVisible ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
+                {/* Top Bar */}
+                <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-5 bg-gradient-to-b from-black/85 via-black/40 to-transparent pointer-events-auto">
+                  {onBack && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBack();
+                      }}
+                      className="p-2 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center text-white hover:text-[var(--color-primary)] transition-colors rounded-full hover:bg-white/10"
+                      aria-label="Quay lại"
+                    >
+                      <ArrowLeftIcon className="w-6 h-6 sm:w-7 sm:h-7" />
+                    </button>
+                  )}
+                  <div className="flex-1 min-w-0 pr-2">
+                    <h2 className="text-white font-heading text-[16px] sm:text-[20px] md:text-[22px] uppercase tracking-wide truncate drop-shadow">
+                      {movieName}
+                    </h2>
+                    {currentEpisode && episodes.length > 1 && (
+                      <p className="text-white/80 text-[12px] sm:text-[13px] font-medium truncate">
+                        {episodes[currentIdx]?.name || `Tập ${currentIdx + 1}`}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {/* Share Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShare();
+                      }}
+                      className="p-2 w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                      title="Chia sẻ phim"
+                      aria-label="Chia sẻ"
+                    >
+                      <ShareIcon className="w-5 h-5" />
+                    </button>
+
+                    {/* Fit Mode Toggle */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFitMode((f) => (f === 'contain' ? 'cover' : 'contain'));
+                        showFeedback(
+                          <FilmIcon className="w-10 h-10" />,
+                          fitMode === 'contain' ? 'Phóng to tràn khung' : 'Tỷ lệ gốc'
+                        );
+                      }}
+                      className="p-2 w-9 h-9 sm:w-10 sm:h-10 hidden sm:flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                      title="Khung hình"
+                      aria-label="Khung hình"
+                    >
+                      <FilmIcon className={`w-5 h-5 ${fitMode === 'cover' ? 'text-[var(--color-primary)]' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Big Center Play/Pause Button */}
+                <div className="flex items-center justify-center gap-6 sm:gap-10 pointer-events-auto absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      skipTime(-10);
+                    }}
+                    className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center text-white/90 hover:text-white border border-white/15 transition-all active:scale-95"
+                    aria-label="Lùi 10 giây"
+                  >
+                    <BackwardIcon className="w-6 h-6 sm:w-7 sm:h-7" />
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePlay();
+                    }}
+                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-[var(--color-primary)]/90 hover:bg-[var(--color-primary)] shadow-2xl flex items-center justify-center text-white transition-all transform hover:scale-105 active:scale-95"
+                    aria-label={playing ? 'Tạm dừng' : 'Phát'}
+                  >
+                    {playing ? (
+                      <PauseIcon className="w-8 h-8 sm:w-11 sm:h-11" />
+                    ) : (
+                      <PlayIcon className="w-8 h-8 sm:w-11 sm:h-11 ml-1" />
+                    )}
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      skipTime(10);
+                    }}
+                    className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center text-white/90 hover:text-white border border-white/15 transition-all active:scale-95"
+                    aria-label="Tới 10 giây"
+                  >
+                    <ForwardIcon className="w-6 h-6 sm:w-7 sm:h-7" />
+                  </button>
+                </div>
+
+                {/* Bottom Bar Container */}
+                <div className="bg-gradient-to-t from-black/95 via-black/70 to-transparent pt-12 pb-3 sm:pb-4 px-3 sm:px-6 pointer-events-auto">
+                  {/* Progress Scrubber (enlarged hit target for touch) */}
+                  <div
+                    className="relative mb-2 sm:mb-4 cursor-pointer flex items-center h-8 group/progress touch-none"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                      setHoverPos(pos);
+                      setHoverTime(pos * duration);
+                      setShowTooltip(true);
+                    }}
+                    onMouseLeave={() => setShowTooltip(false)}
+                  >
+                    <input
+                      type="range"
+                      min="0"
+                      max={duration || 0}
+                      step="0.1"
+                      value={currentTime}
+                      onChange={handleSeek}
+                      onMouseDown={handleSeekStart}
+                      onMouseUp={handleSeekEnd}
+                      onTouchStart={handleSeekStart}
+                      onTouchEnd={handleSeekEnd}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                      aria-label="Thanh tiến trình"
+                    />
+
+                    {/* Background Bar */}
+                    <div className="relative w-full h-1.5 sm:h-2 rounded-full bg-white/25 overflow-hidden transition-all group-hover/progress:h-2.5">
+                      {/* Buffered bar */}
+                      <div
+                        className="absolute inset-y-0 left-0 bg-white/40 transition-all duration-200"
+                        style={{ width: `${duration > 0 ? (buffered / duration) * 100 : 0}%` }}
+                      />
+                      {/* Played bar */}
+                      <div
+                        className="absolute inset-y-0 left-0 bg-[var(--color-primary)] transition-all duration-75"
+                        style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                      />
+                    </div>
+
+                    {/* Scrubber thumb */}
+                    <div
+                      className="absolute w-4 h-4 sm:w-4.5 sm:h-4.5 bg-[var(--color-primary)] rounded-full shadow-lg pointer-events-none z-10 transition-transform scale-90 group-hover/progress:scale-125 border-2 border-white"
+                      style={{
+                        left: `calc(${duration > 0 ? (currentTime / duration) * 100 : 0}% - 8px)`,
+                      }}
+                    />
+
+                    {/* Scrubber Time Tooltip */}
+                    {showTooltip && controlsVisible && (
+                      <div
+                        className="absolute bottom-9 -translate-x-1/2 bg-[var(--color-bg-surface)] px-2.5 py-1 rounded-[6px] text-white text-[12px] font-bold pointer-events-none border border-[var(--color-border)] shadow-xl whitespace-nowrap"
+                        style={{ left: `${hoverPos * 100}%` }}
+                      >
+                        {formatTime(hoverTime)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Controls Row */}
+                  <div className="flex items-center justify-between gap-1 sm:gap-3">
+                    {/* Left Controls (Mobile-friendly: Play, 10s back/forward, Time) */}
+                    <div className="flex items-center gap-0.5 sm:gap-2 shrink-0">
+                      {/* Play/Pause Button - ALWAYS VISIBLE */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePlay();
+                        }}
+                        className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        aria-label={playing ? 'Tạm dừng' : 'Phát'}
+                      >
+                        {playing ? <PauseIcon className="w-6 h-6 sm:w-7 sm:h-7" /> : <PlayIcon className="w-6 h-6 sm:w-7 sm:h-7" />}
+                      </button>
+
+                      {/* Rewind 10s - ALWAYS VISIBLE */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          skipTime(-10);
+                        }}
+                        className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-white/90 hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        aria-label="Lùi 10 giây"
+                      >
+                        <BackwardIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                      </button>
+
+                      {/* Forward 10s - ALWAYS VISIBLE */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          skipTime(10);
+                        }}
+                        className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-white/90 hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        aria-label="Tới 10 giây"
+                      >
+                        <ForwardIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                      </button>
+
+                      {/* Volume Slider (Desktop) */}
+                      <div className="hidden sm:flex items-center group/volume relative ml-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMuted((m) => {
+                              const nm = !m;
+                              if (videoRef.current) videoRef.current.muted = nm;
+                              return nm;
+                            });
+                          }}
+                          className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                          aria-label={muted || volume === 0 ? 'Bật tiếng' : 'Tắt tiếng'}
+                        >
+                          {muted || volume === 0 ? (
+                            <SpeakerXMarkIcon className="w-6 h-6" />
+                          ) : (
+                            <SpeakerWaveIcon className="w-6 h-6" />
+                          )}
+                        </button>
+                        <div className="w-0 overflow-hidden group-hover/volume:w-20 sm:group-hover/volume:w-24 transition-all duration-300 flex items-center">
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={muted ? 0 : volume}
+                            onChange={handleVolume}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full h-1.5 accent-[var(--color-primary)] bg-white/25 rounded-full cursor-pointer ml-1"
+                            aria-label="Âm lượng"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Time Readout */}
+                      <div className="text-[12px] sm:text-[13px] font-bold text-white/90 whitespace-nowrap ml-1 sm:ml-2">
+                        <span className="text-white">{formatTime(currentTime)}</span>
+                        <span className="mx-1 text-white/40">/</span>
+                        <span className="text-white/70">{formatTime(duration)}</span>
+                      </div>
+                    </div>
+
+                    {/* Right Controls */}
+                    <div className="flex items-center gap-0.5 sm:gap-1.5">
+                      {/* Skip Intro (Desktop) */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          skipTime(85);
+                        }}
+                        className="text-white text-[12px] font-bold bg-white/15 hover:bg-[var(--color-primary)] px-3 py-1.5 rounded-[6px] transition-colors hidden md:block"
+                      >
+                        Bỏ qua Intro
+                      </button>
+
+                      {/* Playback Speed Menu */}
+                      <div className="relative" onMouseLeave={() => setShowSpeedMenu(false)}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowSpeedMenu((v) => !v);
+                            setShowQualityMenu(false);
+                          }}
+                          className="px-2 py-1.5 min-w-[38px] h-9 sm:h-10 flex items-center justify-center text-white text-[12px] sm:text-[13px] font-bold hover:bg-white/10 rounded-[6px] transition-colors"
+                          aria-label="Tốc độ phát"
+                        >
+                          {playbackSpeed}x
+                        </button>
+                        {showSpeedMenu && (
+                          <div className="absolute bottom-full right-0 mb-3 bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1.5 min-w-[110px] shadow-2xl z-50">
+                            {[0.5, 0.75, 1, 1.25, 1.5, 2].map((speed) => (
+                              <div
+                                key={speed}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPlaybackSpeed(speed);
+                                  if (videoRef.current) videoRef.current.playbackRate = speed;
+                                  setShowSpeedMenu(false);
+                                }}
+                                className={`px-4 py-2 text-[13px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
+                                  playbackSpeed === speed
+                                    ? 'text-[var(--color-primary)] font-bold'
+                                    : 'text-white hover:bg-white/10'
+                                }`}
+                              >
+                                {speed}x {playbackSpeed === speed && <CheckCircleIcon className="w-4 h-4" />}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Quality Menu */}
+                      {qualityLevels.length > 1 && (
+                        <div className="relative" onMouseLeave={() => setShowQualityMenu(false)}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowQualityMenu((v) => !v);
+                              setShowSpeedMenu(false);
+                            }}
+                            className="p-2 min-w-[38px] min-h-[38px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                            aria-label="Chất lượng"
+                          >
+                            <Cog6ToothIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                          </button>
+                          {showQualityMenu && (
+                            <div className="absolute bottom-full right-0 mb-3 bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1.5 min-w-[130px] shadow-2xl z-50">
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (hlsRef.current) hlsRef.current.currentLevel = -1;
+                                  setCurrentQuality(-1);
+                                  setShowQualityMenu(false);
+                                }}
+                                className={`px-4 py-2 text-[13px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
+                                  currentQuality === -1
+                                    ? 'text-[var(--color-primary)] font-bold'
+                                    : 'text-white hover:bg-white/10'
+                                }`}
+                              >
+                                Tự động {currentQuality === -1 && <CheckCircleIcon className="w-4 h-4" />}
+                              </div>
+                              {qualityLevels.map((lvl, idx) => (
+                                <div
+                                  key={idx}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (hlsRef.current) hlsRef.current.currentLevel = idx;
+                                    setCurrentQuality(idx);
+                                    setShowQualityMenu(false);
+                                  }}
+                                  className={`px-4 py-2 text-[13px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
+                                    currentQuality === idx
+                                      ? 'text-[var(--color-primary)] font-bold'
+                                      : 'text-white hover:bg-white/10'
+                                  }`}
+                                >
+                                  {lvl.height}p {currentQuality === idx && <CheckCircleIcon className="w-4 h-4" />}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Episode Drawer Button (Mobile/Tablet) */}
+                      {episodes.length > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowOverlay((v) => !v);
+                          }}
+                          className="p-2 min-w-[38px] min-h-[38px] lg:hidden flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                          aria-label="Danh sách tập"
+                        >
+                          <ListBulletIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                        </button>
+                      )}
+
+                      {/* Cinema Mode (Desktop) */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCinemaMode((v) => !v);
+                        }}
+                        className="p-2 min-w-[38px] min-h-[38px] hidden lg:flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        title="Chế độ rạp phim"
+                        aria-label="Chế độ rạp phim"
+                      >
+                        <FilmIcon className={`w-5 h-5 ${cinemaMode ? 'text-[var(--color-primary)]' : ''}`} />
+                      </button>
+
+                      {/* Fullscreen Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFullscreen();
+                        }}
+                        className="p-2 min-w-[38px] min-h-[38px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        aria-label={fullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+                      >
+                        {fullscreen ? (
+                          <ArrowsPointingInIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                        ) : (
+                          <ArrowsPointingOutIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Episode Overlay Drawer (Mobile/Tablet Fullscreen) */}
+            {showOverlay && episodes.length > 0 && (
+              <div
+                className="absolute inset-0 z-50 bg-[var(--color-bg-base)]/95 backdrop-blur-md flex flex-col p-4 sm:p-6 animate-in fade-in duration-200 pointer-events-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowOverlay(false);
+                }}
+              >
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-[var(--color-border)]">
+                  <div>
+                    <h3 className="text-[var(--color-text-1)] font-heading text-[18px] sm:text-[22px] uppercase tracking-wide">
+                      Danh sách tập
+                    </h3>
+                    <p className="text-[var(--color-text-3)] text-[12px]">{episodes.length} tập có sẵn</p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowOverlay(false);
+                    }}
+                    className="p-2 rounded-full bg-[var(--color-bg-surface)] text-[var(--color-text-1)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)]"
+                    aria-label="Đóng danh sách tập"
+                  >
+                    <XMarkIcon className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Server Selector if Multiple */}
+                {servers.length > 1 && (
+                  <div
+                    className="flex flex-wrap gap-2 mb-4 bg-[var(--color-bg-surface)] p-1.5 rounded-[8px] border border-[var(--color-border)]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {servers.map((s, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setActiveServer(i)}
+                        className={`px-3 py-1.5 rounded-[6px] text-[12px] font-semibold transition-colors ${
+                          activeServer === i
+                            ? 'bg-[var(--color-primary)] text-white'
+                            : 'text-[var(--color-text-2)] hover:text-[var(--color-text-1)] hover:bg-[var(--color-bg-hover)]'
+                        }`}
+                      >
+                        {s.server_name?.replace(/vietsub|thuyết minh|server/gi, '').trim() || `Server ${i + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Episode Grid */}
+                <div
+                  className="flex-1 overflow-y-auto grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 content-start pb-6"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {episodes.map((ep, idx) => {
+                    const isCurrent = ep.slug === currentEpisode;
+                    const isWatched = watchedEps.includes(ep.slug);
+                    return (
+                      <button
+                        key={ep.slug}
+                        onClick={() => {
+                          onEpisodeChange(activeServer, ep.slug);
+                          setShowOverlay(false);
+                        }}
+                        className={`relative py-3 rounded-[8px] text-[13px] font-semibold transition-all border flex justify-center items-center active:scale-95 ${
+                          isCurrent
+                            ? 'bg-[var(--color-primary)] text-white border-transparent shadow-md'
+                            : isWatched
+                            ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-3)] border-[var(--color-border)]'
+                            : 'bg-[var(--color-bg-surface)] text-[var(--color-text-1)] border-[var(--color-border)] hover:bg-[var(--color-bg-hover)]'
+                        }`}
+                      >
+                        <span className="z-10">{ep.name || `${idx + 1}`}</span>
+                        {isWatched && !isCurrent && (
+                          <CheckCircleIcon className="absolute top-1 right-1 w-3.5 h-3.5 text-[#22c55e]" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Fullscreen Button (Local) */}
-          <div className="p-4 border-t border-white/5 shrink-0">
-            <button
-              onClick={toggleFullscreen}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/5 border border-white/10 text-white/50 font-black text-[11px] uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all"
+          {/* ── Episode Sidebar (Desktop + Tablet Landscape) ── */}
+          {showList && episodes.length > 0 && (
+            <div
+              className={`bg-[var(--color-bg-surface)] border-t lg:border-t-0 lg:border-l border-[var(--color-border)] flex flex-col shrink-0 transition-all duration-300 ${
+                cinemaMode
+                  ? 'w-full lg:w-72 xl:w-80'
+                  : 'w-full lg:w-72 xl:w-84 max-h-[280px] sm:max-h-[340px] lg:max-h-none'
+              }`}
             >
-              <ArrowsPointingOutIcon className="w-4 h-4" />
-              Xem toàn màn hình
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+              <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-[var(--color-border)] shrink-0">
+                <div className="flex flex-col">
+                  <h3 className="text-[var(--color-text-1)] font-heading text-[18px] sm:text-[20px] uppercase">
+                    Danh sách tập
+                  </h3>
+                  <p className="text-[var(--color-text-3)] text-[12px] font-medium">{episodes.length} tập</p>
+                </div>
 
+                {servers.length > 1 && (
+                  <select
+                    className="bg-[var(--color-bg-hover)] text-[var(--color-text-1)] text-[12px] font-medium rounded-[6px] px-2.5 py-1.5 border border-[var(--color-border)] outline-none focus:border-[var(--color-primary)]"
+                    value={activeServer}
+                    onChange={(e) => setActiveServer(Number(e.target.value))}
+                  >
+                    {servers.map((s, i) => (
+                      <option key={i} value={i} className="bg-[var(--color-bg-surface)]">
+                        {s.server_name?.replace(/vietsub|thuyết minh|server/gi, '').trim() || `Server ${i + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-4 gap-2 sm:gap-2.5">
+                  {episodes.map((ep, idx) => {
+                    const isCurrent = ep.slug === currentEpisode;
+                    const isWatched = watchedEps.includes(ep.slug);
+                    return (
+                      <button
+                        key={ep.slug}
+                        id={`ep-${ep.slug}`}
+                        onClick={() => onEpisodeChange(activeServer, ep.slug)}
+                        className={`relative py-2.5 sm:py-3 rounded-[8px] text-[12px] sm:text-[13px] font-semibold transition-all border flex justify-center items-center active:scale-95 ${
+                          isCurrent
+                            ? 'bg-[var(--color-primary)] text-white border-transparent shadow-md'
+                            : isWatched
+                            ? 'bg-[var(--color-bg-base)] text-[var(--color-text-3)] border-[var(--color-border)]'
+                            : 'bg-[var(--color-bg-base)] text-[var(--color-text-2)] hover:text-[var(--color-text-1)] border-[var(--color-border)] hover:bg-[var(--color-bg-hover)]'
+                        }`}
+                      >
+                        <span className="z-10">{ep.name || `${idx + 1}`}</span>
+                        {isWatched && !isCurrent && (
+                          <CheckCircleIcon className="absolute top-1 right-1 w-3.5 h-3.5 text-[#22c55e]" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
 };

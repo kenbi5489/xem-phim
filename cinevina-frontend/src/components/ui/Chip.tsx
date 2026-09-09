@@ -11,10 +11,10 @@ export const Chip = React.forwardRef<HTMLSpanElement, ChipProps>(
       <span
         ref={ref}
         className={cn(
-          "inline-flex items-center px-3 py-1 text-sm font-medium transition-colors duration-200 cursor-pointer rounded-md",
+          "inline-flex items-center justify-center px-3 py-1 text-[12px] font-medium transition-colors duration-200 rounded-[6px]",
           selected 
-            ? "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]" 
-            : "bg-[var(--color-surface-variant)] text-[var(--color-on-surface)] hover:bg-[color-mix(in_srgb,var(--color-surface-variant)_80%,var(--color-primary)_20%)]",
+            ? "bg-[var(--color-primary)] text-white" 
+            : "bg-[var(--color-bg-hover)] text-[var(--color-text-2)] hover:text-[var(--color-text-1)] cursor-pointer",
           className
         )}
         {...props}

@@ -3,6 +3,8 @@ CINEVINA — movies router
 Nguồn chính: KKPhim (phimapi.com)
 """
 import urllib.parse
+import re
+import unicodedata
 from typing import Optional, List, Any, Dict
 
 import httpx
@@ -17,6 +19,27 @@ OPHIM_BASE = "https://ophim1.com"
 # ─────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────
+
+def parse_series_info(name: str):
+    """
+    Parse title to extract base_name, series_id, and season_number.
+    E.g. 'Danh Dự (Phần 1)' -> 'Danh Dự', 'danh-du', 1
+    """
+    if not name:
+        return name, None, 1
+        
+    pattern = r'(?i)\s*(?:\(|-)?\s*(?:Phần|Season)\s*(\d+)\s*(?:\))?$'
+    match = re.search(pattern, name)
+    
+    if match:
+        season_number = int(match.group(1))
+        base_name = name[:match.start()].strip()
+        s = unicodedata.normalize('NFKD', base_name).encode('ascii', 'ignore').decode('utf-8').lower()
+        series_id = re.sub(r'[^a-z0-9]+', '-', s).strip('-')
+        return base_name, series_id, season_number
+        
+    return name, None, 1
+
 
 def normalize_kkphim_image_url(url: Optional[str]) -> str:
     """
@@ -137,11 +160,17 @@ def _map_item(item: dict, path_image: str = "") -> dict:
             poster_raw = f"{path_image.rstrip('/')}/{str(poster_raw).lstrip('/')}"
         if thumb_raw and not str(thumb_raw).startswith("http"):
             thumb_raw = f"{path_image.rstrip('/')}/{str(thumb_raw).lstrip('/')}"
+            
+    title_raw = item.get("name", "")
+    base_title, series_id, season_number = parse_series_info(title_raw)
 
     return {
         "id":             str(item.get("_id") or item.get("id") or ""),
         "slug":           item.get("slug", ""),
-        "title":          item.get("name", ""),
+        "title":          title_raw,
+        "base_title":     base_title,
+        "series_id":      series_id,
+        "season_number":  season_number,
         "original_title": item.get("origin_name", ""),
         "poster_url":     _fix_image(poster_raw),
         "thumb_url":      _fix_image(thumb_raw),
@@ -217,18 +246,130 @@ async def _ophim_get(path: str, params: dict) -> dict:
         except Exception as e:
             return {} # Fallback
 
+def _clean_text_for_fingerprint(text: str) -> str:
+    """Chuẩn hoá chuỗi để so sánh phim trùng lặp (bỏ dấu, năm, mùa, ký tự đặc biệt)."""
+    if not text:
+        return ""
+    # Bỏ dấu tiếng Việt
+    s = unicodedata.normalize('NFKD', str(text)).encode('ascii', 'ignore').decode('utf-8').lower()
+    # Bỏ năm dạng (2024), [2024], 2024 ở cuối
+    s = re.sub(r'[\(\[]?\b(19\d\d|20\d\d)\b[\)\]]?', ' ', s)
+    # Bỏ phần/mùa
+    s = re.sub(r'\b(phan|season|ss)\s*\d+\b', ' ', s)
+    # Bỏ các nhãn chất lượng / thuyết minh phổ biến
+    s = re.sub(r'\b(thuyet minh|vietsub|long tieng|ban cam|cam|hd|fhd|4k|raw)\b', ' ', s)
+    # Chỉ giữ lại ký tự chữ cái và số
+    s = re.sub(r'[^a-z0-9]+', ' ', s).strip()
+    return re.sub(r'\s+', ' ', s)
+
+def _clean_slug_for_fingerprint(slug: str) -> str:
+    """Loại bỏ các hậu tố thường thấy trong slug."""
+    if not slug:
+        return ""
+    s = slug.lower().strip()
+    # Bỏ năm ở cuối slug (-2024, -2023)
+    s = re.sub(r'-(19\d\d|20\d\d)$', '', s)
+    # Bỏ các đuôi vietsub, thuyet-minh, cam, full, tap-full
+    s = re.sub(r'-(vietsub|thuyet-minh|long-tieng|ban-cam|cam|full|tap-full)$', '', s)
+    return s.strip('-')
+
+def _quality_score(quality: Optional[str]) -> int:
+    """Chấm điểm chất lượng video để ưu tiên bản đẹp hơn."""
+    q = (quality or "").upper()
+    if any(k in q for k in ["4K", "UHD", "2160"]):
+        return 5
+    if any(k in q for k in ["FHD", "1080"]):
+        return 4
+    if any(k in q for k in ["HD", "720"]):
+        return 3
+    if any(k in q for k in ["SD", "480", "360"]):
+        return 2
+    if "CAM" in q:
+        return 1
+    return 3
+
 def _merge_and_dedup(items1: list, items2: list) -> list:
-    """Gộp 2 danh sách phim và loại bỏ các phim trùng lặp dựa trên slug."""
-    seen_slugs = set()
-    merged = []
+    """
+    Gộp 2 danh sách phim từ KKPhim và Ophim, loại bỏ triệt để phim trùng:
+    1. So khớp exact slug
+    2. So khớp normalized slug (bỏ -2024, -vietsub...)
+    3. So khớp tiêu đề tiếng Việt chuẩn hoá (bỏ dấu, năm, mùa)
+    4. So khớp tiêu đề gốc tiếng Anh (origin_name) kết hợp năm phát hành
+    Ưu tiên: Bản phát được (streamable) > Bản không phát được, Chất lượng cao > Chất lượng thấp.
+    """
+    merged: list = []
+    # Fingerprint index maps to index in merged list
+    fp_to_index: dict = {}
+
     for item in items1 + items2:
-        slug = item.get("slug")
-        if slug and slug not in seen_slugs:
-            seen_slugs.add(slug)
+        slug = item.get("slug", "").strip()
+        norm_slug = _clean_slug_for_fingerprint(slug)
+        title_fp = _clean_text_for_fingerprint(item.get("title") or item.get("base_title") or "")
+        orig_fp = _clean_text_for_fingerprint(item.get("original_title") or "")
+        year = str(item.get("year") or "").strip()
+        orig_with_year = f"{orig_fp}_{year}" if orig_fp and year else ""
+
+        # Tìm xem đã có bản ghi nào trùng các tiêu chí fingerprint chưa
+        matched_idx = None
+        for fp in [slug, norm_slug, title_fp, orig_with_year]:
+            if fp and fp in fp_to_index:
+                matched_idx = fp_to_index[fp]
+                break
+
+        if matched_idx is None:
+            # Chưa có -> Thêm mới vào merged list
+            idx = len(merged)
             merged.append(item)
+            # Lưu các fingerprint trỏ tới index này
+            if slug:
+                fp_to_index[slug] = idx
+            if norm_slug:
+                fp_to_index[norm_slug] = idx
+            if title_fp and len(title_fp) >= 3:
+                fp_to_index[title_fp] = idx
+            if orig_with_year and len(orig_fp) >= 3:
+                fp_to_index[orig_with_year] = idx
+        else:
+            # Đã có -> So sánh để giữ lại bản tốt nhất
+            existing = merged[matched_idx]
+            curr_is_stream = bool(item.get("is_streamable", True))
+            exist_is_stream = bool(existing.get("is_streamable", True))
+            curr_score = _quality_score(item.get("quality"))
+            exist_score = _quality_score(existing.get("quality"))
+
+            replace = False
+            if curr_is_stream and not exist_is_stream:
+                replace = True
+            elif not curr_is_stream and exist_is_stream:
+                replace = False
+            elif curr_score > exist_score:
+                replace = True
+            elif not existing.get("poster_url") and item.get("poster_url"):
+                replace = True
+
+            if replace:
+                merged[matched_idx] = item
+                # Cập nhật thêm fingerprint của item mới vào index
+                if slug:
+                    fp_to_index[slug] = matched_idx
+                if norm_slug:
+                    fp_to_index[norm_slug] = matched_idx
+
     return merged
 
-async def _fetch_and_merge(path: str, params: dict, page: int, limit: int) -> dict:
+def _group_items(items: list) -> list:
+    """Gom nhóm các phim thuộc cùng 1 series trên danh sách, giữ lại phần mới nhất."""
+    grouped = {}
+    for item in items:
+        sid = item.get("series_id")
+        if sid:
+            if sid not in grouped or item["season_number"] > grouped[sid]["season_number"]:
+                grouped[sid] = item
+        else:
+            grouped[item["id"]] = item
+    return list(grouped.values())
+
+async def _fetch_and_merge(path: str, params: dict, page: int, limit: int, grouped: bool = False) -> dict:
     """Fetch dữ liệu từ KKPhim và Ophim, sau đó gộp lại."""
     import asyncio
     kkphim_task = _kkphim_get(path, params)
@@ -257,6 +398,9 @@ async def _fetch_and_merge(path: str, params: dict, page: int, limit: int) -> di
     
     merged_items = _merge_and_dedup(kkphim_mapped, ophim_mapped)
     
+    if grouped:
+        merged_items = _group_items(merged_items)
+    
     # Tính toán pagination
     kk_pagination = kkphim_data.get("data", {}).get("params", {}).get("pagination", {}) or kkphim_data.get("pagination", {})
     op_pagination = ophim_data.get("data", {}).get("params", {}).get("pagination", {}) or ophim_data.get("pagination", {})
@@ -279,9 +423,9 @@ async def _fetch_and_merge(path: str, params: dict, page: int, limit: int) -> di
 # ─────────────────────────────────────────
 
 @router.get("/trending")
-async def get_trending(limit: int = 10):
+async def get_trending(limit: int = 10, grouped: bool = Query(False)):
     """Lấy top phim trending — dùng phim mới cập nhật từ cả 2 nguồn làm trending proxy."""
-    data = await _fetch_and_merge("/danh-sach/phim-moi-cap-nhat", {"page": 1, "limit": limit}, 1, limit)
+    data = await _fetch_and_merge("/danh-sach/phim-moi-cap-nhat", {"page": 1, "limit": limit}, 1, limit, grouped)
     return data.get("items", [])[:limit]
 
 
@@ -292,6 +436,7 @@ async def get_movies(
     genre:    Optional[str] = None,
     year:     Optional[str] = None,
     sort:     str           = "modified.time",
+    grouped:  bool          = Query(False),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=24, ge=1, le=100),
 ):
@@ -304,20 +449,20 @@ async def get_movies(
     if country:
         endpoint = f"/v1/api/quoc-gia/{country}"
         if genre: base_params["category"] = genre
-        return await _fetch_and_merge(endpoint, base_params, page, limit)
+        return await _fetch_and_merge(endpoint, base_params, page, limit, grouped)
 
     # Ưu tiên tiếp theo theo Genre
     if genre:
         endpoint = f"/v1/api/the-loai/{genre}"
-        return await _fetch_and_merge(endpoint, base_params, page, limit)
+        return await _fetch_and_merge(endpoint, base_params, page, limit, grouped)
 
     # Cuối cùng theo Category
     cat = category or "phim-moi-cap-nhat"
     if cat == "phim-moi-cap-nhat":
-        return await _fetch_and_merge("/danh-sach/phim-moi-cap-nhat", {"page": page, "limit": limit}, page, limit)
+        return await _fetch_and_merge("/danh-sach/phim-moi-cap-nhat", {"page": page, "limit": limit}, page, limit, grouped)
     
     endpoint = f"/v1/api/danh-sach/{cat}"
-    return await _fetch_and_merge(endpoint, base_params, page, limit)
+    return await _fetch_and_merge(endpoint, base_params, page, limit, grouped)
 
 
 
@@ -326,21 +471,9 @@ async def search_movies(
     keyword: str = Query(..., min_length=1),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=24, ge=1, le=100),
+    grouped: bool = Query(False),
 ):
-    # 1. Optionally fetch live/sport items from plugin (non-fatal)
-    live_items = []
-    if page == 1:
-        try:
-            SourceRegistry.discover_plugins()
-            plugin = SourceRegistry.get_plugin("sport_live")
-            if plugin and getattr(plugin, "is_active", False):
-                live_items_raw = await plugin.search(keyword)
-                live_items = [item.model_dump() if hasattr(item, "model_dump") else item for item in live_items_raw]
-        except Exception:
-            pass  # Plugin errors should never break main search
-
-
-    # 2. Fetch từ cả KKPhim và Ophim
+    # Fetch từ cả KKPhim và Ophim
     import asyncio
     kkphim_task = _kkphim_get("/v1/api/tim-kiem", {"keyword": keyword, "page": page, "limit": limit})
     ophim_task = _ophim_get("/v1/api/tim-kiem", {"keyword": keyword, "page": page, "limit": limit})
@@ -364,15 +497,16 @@ async def search_movies(
     
     merged_api_items = _merge_and_dedup(kk_mapped, op_mapped)
     
+    if grouped:
+        merged_api_items = _group_items(merged_api_items)
+    
     pagination = kkphim_data.get("data", {}).get("params", {}).get("pagination", {})
     if not pagination:
         pagination = ophim_data.get("data", {}).get("params", {}).get("pagination", {})
 
-    combined_items = live_items + merged_api_items
-
     return {
-        "items":       combined_items,
-        "total":       pagination.get("totalItems", len(merged_api_items)) + len(live_items),
+        "items":       merged_api_items,
+        "total":       pagination.get("totalItems", len(merged_api_items)),
         "page":        page,
         "limit":       limit,
         "total_pages": pagination.get("totalPages", 1),
@@ -383,8 +517,9 @@ async def search_movies(
 async def get_cinema_movies(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=24, ge=1, le=100),
+    grouped: bool = Query(False),
 ):
-    return await _fetch_and_merge("/v1/api/danh-sach/phim-chieu-rap", {"page": page, "limit": limit, "sort_field": "modified.time"}, page, limit)
+    return await _fetch_and_merge("/v1/api/danh-sach/phim-chieu-rap", {"page": page, "limit": limit, "sort_field": "modified.time"}, page, limit, grouped)
 
 
 @router.get("/by-country/{country_slug}")
@@ -395,11 +530,12 @@ async def get_by_country(
     genre: Optional[str]  = None,
     year:  Optional[str]  = None,
     sort:  str            = "modified.time",
+    grouped: bool         = Query(False),
 ):
     params = {"page": page, "limit": limit, "sort_field": sort}
     if genre: params["category"] = genre
     if year:  params["year"] = year
-    return await _fetch_and_merge(f"/v1/api/quoc-gia/{country_slug}", params, page, limit)
+    return await _fetch_and_merge(f"/v1/api/quoc-gia/{country_slug}", params, page, limit, grouped)
 
 
 @router.get("/by-genre/{genre_slug}")
@@ -410,11 +546,12 @@ async def get_by_genre(
     country: Optional[str] = None,
     year:    Optional[str] = None,
     sort:    str           = "modified.time",
+    grouped: bool          = Query(False),
 ):
     params = {"page": page, "limit": limit, "sort_field": sort}
     if country: params["country"] = country
     if year:    params["year"] = year
-    return await _fetch_and_merge(f"/v1/api/the-loai/{genre_slug}", params, page, limit)
+    return await _fetch_and_merge(f"/v1/api/the-loai/{genre_slug}", params, page, limit, grouped)
 
 
 @router.get("/{slug}/stream/{episode_slug}")
@@ -439,6 +576,49 @@ async def get_stream(slug: str, episode_slug: str):
                     }
     raise HTTPException(404, "Episode not found")
 
+
+@router.get("/series/{series_id}")
+async def get_series_detail(series_id: str):
+    """Dynamic endpoint to group multiple seasons by searching for the series_id (slug)"""
+    keyword = series_id.replace('-', ' ')
+    
+    import asyncio
+    kkphim_task = _kkphim_get("/v1/api/tim-kiem", {"keyword": keyword, "limit": 100})
+    ophim_task = _ophim_get("/v1/api/tim-kiem", {"keyword": keyword, "limit": 100})
+    
+    try:
+        kkphim_data, ophim_data = await asyncio.gather(kkphim_task, ophim_task)
+    except Exception:
+        kkphim_data, ophim_data = {}, {}
+        
+    kk_items = kkphim_data.get("data", {}).get("items") or []
+    op_items = ophim_data.get("data", {}).get("items") or []
+    
+    ophim_path_image = ophim_data.get("pathImage") or ophim_data.get("data", {}).get("APP_DOMAIN_CDN_IMAGE", "")
+    if not ophim_path_image or ophim_path_image.strip("/") == "https://img.ophim.live":
+        ophim_path_image = "https://img.ophim.live/uploads/movies/"
+    elif not ophim_path_image.endswith("/"):
+        ophim_path_image += "/"
+    
+    kk_mapped = [_map_item(i) for i in kk_items]
+    op_mapped = [_map_item(i, ophim_path_image) for i in op_items]
+    
+    merged_items = _merge_and_dedup(kk_mapped, op_mapped)
+    
+    seasons = [m for m in merged_items if m.get("series_id") == series_id]
+    seasons.sort(key=lambda x: x.get("season_number", 1))
+    
+    if not seasons:
+        raise HTTPException(404, "Series not found")
+        
+    base_movie = seasons[-1] # latest season metadata
+    return {
+        "series_id": series_id,
+        "name": base_movie.get("base_title"),
+        "description": base_movie.get("description"),
+        "poster_url": base_movie.get("poster_url"),
+        "seasons": seasons
+    }
 
 @router.get("/{slug}")
 async def get_movie_detail(slug: str):
@@ -520,11 +700,18 @@ async def get_movie_detail(slug: str):
 
     # Lấy thêm trường duration từ "time"
     duration = movie.get("time", "")
+    
+    # Extract base_title and series_id
+    title_raw = movie.get("name", "")
+    base_title, series_id, season_number = parse_series_info(title_raw)
 
     return {
         "id":             str(movie.get("_id") or ""),
         "slug":           movie.get("slug", ""),
-        "title":          movie.get("name", ""),
+        "title":          title_raw,
+        "base_title":     base_title,
+        "series_id":      series_id,
+        "season_number":  season_number,
         "original_title": movie.get("origin_name", ""),
         "description":    movie.get("content", ""),
         "poster_url":     _fix_image(movie.get("poster_url")),

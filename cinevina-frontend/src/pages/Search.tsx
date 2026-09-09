@@ -1,54 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { MagnifyingGlassIcon, XMarkIcon, ClockIcon } from '@heroicons/react/24/outline';
+import {
+  MagnifyingGlassIcon,
+  XMarkIcon,
+  ClockIcon,
+  FireIcon,
+  FunnelIcon,
+} from '@heroicons/react/24/outline';
 import { MovieCard } from '../components/ui/MovieCard';
 import { useSearchMovies, useDebounce } from '../hooks/useMovies';
 import type { MovieInfo } from '../services/api';
 
-// ─── Group config ─────────────────────────────────────────────────────────────
-const GROUP_ORDER = ['live', 'series', 'single', 'hoathinh', 'tvshows', 'other'] as const;
-const GROUP_LABELS: Record<string, { label: string; emoji: string }> = {
-  live:     { label: 'Truyền Hình', emoji: '🔴' },
-  series:   { label: 'Phim Bộ',    emoji: '📺' },
-  single:   { label: 'Phim Lẻ',    emoji: '🎬' },
-  hoathinh: { label: 'Anime',      emoji: '🌙' },
-  tvshows:  { label: 'TV Show',    emoji: '🎭' },
-  other:    { label: 'Phim khác',  emoji: '🎞️' },
-};
+type FilterCategory = 'all' | 'single' | 'series' | 'hoathinh' | 'cinema';
 
-const groupMovies = (movies: MovieInfo[]) => {
-  const groups: Record<string, MovieInfo[]> = {};
-  for (const m of movies) {
-    let key = (m.type || 'other').toLowerCase();
-    const isHoatHinh = key === 'hoathinh' || key === 'hoat-hinh' || m.categories?.toLowerCase().includes('hoạt hình');
-    
-    if (isHoatHinh) key = 'hoathinh';
-    else if (key === 'live') key = 'live';
-    else if (key === 'series') key = 'series';
-    else if (key === 'single') key = 'single';
-    else if (key === 'tvshows' || key === 'tv-shows') key = 'tvshows';
-    else key = 'other';
-    
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(m);
-  }
-  return groups;
-};
+interface CategoryFilter {
+  key: FilterCategory;
+  label: string;
+}
 
+const CATEGORIES: CategoryFilter[] = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'single', label: 'Phim lẻ' },
+  { key: 'series', label: 'Phim bộ' },
+  { key: 'hoathinh', label: 'Anime / Hoạt hình' },
+  { key: 'cinema', label: 'Chiếu rạp' },
+];
 
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export const Search: React.FC = () => {
-  const location  = useLocation();
-  const navigate  = useNavigate();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Sync query state with URL ?q=
   const urlQ = new URLSearchParams(location.search).get('q') || '';
   const [input, setInput] = useState(urlQ);
-  const debouncedQuery = useDebounce(input, 300);
+  const debouncedQuery = useDebounce(input, 250);
   const [history, setHistory] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('all');
 
-  // Load history on mount
+  // Load search history
   useEffect(() => {
     try {
       const stored = localStorage.getItem('cinevina_search_history');
@@ -63,8 +51,8 @@ export const Search: React.FC = () => {
   const addToHistory = (query: string) => {
     const q = query.trim();
     if (q.length < 2) return;
-    setHistory(prev => {
-      const next = [q, ...prev.filter(i => i.toLowerCase() !== q.toLowerCase())].slice(0, 10);
+    setHistory((prev) => {
+      const next = [q, ...prev.filter((i) => i.toLowerCase() !== q.toLowerCase())].slice(0, 10);
       try {
         localStorage.setItem('cinevina_search_history', JSON.stringify(next));
       } catch (e) {}
@@ -74,8 +62,8 @@ export const Search: React.FC = () => {
 
   const removeHistory = (query: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setHistory(prev => {
-      const next = prev.filter(i => i.toLowerCase() !== query.toLowerCase());
+    setHistory((prev) => {
+      const next = prev.filter((i) => i.toLowerCase() !== query.toLowerCase());
       try {
         localStorage.setItem('cinevina_search_history', JSON.stringify(next));
       } catch (e) {}
@@ -83,10 +71,11 @@ export const Search: React.FC = () => {
     });
   };
 
-  // Keep input in sync when URL changes externally (e.g. browser back/forward)
-  useEffect(() => { setInput(urlQ); }, [urlQ]);
+  useEffect(() => {
+    setInput(urlQ);
+  }, [urlQ]);
 
-  // Update URL when debounced value changes
+  // Sync URL with debounced query
   useEffect(() => {
     const q = debouncedQuery.trim();
     const currentQ = new URLSearchParams(location.search).get('q') || '';
@@ -100,9 +89,31 @@ export const Search: React.FC = () => {
     }
   }, [debouncedQuery]);
 
-  const { data: results, isLoading, error, refetch } = useSearchMovies(debouncedQuery.trim());
-  const grouped = results ? groupMovies(results) : {};
-  const hasResults = results && results.length > 0;
+  const { data: results, isLoading, error } = useSearchMovies(debouncedQuery.trim());
+
+  // Filter results by selected category
+  const filteredResults = useMemo(() => {
+    if (!results || results.length === 0) return [];
+    if (selectedCategory === 'all') return results;
+
+    return results.filter((m: MovieInfo) => {
+      const type = (m.type || '').toLowerCase();
+      const cat = (m.categories || '').toLowerCase();
+
+      switch (selectedCategory) {
+        case 'single':
+          return type === 'single';
+        case 'series':
+          return type === 'series';
+        case 'hoathinh':
+          return type === 'hoathinh' || type === 'hoat-hinh' || cat.includes('hoạt hình') || cat.includes('anime');
+        case 'cinema':
+          return m.isCinema === true || cat.includes('chiếu rạp');
+        default:
+          return true;
+      }
+    });
+  }, [results, selectedCategory]);
 
   const clearSearch = () => {
     setInput('');
@@ -110,95 +121,135 @@ export const Search: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-32 pb-24 px-6 md:px-12 flex flex-col gap-12">
-      <div className="max-w-[1500px] mx-auto w-full flex flex-col gap-12">
-        
-        {/* ── Search Input ───────────────────────────────────────────────── */}
+    <div className="min-h-screen bg-[var(--color-bg-base)] pt-24 sm:pt-28 pb-28 lg:pb-16 px-4 md:px-8 flex flex-col">
+      <div className="max-w-[1440px] mx-auto w-full flex flex-col gap-6 sm:gap-8">
+        {/* ── Search Header & Input ── */}
         <div className="max-w-3xl mx-auto w-full flex flex-col gap-4">
-          <div className="relative flex items-center group">
-            <div className="absolute left-6 w-6 h-6 text-primary group-focus-within:scale-125 transition-transform duration-500">
+          <div className="relative flex items-center">
+            <div className="absolute left-4 sm:left-5 w-5 h-5 text-[var(--color-text-3)] pointer-events-none">
               <MagnifyingGlassIcon />
             </div>
             <input
               id="search-input"
               type="text"
               value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
                 if (e.key === 'Escape') clearSearch();
               }}
               placeholder="Tìm kiếm phim, diễn viên, đạo diễn..."
               autoFocus
-              className="w-full pl-16 pr-16 py-6 rounded-[32px] glass-premium border border-white/10 text-white placeholder-white/30 text-lg md:text-xl font-bold focus:outline-none focus:border-primary focus:shadow-[0_0_40px_rgba(175,37,254,0.2)] transition-all duration-500"
+              className="w-full pl-12 sm:pl-14 pr-12 sm:pr-14 py-3.5 sm:py-4 rounded-[14px] bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-1)] placeholder-[var(--color-text-3)] text-[15px] sm:text-[16px] font-medium focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all shadow-lg"
             />
             {input && (
-              <button onClick={clearSearch} className="absolute right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all" aria-label="Xóa">
-                <XMarkIcon className="w-6 h-6" />
+              <button
+                onClick={clearSearch}
+                className="absolute right-3.5 sm:right-4 p-1.5 rounded-full bg-[var(--color-bg-hover)] text-[var(--color-text-2)] hover:text-[var(--color-text-1)] transition-colors active:scale-95"
+                aria-label="Xóa từ khóa"
+              >
+                <XMarkIcon className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             )}
           </div>
 
-          {/* Result count */}
+          {/* Category Filter Pills */}
+          {debouncedQuery.trim().length >= 2 && results && results.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar -mx-2 px-2">
+              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-text-3)] shrink-0 mr-1 hidden sm:flex">
+                <FunnelIcon className="w-3.5 h-3.5" /> Lọc:
+              </div>
+              {CATEGORIES.map((cat) => {
+                const count =
+                  cat.key === 'all'
+                    ? results.length
+                    : results.filter((m) => {
+                        const type = (m.type || '').toLowerCase();
+                        const c = (m.categories || '').toLowerCase();
+                        if (cat.key === 'single') return type === 'single';
+                        if (cat.key === 'series') return type === 'series';
+                        if (cat.key === 'hoathinh')
+                          return type === 'hoathinh' || type === 'hoat-hinh' || c.includes('hoạt hình') || c.includes('anime');
+                        if (cat.key === 'cinema') return m.isCinema === true || c.includes('chiếu rạp');
+                        return true;
+                      }).length;
+
+                return (
+                  <button
+                    key={cat.key}
+                    onClick={() => setSelectedCategory(cat.key)}
+                    className={`px-3.5 py-1.5 rounded-[20px] text-[12px] sm:text-[13px] font-semibold transition-all whitespace-nowrap active:scale-95 ${
+                      selectedCategory === cat.key
+                        ? 'bg-[var(--color-primary)] text-white shadow-md'
+                        : 'bg-[var(--color-bg-surface)] text-[var(--color-text-2)] hover:text-[var(--color-text-1)] border border-[var(--color-border)] hover:bg-[var(--color-bg-hover)]'
+                    }`}
+                  >
+                    {cat.label} <span className="opacity-70 text-[11px]">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Search feedback summary */}
           {debouncedQuery.trim().length >= 2 && !isLoading && (
-            <p className="text-white/40 text-sm font-black uppercase tracking-[0.2em] text-center flex items-center justify-center gap-3 animate-fade-in">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              {hasResults
-                ? `Tìm thấy ${results!.length} siêu phẩm cho "${debouncedQuery.trim()}"`
-                : `Không tìm thấy kết quả nào cho "${debouncedQuery.trim()}"`}
-            </p>
+            <div className="flex items-center justify-between text-[13px] text-[var(--color-text-3)] px-1">
+              <span>
+                {results && results.length > 0
+                  ? `Tìm thấy ${filteredResults.length} phim phù hợp`
+                  : `Không tìm thấy kết quả cho "${debouncedQuery.trim()}"`}
+              </span>
+              {selectedCategory !== 'all' && (
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className="text-[var(--color-primary)] hover:underline font-semibold"
+                >
+                  Bỏ lọc
+                </button>
+              )}
+            </div>
           )}
         </div>
 
-        {/* ── Loading ─────────────────────────────────────────────────────── */}
+        {/* ── Loading Skeleton Grid ── */}
         {isLoading && (
-          <div className="flex flex-col gap-16">
-            {[1, 2].map(g => (
-              <div key={g} className="flex flex-col gap-8">
-                <div className="h-8 w-48 bg-surface-container-highest animate-pulse rounded-full" />
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="flex flex-col gap-4">
-                      <div className="aspect-[2/3] bg-surface-container-highest animate-pulse rounded-[24px]" />
-                      <div className="h-4 bg-surface-container-highest animate-pulse rounded-full w-3/4" />
-                    </div>
-                  ))}
-                </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="flex flex-col gap-2 w-full">
+                <div className="w-full aspect-[2/3] bg-[var(--color-bg-surface)] animate-skeleton rounded-[12px]" />
+                <div className="h-4 bg-[var(--color-bg-surface)] animate-skeleton rounded w-3/4 mt-1" />
+                <div className="h-3 bg-[var(--color-bg-surface)] animate-skeleton rounded w-1/2" />
               </div>
             ))}
           </div>
         )}
 
-        {/* ── Error ───────────────────────────────────────────────────────── */}
-        {error && !isLoading && (
-          <div className="py-32 flex flex-col items-center gap-8 text-center glass-premium rounded-[40px]">
-            <span className="text-7xl animate-bounce">😵</span>
-            <div className="flex flex-col gap-2">
-              <h2 className="text-2xl font-black text-white uppercase italic">Hệ thống đang bảo trì</h2>
-              <p className="text-white/40 font-bold uppercase tracking-widest text-xs">Không thể thực hiện tìm kiếm lúc này</p>
+        {/* ── Empty State ── */}
+        {!isLoading && !error && debouncedQuery.trim().length >= 2 && filteredResults.length === 0 && (
+          <div className="py-20 flex flex-col items-center gap-5 text-center">
+            <div className="w-16 h-16 rounded-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-3)] mb-2">
+              <MagnifyingGlassIcon className="w-8 h-8" />
             </div>
-            <button onClick={() => refetch()} className="btn-vibrant">THỬ LẠI NGAY</button>
-          </div>
-        )}
-
-        {/* ── Empty (has query, no results) ────────────────────────────────── */}
-        {!isLoading && !error && debouncedQuery.trim().length >= 2 && !hasResults && (
-          <div className="py-24 flex flex-col items-center gap-10 text-center glass-premium rounded-[40px]">
-            <div className="w-32 h-32 rounded-[40px] bg-surface-container flex items-center justify-center text-6xl shadow-2xl border border-white/5">🔍</div>
             <div>
-              <h2 className="font-display text-3xl font-black text-white mb-3 uppercase tracking-tighter italic">Không có kết quả</h2>
-              <p className="text-white/40 max-w-sm font-bold uppercase tracking-widest text-xs">
-                Hãy thử từ khóa khác hoặc khám phá các danh mục nổi bật dưới đây
+              <h2 className="font-heading text-[24px] sm:text-[28px] text-[var(--color-text-1)] tracking-wide uppercase mb-1">
+                Không tìm thấy phim
+              </h2>
+              <p className="text-[var(--color-text-3)] text-[14px] max-w-md">
+                Không có phim nào phù hợp với từ khóa <strong className="text-[var(--color-text-1)]">"{debouncedQuery.trim()}"</strong>
+                {selectedCategory !== 'all' && ' trong danh mục này'}. Hãy thử tìm từ khóa khác hoặc khám phá các mục dưới đây.
               </p>
             </div>
-            <div className="flex flex-wrap gap-4 justify-center">
+            <div className="flex flex-wrap gap-2.5 justify-center mt-3">
               {[
-                { to: '/browse/phim-le',   label: '🎬 Phim Lẻ' },
-                { to: '/browse/phim-bo',   label: '📺 Phim Bộ' },
-                { to: '/browse/hoat-hinh', label: '🌙 Anime' },
-                { to: '/browse/phim-chieu-rap', label: '🎭 Chiếu Rạp' },
+                { to: '/browse/phim-le', label: 'Phim Lẻ' },
+                { to: '/browse/phim-bo', label: 'Phim Bộ' },
+                { to: '/browse/hoat-hinh', label: 'Anime & Hoạt hình' },
+                { to: '/browse/phim-chieu-rap', label: 'Chiếu Rạp' },
               ].map(({ to, label }) => (
-                <Link key={to} to={to}
-                  className="px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-primary/20 hover:border-primary/40 text-sm font-black uppercase tracking-widest transition-all">
+                <Link
+                  key={to}
+                  to={to}
+                  className="px-5 py-2.5 rounded-[10px] bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-2)] hover:text-[var(--color-text-1)] hover:border-[var(--color-primary)] text-[13px] font-semibold transition-all shadow-sm active:scale-95"
+                >
                   {label}
                 </Link>
               ))}
@@ -206,83 +257,73 @@ export const Search: React.FC = () => {
           </div>
         )}
 
-        {/* ── Results grouped by type ──────────────────────────────────────── */}
-        {!isLoading && !error && hasResults && (
-          <div className="flex flex-col gap-16">
-            {GROUP_ORDER.map(groupKey => {
-              const group = grouped[groupKey];
-              if (!group || group.length === 0) return null;
-              const { label, emoji } = GROUP_LABELS[groupKey];
-              return (
-                <section key={groupKey} className="flex flex-col gap-8">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-surface-container flex items-center justify-center text-2xl shadow-lg border border-white/5">
-                      {emoji}
-                    </div>
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-4">
-                        <h2 className="font-display text-2xl md:text-3xl font-black text-white uppercase italic text-gradient-primary">
-                          {label}
-                        </h2>
-                        <span className="bg-primary/20 text-primary text-[10px] font-black px-3 py-1 rounded-full border border-primary/20 shadow-[0_0_15px_rgba(175,37,254,0.3)]">
-                          {group.length} KẾT QUẢ
-                        </span>
-                      </div>
-                      <div className="h-1 w-12 bg-primary rounded-full mt-1" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 md:gap-8">
-                    {group.map(m => (
-                      <MovieCard
-                        key={m.id || m.slug}
-                        slug={m.slug}
-                        name={m.name}
-                        posterUrl={m.posterUrl}
-                        thumbUrl={m.thumbUrl}
-                        quality={m.quality}
-                        lang={m.lang}
-                        year={m.year}
-                        description={m.description}
-                        isCinema={m.isCinema}
-                        isStreamable={m.isStreamable}
-                        trailerUrl={m.trailerUrl}
-                        className="w-full"
-                      />
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
+        {/* ── Results Unified Grid ── */}
+        {!isLoading && !error && filteredResults.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+            {filteredResults.map((m) => (
+              <MovieCard
+                key={m.id || m.slug}
+                slug={m.slug}
+                name={m.name}
+                posterUrl={m.posterUrl}
+                thumbUrl={m.thumbUrl}
+                quality={m.quality}
+                lang={m.lang}
+                year={m.year}
+                description={m.description}
+                isCinema={m.isCinema}
+                isStreamable={m.isStreamable}
+                trailerUrl={m.trailerUrl}
+                className="w-full"
+              />
+            ))}
           </div>
         )}
 
-        {/* ── Initial state (no query) ─────────────────────────────────────── */}
+        {/* ── Initial State (No Query) ── */}
         {!isLoading && !error && !debouncedQuery.trim() && (
-          <div className="py-24 flex flex-col items-center gap-10 text-center glass-premium rounded-[40px]">
-            <div className="text-8xl select-none animate-float">🎬</div>
-            <div>
-              <h2 className="font-display text-4xl font-black text-white mb-3 uppercase tracking-tighter italic text-gradient-primary">Tìm kiếm phim</h2>
-              <p className="text-white/40 max-w-sm font-bold uppercase tracking-widest text-xs">Nhập tên phim, diễn viên hoặc đạo diễn để bắt đầu</p>
+          <div className="py-12 flex flex-col items-center gap-8 max-w-2xl mx-auto w-full">
+            <div className="text-center">
+              <h2 className="font-heading text-[30px] sm:text-[36px] text-[var(--color-text-1)] tracking-wide uppercase mb-2">
+                Tìm kiếm phim
+              </h2>
+              <p className="text-[var(--color-text-3)] text-[14px]">
+                Nhập tên phim, diễn viên hoặc thể loại để bắt đầu thưởng thức ngay
+              </p>
             </div>
 
             {/* Search History */}
             {history.length > 0 && (
-              <div className="flex flex-col items-center gap-5 mt-4 w-full max-w-2xl">
-                <div className="flex items-center justify-between w-full px-4">
-                  <p className="text-white/30 text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2">
-                    <ClockIcon className="w-4 h-4" /> Lịch sử tìm kiếm
+              <div className="flex flex-col gap-3 w-full bg-[var(--color-bg-surface)]/50 p-4 sm:p-5 rounded-[16px] border border-[var(--color-border)]">
+                <div className="flex items-center justify-between w-full">
+                  <p className="text-[var(--color-text-2)] text-[13px] font-bold flex items-center gap-2">
+                    <ClockIcon className="w-4 h-4 text-[var(--color-primary)]" /> Tìm kiếm gần đây
                   </p>
-                  <button onClick={() => { setHistory([]); localStorage.removeItem('cinevina_search_history'); }} className="text-white/30 hover:text-white/60 text-[10px] font-black uppercase tracking-[0.3em]">Xóa tất cả</button>
+                  <button
+                    onClick={() => {
+                      setHistory([]);
+                      localStorage.removeItem('cinevina_search_history');
+                    }}
+                    className="text-[var(--color-text-3)] hover:text-[var(--color-text-2)] text-[12px] font-medium transition-colors"
+                  >
+                    Xóa tất cả
+                  </button>
                 </div>
-                <div className="flex flex-wrap gap-3 justify-center w-full">
-                  {history.map(q => (
+                <div className="flex flex-wrap gap-2 w-full">
+                  {history.map((q) => (
                     <div key={q} className="group relative flex items-center">
-                      <button onClick={() => setInput(q)}
-                        className="px-6 py-3 pr-10 rounded-2xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-primary/20 hover:border-primary/40 hover:scale-105 text-sm font-black uppercase tracking-widest transition-all">
+                      <button
+                        onClick={() => setInput(q)}
+                        className="px-3.5 py-1.5 pr-8 rounded-[8px] bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium hover:bg-[var(--color-bg-hover)] hover:border-[var(--color-primary)]/50 transition-all active:scale-95"
+                      >
                         {q}
                       </button>
-                      <button onClick={(e) => removeHistory(q, e)} className="absolute right-2 p-1.5 rounded-full text-white/30 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all">
-                        <XMarkIcon className="w-4 h-4" />
+                      <button
+                        onClick={(e) => removeHistory(q, e)}
+                        className="absolute right-2 p-1 rounded-full text-[var(--color-text-3)] hover:text-[var(--color-text-1)] transition-colors"
+                        aria-label={`Xóa ${q}`}
+                      >
+                        <XMarkIcon className="w-3 h-3" />
                       </button>
                     </div>
                   ))}
@@ -290,13 +331,28 @@ export const Search: React.FC = () => {
               </div>
             )}
 
-            {/* Trending searches */}
-            <div className="flex flex-col items-center gap-5 mt-4">
-              <p className="text-white/30 text-[10px] font-black uppercase tracking-[0.3em]">Xu hướng tìm kiếm</p>
-              <div className="flex flex-wrap gap-3 justify-center max-w-2xl">
-                {['Lật mặt', 'Avengers', 'One Piece', 'Song Hye Kyo', 'Doraemon', 'Fast Furious', 'Spider-Man'].map(q => (
-                  <button key={q} onClick={() => setInput(q)}
-                    className="px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-primary/20 hover:border-primary/40 hover:scale-105 text-sm font-black uppercase tracking-widest transition-all">
+            {/* Trending Popular Searches */}
+            <div className="flex flex-col gap-3 w-full">
+              <p className="text-[var(--color-text-2)] text-[13px] font-bold flex items-center gap-2">
+                <FireIcon className="w-4 h-4 text-[var(--color-primary)]" /> Từ khóa phổ biến
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  'Lật Mặt 7',
+                  'Mai',
+                  'Avengers',
+                  'One Piece',
+                  'Doraemon',
+                  'Thám Tử Lừng Danh Conan',
+                  'Nữ Hoàng Nước Mắt',
+                  'Spider-Man',
+                  'Harry Potter',
+                ].map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => setInput(q)}
+                    className="px-4 py-2 rounded-[10px] bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium hover:bg-[var(--color-bg-hover)] hover:border-[var(--color-primary)]/50 transition-all active:scale-95 shadow-sm"
+                  >
                     {q}
                   </button>
                 ))}
@@ -308,4 +364,3 @@ export const Search: React.FC = () => {
     </div>
   );
 };
-

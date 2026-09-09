@@ -2,18 +2,24 @@ import type { MovieInfo } from '../services/api';
 
 const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (!envUrl) {
-    return typeof window !== 'undefined' && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? '/api'
-      : 'https://cinevina-backend.vercel.app/api';
+  if (envUrl) {
+    if (envUrl.startsWith('http')) {
+      const sanitized = envUrl.replace(/\/$/, '');
+      return sanitized.endsWith('/api') ? sanitized : `${sanitized}/api`;
+    }
+    return envUrl;
   }
   
-  if (envUrl.startsWith('http')) {
-    const sanitized = envUrl.replace(/\/$/, '');
-    return sanitized.endsWith('/api') ? sanitized : `${sanitized}/api`;
+  if (typeof window === 'undefined') return '/api';
+  
+  // Local Vite dev server runs on 5173 or 4173
+  const isViteDev = window.location.port === '5173' || window.location.port === '4173';
+  if (isViteDev) {
+    return '/api';
   }
-  return envUrl;
+  
+  // Production Vercel or Capacitor Android App
+  return 'https://cinevina-backend.vercel.app/api';
 };
 
 const PROXY_BASE = getBaseUrl();
@@ -56,6 +62,19 @@ export const getProxiedImageUrl = (url: string): string => {
   return targetUrl;
 };
 
+export const parseSeriesInfo = (name: string) => {
+  if (!name) return { baseTitle: name, seriesId: undefined, seasonNumber: 1 };
+  
+  const match = name.match(/\s*(?:\(|-)?\s*(?:Phần|Season)\s*(\d+)\s*(?:\))?$/i);
+  if (match) {
+    const seasonNumber = parseInt(match[1], 10);
+    const baseTitle = name.substring(0, match.index).trim();
+    const seriesId = baseTitle.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, '');
+    return { baseTitle, seriesId, seasonNumber };
+  }
+  return { baseTitle: name, seriesId: undefined, seasonNumber: 1 };
+};
+
 /**
  * adaptMovieCard: For listing/browse/home cards only.
  * Backend already proxied poster_url and thumb_url — pass through without double-wrapping.
@@ -68,10 +87,16 @@ export const adaptMovieCard = (raw: any): MovieInfo => {
   const posterUrl = getProxiedImageUrl(raw?.poster_url || raw?.poster || raw?.thumbnail || raw?.image || '');
   const thumbUrl  = getProxiedImageUrl(raw?.thumb_url  || raw?.thumb  || raw?.thumbnail || raw?.image || '');
   
+  const rawTitle = raw?.title || raw?.name || '';
+  const { baseTitle, seriesId, seasonNumber } = parseSeriesInfo(rawTitle);
+  
   return {
     id: raw?.id || raw?._id || '',
     slug: raw?.slug || '',
-    name: raw?.title || raw?.name || '',
+    name: raw?.base_title || baseTitle,
+    baseTitle: raw?.base_title || baseTitle,
+    seriesId: raw?.series_id || seriesId,
+    seasonNumber: raw?.season_number || seasonNumber,
     originalName: raw?.original_title || raw?.origin_name || '',
     posterUrl,
     thumbUrl,
@@ -124,10 +149,22 @@ export const adaptMovieDetail = (raw: any): MovieInfo => {
   const cast     = _toCommaSeparated(raw?.cast) || _toCommaSeparated(raw?.actor) || '';
   const director = _toCommaSeparated(raw?.director) || '';
 
+  const rawTitle = raw?.title || raw?.name || '';
+  const { baseTitle, seriesId, seasonNumber } = parseSeriesInfo(rawTitle);
+
+  let episodes = Array.isArray(raw?.episodes) ? raw.episodes : [];
+  if (episodes.length === 0 && servers.length > 0) {
+    // If root episodes is empty, fallback to the first server's data
+    episodes = servers[0].server_data || [];
+  }
+
   return {
     id: raw?.id || raw?._id || '',
     slug: raw?.slug || '',
-    name: raw?.title || raw?.name || '',
+    name: raw?.base_title || baseTitle,
+    baseTitle: raw?.base_title || baseTitle,
+    seriesId: raw?.series_id || seriesId,
+    seasonNumber: raw?.season_number || seasonNumber,
     originalName: raw?.original_title || raw?.origin_name || '',
     posterUrl,
     thumbUrl,
@@ -150,7 +187,7 @@ export const adaptMovieDetail = (raw: any): MovieInfo => {
     episodeCurrent: raw?.episode_current || '',
     totalEpisodes: raw?.totalEpisodes || raw?.total_episodes || raw?.episode_total || '',
     isStreamable,
-    episodes: Array.isArray(raw?.episodes) ? raw.episodes : [],
+    episodes,
     servers,
   };
 };
@@ -182,16 +219,45 @@ function _emptyMovie(): MovieInfo {
 // Backward-compat exports
 export const adaptMovie  = adaptMovieDetail;
 
+export const cleanTextFingerprint = (text?: string): string => {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\(\[]?\b(19\d\d|20\d\d)\b[\)\]]?/g, ' ')
+    .replace(/\b(phan|season|ss)\s*\d+\b/gi, ' ')
+    .replace(/\b(thuyet minh|vietsub|long tieng|ban cam|cam|hd|fhd|4k|raw)\b/gi, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+};
+
+export const cleanSlugFingerprint = (slug?: string): string => {
+  if (!slug) return '';
+  return slug
+    .toLowerCase()
+    .trim()
+    .replace(/-(19\d\d|20\d\d)$/, '')
+    .replace(/-(vietsub|thuyet-minh|long-tieng|ban-cam|cam|full|tap-full)$/, '')
+    .replace(/^-+|-+$/g, '');
+};
+
+const getQualityRank = (quality?: string): number => {
+  const q = (quality || '').toUpperCase();
+  if (q.includes('4K') || q.includes('UHD') || q.includes('2160')) return 5;
+  if (q.includes('FHD') || q.includes('1080')) return 4;
+  if (q.includes('HD') || q.includes('720')) return 3;
+  if (q.includes('SD') || q.includes('480')) return 2;
+  if (q.includes('CAM')) return 1;
+  return 3;
+};
+
 /**
  * Normalize any response into a flat array of MovieInfo objects.
- * Handles:
- * - Array directly: [...]
- * - Object with items: { items: [...] }
- * - Object with data.items: { data: { items: [...] } }
- * - Object with data (as array): { data: [...] }
- * - Object with results: { results: [...] }
+ * Deduplicates entries across KKPhim and Ophim sources using fingerprinting.
  */
-export const adaptMovies = (input: any): MovieInfo[] => {
+export const adaptMovies = (input: any, grouped: boolean = false): MovieInfo[] => {
   if (!input) return [];
   
   let rawList: any[] = [];
@@ -212,5 +278,61 @@ export const adaptMovies = (input: any): MovieInfo[] => {
     console.warn('[adaptMovies] No valid movie list found in input:', input);
   }
 
-  return rawList.map(adaptMovieCard);
+  const mapped = rawList.map(adaptMovieCard);
+  
+  // Multi-tier deduplication
+  const deduped: MovieInfo[] = [];
+  const fpToIndex = new Map<string, number>();
+
+  for (const item of mapped) {
+    const slug = item.slug.trim();
+    const normSlug = cleanSlugFingerprint(slug);
+    const titleFp = cleanTextFingerprint(item.baseTitle || item.name);
+    const origFp = cleanTextFingerprint(item.originalName);
+    const origWithYear = origFp && item.year ? `${origFp}_${item.year}` : '';
+
+    let matchIdx: number | undefined = undefined;
+    for (const fp of [slug, normSlug, titleFp, origWithYear]) {
+      if (fp && fpToIndex.has(fp)) {
+        matchIdx = fpToIndex.get(fp);
+        break;
+      }
+    }
+
+    if (matchIdx === undefined) {
+      const idx = deduped.length;
+      deduped.push(item);
+      if (slug) fpToIndex.set(slug, idx);
+      if (normSlug) fpToIndex.set(normSlug, idx);
+      if (titleFp && titleFp.length >= 3) fpToIndex.set(titleFp, idx);
+      if (origWithYear && origFp.length >= 3) fpToIndex.set(origWithYear, idx);
+    } else {
+      const existing = deduped[matchIdx];
+      const currIsStream = item.isStreamable;
+      const existIsStream = existing.isStreamable;
+      const currScore = getQualityRank(item.quality);
+      const existScore = getQualityRank(existing.quality);
+
+      let replace = false;
+      if (currIsStream && !existIsStream) {
+        replace = true;
+      } else if (!currIsStream && existIsStream) {
+        replace = false;
+      } else if (grouped && (item.seasonNumber || 1) > (existing.seasonNumber || 1)) {
+        replace = true;
+      } else if (currScore > existScore) {
+        replace = true;
+      } else if (!existing.posterUrl && item.posterUrl) {
+        replace = true;
+      }
+
+      if (replace) {
+        deduped[matchIdx] = item;
+        if (slug) fpToIndex.set(slug, matchIdx);
+        if (normSlug) fpToIndex.set(normSlug, matchIdx);
+      }
+    }
+  }
+
+  return deduped;
 };
