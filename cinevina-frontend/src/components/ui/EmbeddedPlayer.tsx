@@ -50,7 +50,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
 
-  // Core playback states
+  // Playback States
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [playing, setPlaying] = useState(false);
@@ -68,45 +68,43 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain');
   const [isBuffering, setIsBuffering] = useState(false);
 
-  // Menus & customization
+  // Menus
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [qualityLevels, setQualityLevels] = useState<any[]>([]);
   const [currentQuality, setCurrentQuality] = useState<number>(-1);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
 
-  // Scrubber preview
+  // Scrubber Hover
   const [hoverTime, setHoverTime] = useState(0);
   const [hoverPos, setHoverPos] = useState(0);
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Feedback & prompts
+  // Non-intrusive feedback (Volume / Share only - NEVER for play/pause to avoid icon overlap)
   const [feedbackMsg, setFeedbackMsg] = useState<{ icon: React.ReactNode; text: string } | null>(null);
   const [resumeToast, setResumeToast] = useState<{ time: number } | null>(null);
   const [showNextOverlay, setShowNextOverlay] = useState(false);
   const [skipEndingVisible, setSkipEndingVisible] = useState(false);
 
-  // Ripple feedback for double taps
-  const [doubleTapFeedback, setDoubleTapFeedback] = useState<{
-    type: 'left' | 'right' | 'center';
-    id: number;
-  } | null>(null);
+  // Side double-tap ripple animation (Only -10s left / +10s right, no center icon)
+  const [doubleTapSide, setDoubleTapSide] = useState<'left' | 'right' | null>(null);
 
-  // Player view modes
+  // Mini-player and View modes
   const [isMiniPlayer, setIsMiniPlayer] = useState(false);
   const [cinemaMode, setCinemaMode] = useState(false);
   const [watchedEps, setWatchedEps] = useState<string[]>([]);
   const [embedKey, setEmbedKey] = useState(0);
 
-  // Timers and gesture tracking refs
+  // Refs for timers and touch discrimination
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const skipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const touchStartRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const lastTapRef = useRef<{ time: number; x: number } | null>(null);
   const singleTapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const isTouchRef = useRef(false);
+  const touchResetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Format seconds to mm:ss or hh:mm:ss
   const formatTime = (seconds: number) => {
     if (isNaN(seconds) || seconds < 0) return '00:00';
     const hrs = Math.floor(seconds / 3600);
@@ -129,7 +127,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     feedbackTimer.current = setTimeout(() => setFeedbackMsg(null), 800);
   };
 
-  // Persistent episode tracking & time param
+  // Load watched history
   useEffect(() => {
     const w = localStorage.getItem(`watched_episodes_${movieSlug}`);
     if (w) {
@@ -146,7 +144,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     }
   }, [movieSlug, currentEpisode]);
 
-  // HLS stream loader
+  // HLS Stream Initializer
   useEffect(() => {
     if (streamType !== 'hls' || !videoRef.current) return;
     setIsLoading(true);
@@ -213,7 +211,6 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native Safari iOS/macOS HLS
       video.src = streamUrl;
       video.addEventListener('loadedmetadata', () => {
         setIsLoading(false);
@@ -239,7 +236,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     };
   }, [streamUrl, streamType, movieSlug, currentEpisode]);
 
-  // Save progress periodically
+  // Periodic watch progress save
   useEffect(() => {
     const int = setInterval(() => {
       if (playing && currentTime > 0) {
@@ -249,7 +246,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     return () => clearInterval(int);
   }, [playing, currentTime, movieSlug, currentEpisode]);
 
-  // Mark watched
+  // Watched threshold
   useEffect(() => {
     if (duration > 0 && currentTime > duration * 0.9) {
       if (!watchedEps.includes(currentEpisode)) {
@@ -260,7 +257,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     }
   }, [currentTime, duration, watchedEps, movieSlug, currentEpisode]);
 
-  // Video state listeners
+  // Video listeners
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -271,14 +268,12 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
         setBuffered(video.buffered.end(video.buffered.length - 1));
       }
 
-      // Auto Next overlay (20s before ending)
       if (video.duration > 0 && video.duration - video.currentTime <= 20 && nextEp) {
         setShowNextOverlay(true);
       } else {
         setShowNextOverlay(false);
       }
 
-      // Skip Ending logic (between -120s and -20s)
       if (
         video.duration > 120 &&
         video.currentTime > video.duration - 120 &&
@@ -314,13 +309,13 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     };
   }, [isScrubbing, nextEp, skipEndingVisible]);
 
-  // Auto scroll episode into view
+  // Auto scroll episode
   useEffect(() => {
     const el = document.getElementById(`ep-${currentEpisode}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [currentEpisode]);
 
-  // Fullscreen controller
+  // Fullscreen
   const toggleFullscreen = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -362,14 +357,14 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  // Controls auto-hide (only when playing; never auto-hide when paused)
+  // Controls auto-hide: only hides when playing; never auto-hide when paused or scrubbing
   const resetHideTimer = useCallback(() => {
     setControlsVisible(true);
     clearTimeout(hideTimer.current);
     if (playing && !isScrubbing && !showSpeedMenu && !showQualityMenu) {
       hideTimer.current = setTimeout(() => {
         setControlsVisible(false);
-      }, 4500);
+      }, 4000);
     }
   }, [playing, isScrubbing, showSpeedMenu, showQualityMenu]);
 
@@ -377,24 +372,22 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     if (playing) {
       resetHideTimer();
     } else {
-      // When paused, ensure controls remain visible
       setControlsVisible(true);
       clearTimeout(hideTimer.current);
     }
     return () => clearTimeout(hideTimer.current);
   }, [playing, resetHideTimer]);
 
+  // Clean Play/Pause toggle: updates state directly without generating duplicate overlapping popup icons
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) {
       v.play().catch(() => {});
       setPlaying(true);
-      showFeedback(<PlayIcon className="w-10 h-10 sm:w-12 sm:h-12" />, 'Phát');
     } else {
       v.pause();
       setPlaying(false);
-      showFeedback(<PauseIcon className="w-10 h-10 sm:w-12 sm:h-12" />, 'Tạm dừng');
     }
   }, []);
 
@@ -403,27 +396,23 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
       const newTime = Math.max(0, Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + amount));
       videoRef.current.currentTime = newTime;
       setCurrentTime(newTime);
-      showFeedback(
-        amount > 0 ? (
-          <ForwardIcon className="w-10 h-10 sm:w-12 sm:h-12" />
-        ) : (
-          <BackwardIcon className="w-10 h-10 sm:w-12 sm:h-12" />
-        ),
-        `${amount > 0 ? '+' : ''}${amount}s`
-      );
     }
   }, []);
 
-  // Trigger double-tap ripple animation
-  const triggerDoubleTapFeedback = useCallback((type: 'left' | 'right' | 'center') => {
-    setDoubleTapFeedback({ type, id: Date.now() });
+  // Set side double tap ripple feedback
+  const triggerSideFeedback = useCallback((side: 'left' | 'right') => {
+    setDoubleTapSide(side);
     setTimeout(() => {
-      setDoubleTapFeedback((prev) => (prev?.type === type ? null : prev));
-    }, 650);
+      setDoubleTapSide((prev) => (prev === side ? null : prev));
+    }, 550);
   }, []);
 
-  // Touch gesture handling (mobile-first, zero-lag tap detection)
+  // ── TOUCH GESTURE SYSTEM (Mobile / Tablet) ──
+  // Fully prevents synthetic click double-firing
   const handleTouchStart = (e: React.TouchEvent) => {
+    isTouchRef.current = true;
+    clearTimeout(touchResetTimer.current);
+
     if (e.touches.length === 1) {
       const touch = e.touches[0];
       touchStartRef.current = {
@@ -435,21 +424,32 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
+    // Keep touch flag active for 400ms to ignore simulated mouse click
+    clearTimeout(touchResetTimer.current);
+    touchResetTimer.current = setTimeout(() => {
+      isTouchRef.current = false;
+    }, 400);
+
     if (!touchStartRef.current) return;
     const touch = e.changedTouches[0];
     const duration = Date.now() - touchStartRef.current.time;
     const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
     const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
 
-    // If movement was small, it's a tap, not a swipe/scroll
-    if (deltaX < 15 && deltaY < 15 && duration < 350) {
+    // If movement was small, it is a deliberate tap
+    if (deltaX < 12 && deltaY < 12 && duration < 300) {
       const now = Date.now();
       const rect = containerRef.current?.getBoundingClientRect();
       const clickX = touch.clientX - (rect?.left || 0);
       const totalWidth = rect?.width || window.innerWidth;
       const posRatio = clickX / totalWidth;
 
-      if (lastTapRef.current && now - lastTapRef.current.time < 320 && Math.abs(clickX - lastTapRef.current.x) < 50) {
+      // Check double-tap: within 280ms on left (<35%) or right (>65%)
+      if (
+        lastTapRef.current &&
+        now - lastTapRef.current.time < 280 &&
+        Math.abs(clickX - lastTapRef.current.x) < 50
+      ) {
         // Double Tap confirmed!
         clearTimeout(singleTapTimer.current);
         lastTapRef.current = null;
@@ -457,25 +457,25 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
         if (streamType === 'hls') {
           if (posRatio < 0.35) {
             skipTime(-10);
-            triggerDoubleTapFeedback('left');
+            triggerSideFeedback('left');
           } else if (posRatio > 0.65) {
             skipTime(10);
-            triggerDoubleTapFeedback('right');
+            triggerSideFeedback('right');
           } else {
+            // Tapping center twice gently toggles play once
             togglePlay();
-            triggerDoubleTapFeedback('center');
           }
         }
       } else {
-        // First tap: set timer for single tap
+        // First tap: debounce single tap so double-tap can cancel it
         lastTapRef.current = { time: now, x: clickX };
         singleTapTimer.current = setTimeout(() => {
-          // Single tap action: toggle controls
+          // Toggle controls once cleanly
           setControlsVisible((prev) => {
             const next = !prev;
             if (next && playing) {
               clearTimeout(hideTimer.current);
-              hideTimer.current = setTimeout(() => setControlsVisible(false), 4500);
+              hideTimer.current = setTimeout(() => setControlsVisible(false), 4000);
             }
             return next;
           });
@@ -486,8 +486,30 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     touchStartRef.current = null;
   };
 
-  // Mouse double click (desktop)
+  // ── DESKTOP MOUSE CLICKS ──
+  const handleContainerClick = (e: React.MouseEvent) => {
+    // If originated from touch, IGNORE to prevent double toggling ("bật tắt")!
+    if (isTouchRef.current) return;
+
+    // Check if clicked an interactive button or slider
+    if ((e.target as HTMLElement).closest('button, input, select, a, [data-interactive="true"]')) {
+      return;
+    }
+
+    if (streamType === 'hls' && !isMiniPlayer) {
+      setControlsVisible((prev) => {
+        const next = !prev;
+        if (next && playing) {
+          clearTimeout(hideTimer.current);
+          hideTimer.current = setTimeout(() => setControlsVisible(false), 4000);
+        }
+        return next;
+      });
+    }
+  };
+
   const handleDoubleClick = (e: React.MouseEvent) => {
+    if (isTouchRef.current) return;
     if (streamType === 'embed') {
       setFitMode((f) => (f === 'contain' ? 'cover' : 'contain'));
       return;
@@ -497,31 +519,19 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     const ratio = x / rect.width;
     if (ratio < 0.32) {
       skipTime(-10);
-      triggerDoubleTapFeedback('left');
+      triggerSideFeedback('left');
     } else if (ratio > 0.68) {
       skipTime(10);
-      triggerDoubleTapFeedback('right');
+      triggerSideFeedback('right');
     } else {
       toggleFullscreen();
     }
   };
 
-  // Mouse click handler (desktop)
-  const handleContainerClick = (e: React.MouseEvent) => {
-    // Check if click originated from interactive controls
-    if ((e.target as HTMLElement).closest('button, input, select, a, [data-interactive="true"]')) {
-      return;
-    }
-    if (streamType === 'hls' && !isMiniPlayer) {
-      setControlsVisible((prev) => {
-        const next = !prev;
-        if (next && playing) {
-          clearTimeout(hideTimer.current);
-          hideTimer.current = setTimeout(() => setControlsVisible(false), 4500);
-        }
-        return next;
-      });
-    }
+  const handleMouseMove = () => {
+    // Ignore synthetic mousemove on mobile devices
+    if (isTouchRef.current) return;
+    resetHideTimer();
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -550,7 +560,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     if (videoRef.current) videoRef.current.volume = val;
   };
 
-  // Keyboard controls
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
@@ -563,10 +573,12 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
         case 'arrowleft':
           e.preventDefault();
           skipTime(-10);
+          triggerSideFeedback('left');
           break;
         case 'arrowright':
           e.preventDefault();
           skipTime(10);
+          triggerSideFeedback('right');
           break;
         case 'arrowup':
           e.preventDefault();
@@ -574,7 +586,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
             const nv = Math.min(1, v + 0.1);
             if (videoRef.current) videoRef.current.volume = nv;
             setMuted(nv === 0);
-            showFeedback(<SpeakerWaveIcon className="w-10 h-10" />, `${Math.round(nv * 100)}%`);
+            showFeedback(<SpeakerWaveIcon className="w-8 h-8" />, `${Math.round(nv * 100)}%`);
             return nv;
           });
           break;
@@ -584,7 +596,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
             const nv = Math.max(0, v - 0.1);
             if (videoRef.current) videoRef.current.volume = nv;
             setMuted(nv === 0);
-            showFeedback(<SpeakerWaveIcon className="w-10 h-10" />, `${Math.round(nv * 100)}%`);
+            showFeedback(<SpeakerWaveIcon className="w-8 h-8" />, `${Math.round(nv * 100)}%`);
             return nv;
           });
           break;
@@ -598,7 +610,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
             const nm = !m;
             if (videoRef.current) videoRef.current.muted = nm;
             showFeedback(
-              nm ? <SpeakerXMarkIcon className="w-10 h-10" /> : <SpeakerWaveIcon className="w-10 h-10" />,
+              nm ? <SpeakerXMarkIcon className="w-8 h-8" /> : <SpeakerWaveIcon className="w-8 h-8" />,
               nm ? 'Đã tắt tiếng' : 'Đã bật tiếng'
             );
             return nm;
@@ -608,9 +620,9 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleFullscreen, togglePlay, skipTime]);
+  }, [toggleFullscreen, togglePlay, skipTime, triggerSideFeedback]);
 
-  // Mini player on viewport scroll
+  // Mini player on scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -627,7 +639,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     const url = new URL(window.location.href);
     url.searchParams.set('t', Math.floor(currentTime).toString());
     navigator.clipboard.writeText(url.toString());
-    showFeedback(<ShareIcon className="w-10 h-10" />, 'Đã sao chép liên kết');
+    showFeedback(<ShareIcon className="w-8 h-8" />, 'Đã sao chép liên kết');
   };
 
   return (
@@ -654,7 +666,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                 ? 'fixed !bottom-6 !right-6 !w-[300px] sm:!w-[340px] !h-[170px] sm:!h-[190px] !z-[9999] shadow-2xl !rounded-[12px] border-2 border-[var(--color-primary)]'
                 : ''
             }`}
-            onMouseMove={resetHideTimer}
+            onMouseMove={handleMouseMove}
             onMouseLeave={() => playing && !isScrubbing && setControlsVisible(false)}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
@@ -690,19 +702,18 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                   title={movieName || 'CINEVINA Player'}
                 />
 
-                {/* Embed Floating Helper Toolbar */}
-                <div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-black/75 backdrop-blur-md p-1.5 rounded-[10px] border border-white/10 shadow-lg">
+                {/* Embed Floating Helper Toolbar (Placed cleanly at top right) */}
+                <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5 bg-black/70 backdrop-blur-md p-1 rounded-[8px] border border-white/10 shadow-lg">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setEmbedKey((k) => k + 1);
-                      showFeedback(<ArrowPathIcon className="w-8 h-8" />, 'Đang tải lại');
                     }}
-                    className="p-2 text-white/80 hover:text-white rounded-[6px] hover:bg-white/10 transition-colors"
+                    className="p-1.5 text-white/80 hover:text-white rounded-[6px] hover:bg-white/10 transition-colors"
                     title="Tải lại player"
                     aria-label="Tải lại player"
                   >
-                    <ArrowPathIcon className="w-5 h-5" />
+                    <ArrowPathIcon className="w-4 h-4" />
                   </button>
 
                   <button
@@ -710,7 +721,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                       e.stopPropagation();
                       setFitMode((f) => (f === 'contain' ? 'cover' : 'contain'));
                     }}
-                    className="px-2.5 py-1 text-white/90 text-[12px] font-semibold rounded-[6px] bg-white/10 hover:bg-white/20 transition-colors"
+                    className="px-2 py-0.5 text-white/90 text-[11px] font-semibold rounded-[6px] bg-white/10 hover:bg-white/20 transition-colors"
                   >
                     {fitMode === 'contain' ? 'Phóng to' : 'Vừa khung'}
                   </button>
@@ -720,43 +731,32 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                       e.stopPropagation();
                       toggleFullscreen();
                     }}
-                    className="p-2 text-white/80 hover:text-white rounded-[6px] hover:bg-white/10 transition-colors"
+                    className="p-1.5 text-white/80 hover:text-white rounded-[6px] hover:bg-white/10 transition-colors"
                     title="Toàn màn hình"
                     aria-label="Toàn màn hình"
                   >
-                    {fullscreen ? <ArrowsPointingInIcon className="w-5 h-5" /> : <ArrowsPointingOutIcon className="w-5 h-5" />}
+                    {fullscreen ? <ArrowsPointingInIcon className="w-4 h-4" /> : <ArrowsPointingOutIcon className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Double Tap Ripple Animations (YouTube Style) */}
-            {doubleTapFeedback && streamType === 'hls' && (
+            {/* Side Double-Tap Ripples (-10s left / +10s right only, NO overlapping center icon) */}
+            {doubleTapSide && streamType === 'hls' && (
               <div className="absolute inset-0 pointer-events-none z-40 overflow-hidden">
-                {doubleTapFeedback.type === 'left' && (
-                  <div className="absolute inset-y-0 left-0 w-1/2 flex items-center justify-center bg-white/10 rounded-r-full animate-pulse transition-opacity">
-                    <div className="flex flex-col items-center gap-1 text-white drop-shadow-lg">
-                      <div className="flex items-center gap-0.5">
-                        <BackwardIcon className="w-8 h-8 animate-bounce" />
-                      </div>
-                      <span className="text-[14px] font-extrabold tracking-wider">-10 giây</span>
+                {doubleTapSide === 'left' && (
+                  <div className="absolute inset-y-0 left-0 w-1/3 flex items-center justify-center bg-white/10 rounded-r-full animate-pulse transition-opacity">
+                    <div className="flex flex-col items-center gap-1 text-white drop-shadow-md">
+                      <BackwardIcon className="w-7 h-7 animate-bounce" />
+                      <span className="text-[13px] font-bold tracking-wide">-10s</span>
                     </div>
                   </div>
                 )}
-                {doubleTapFeedback.type === 'right' && (
-                  <div className="absolute inset-y-0 right-0 w-1/2 flex items-center justify-center bg-white/10 rounded-l-full animate-pulse transition-opacity">
-                    <div className="flex flex-col items-center gap-1 text-white drop-shadow-lg">
-                      <div className="flex items-center gap-0.5">
-                        <ForwardIcon className="w-8 h-8 animate-bounce" />
-                      </div>
-                      <span className="text-[14px] font-extrabold tracking-wider">+10 giây</span>
-                    </div>
-                  </div>
-                )}
-                {doubleTapFeedback.type === 'center' && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    <div className="p-5 rounded-full bg-black/60 text-white animate-ping">
-                      {playing ? <PauseIcon className="w-12 h-12" /> : <PlayIcon className="w-12 h-12" />}
+                {doubleTapSide === 'right' && (
+                  <div className="absolute inset-y-0 right-0 w-1/3 flex items-center justify-center bg-white/10 rounded-l-full animate-pulse transition-opacity">
+                    <div className="flex flex-col items-center gap-1 text-white drop-shadow-md">
+                      <ForwardIcon className="w-7 h-7 animate-bounce" />
+                      <span className="text-[13px] font-bold tracking-wide">+10s</span>
                     </div>
                   </div>
                 )}
@@ -765,11 +765,11 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
 
             {/* Resume Toast */}
             {resumeToast && !isMiniPlayer && (
-              <div className="absolute top-6 sm:top-8 left-1/2 -translate-x-1/2 z-50 bg-[var(--color-bg-surface)]/95 backdrop-blur-md border border-[var(--color-border)] px-5 py-3.5 sm:px-6 sm:py-4 rounded-[12px] shadow-2xl flex flex-col items-center gap-3 max-w-[90%] sm:max-w-md">
-                <p className="text-[var(--color-text-1)] text-[13px] sm:text-[14px] font-medium text-center">
+              <div className="absolute top-6 sm:top-8 left-1/2 -translate-x-1/2 z-50 bg-[var(--color-bg-surface)]/95 backdrop-blur-md border border-[var(--color-border)] px-4 py-3 sm:px-6 sm:py-4 rounded-[12px] shadow-2xl flex flex-col items-center gap-2.5 max-w-[90%] sm:max-w-md">
+                <p className="text-[var(--color-text-1)] text-[12px] sm:text-[14px] font-medium text-center">
                   Bạn đã xem đến <strong className="text-[var(--color-primary)]">{formatTime(resumeToast.time)}</strong>. Tiếp tục chứ?
                 </p>
-                <div className="flex gap-2.5">
+                <div className="flex gap-2">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -778,7 +778,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                       videoRef.current?.play();
                       setPlaying(true);
                     }}
-                    className="px-4 py-2 bg-[var(--color-primary)] text-white text-[13px] font-bold rounded-[8px] hover:bg-[var(--color-primary-hover)] transition-colors active:scale-95"
+                    className="px-3.5 py-1.5 bg-[var(--color-primary)] text-white text-[12px] font-bold rounded-[6px] hover:bg-[var(--color-primary-hover)] transition-colors active:scale-95"
                   >
                     Tiếp tục xem
                   </button>
@@ -788,7 +788,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                       setResumeToast(null);
                       if (videoRef.current) videoRef.current.currentTime = 0;
                     }}
-                    className="px-4 py-2 bg-[var(--color-bg-hover)] text-[var(--color-text-1)] text-[13px] font-bold rounded-[8px] hover:bg-[var(--color-border)] transition-colors active:scale-95"
+                    className="px-3.5 py-1.5 bg-[var(--color-bg-hover)] text-[var(--color-text-1)] text-[12px] font-bold rounded-[6px] hover:bg-[var(--color-border)] transition-colors active:scale-95"
                   >
                     Xem từ đầu
                   </button>
@@ -796,23 +796,23 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
               </div>
             )}
 
-            {/* Buffering Spinner */}
+            {/* Buffering Spinner (Clean, standalone spinner) */}
             {(isBuffering || isLoading) && streamType === 'hls' && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none z-30">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 border-4 border-white/20 border-t-[var(--color-primary)] rounded-full animate-spin" />
-                  <span className="text-white/80 text-[13px] font-medium tracking-wide">Đang tải phim...</span>
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none z-30">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 border-3 border-white/20 border-t-[var(--color-primary)] rounded-full animate-spin" />
+                  <span className="text-white/80 text-[12px] font-medium tracking-wide">Đang tải...</span>
                 </div>
               </div>
             )}
 
             {/* Error Message */}
             {hasError && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#141414] text-white z-40 p-6 text-center">
-                <ExclamationTriangleIcon className="w-14 h-14 text-[var(--color-primary)]" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#141414] text-white z-40 p-6 text-center">
+                <ExclamationTriangleIcon className="w-12 h-12 text-[var(--color-primary)]" />
                 <div>
-                  <p className="text-[18px] font-bold tracking-wide mb-1">Không thể tải luồng phát</p>
-                  <p className="text-white/60 text-[13px]">Vui lòng thử chọn server dự phòng hoặc tải lại trang</p>
+                  <p className="text-[16px] font-bold tracking-wide mb-0.5">Không thể tải luồng phát</p>
+                  <p className="text-white/60 text-[12px]">Vui lòng thử chọn server dự phòng hoặc tải lại trang</p>
                 </div>
                 {servers.length > 1 && (
                   <div className="flex flex-wrap gap-2 justify-center mt-2">
@@ -831,7 +831,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                             : 'bg-white/10 text-white hover:bg-white/20'
                         }`}
                       >
-                        Chuyển sang Server {idx + 1}
+                        Server {idx + 1}
                       </button>
                     ))}
                   </div>
@@ -839,21 +839,21 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
               </div>
             )}
 
-            {/* Central Feedback Toast (Volume/Seek/Play) */}
+            {/* Lightweight Feedback Toast (Volume & Share only, never for Play/Pause) */}
             {feedbackMsg && !isMiniPlayer && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40 animate-in zoom-in-95 fade-in duration-150">
-                <div className="bg-black/85 backdrop-blur-md px-6 py-4 rounded-[16px] flex flex-col items-center text-white gap-2 border border-white/10 shadow-2xl">
+              <div className="absolute top-16 left-1/2 -translate-x-1/2 pointer-events-none z-50 animate-in fade-in duration-150">
+                <div className="bg-black/80 backdrop-blur-md px-4 py-2 rounded-[12px] flex items-center text-white gap-2 border border-white/10 shadow-xl">
                   {feedbackMsg.icon}
-                  <span className="font-extrabold text-[14px] tracking-wider">{feedbackMsg.text}</span>
+                  <span className="font-bold text-[13px] tracking-wide">{feedbackMsg.text}</span>
                 </div>
               </div>
             )}
 
             {/* Auto Next Episode Overlay */}
             {showNextOverlay && !isMiniPlayer && nextEp && (
-              <div className="absolute bottom-20 right-4 sm:bottom-24 sm:right-8 z-40 bg-[var(--color-bg-surface)]/95 backdrop-blur-md border border-[var(--color-border)] p-4 rounded-[12px] shadow-2xl flex flex-col gap-3 max-w-[280px]">
-                <p className="text-[var(--color-text-1)] text-[13px] font-medium">
-                  Tập tiếp theo sẽ phát sau <strong className="text-[var(--color-primary)]">{Math.max(0, Math.ceil(duration - currentTime))}s</strong>
+              <div className="absolute bottom-20 right-4 sm:bottom-24 sm:right-8 z-40 bg-[var(--color-bg-surface)]/95 backdrop-blur-md border border-[var(--color-border)] p-4 rounded-[12px] shadow-2xl flex flex-col gap-2.5 max-w-[260px]">
+                <p className="text-[var(--color-text-1)] text-[12px] font-medium">
+                  Tập tiếp theo sau <strong className="text-[var(--color-primary)]">{Math.max(0, Math.ceil(duration - currentTime))}s</strong>
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -861,7 +861,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                       e.stopPropagation();
                       onEpisodeChange(activeServer, nextEp.slug);
                     }}
-                    className="flex-1 py-2 bg-[var(--color-primary)] text-white text-[12px] font-bold rounded-[8px] hover:bg-[var(--color-primary-hover)] transition-colors active:scale-95"
+                    className="flex-1 py-1.5 bg-[var(--color-primary)] text-white text-[12px] font-bold rounded-[6px] hover:bg-[var(--color-primary-hover)] transition-colors active:scale-95"
                   >
                     Xem ngay
                   </button>
@@ -870,7 +870,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                       e.stopPropagation();
                       setShowNextOverlay(false);
                     }}
-                    className="flex-1 py-2 bg-[var(--color-bg-hover)] text-[var(--color-text-1)] text-[12px] font-bold rounded-[8px] hover:bg-[var(--color-border)] transition-colors active:scale-95"
+                    className="flex-1 py-1.5 bg-[var(--color-bg-hover)] text-[var(--color-text-1)] text-[12px] font-bold rounded-[6px] hover:bg-[var(--color-border)] transition-colors active:scale-95"
                   >
                     Hủy
                   </button>
@@ -885,7 +885,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                   e.stopPropagation();
                   onEpisodeChange(activeServer, nextEp.slug);
                 }}
-                className="absolute bottom-20 right-4 sm:bottom-24 sm:right-8 z-40 bg-[var(--color-bg-surface)]/95 hover:bg-[var(--color-bg-hover)] backdrop-blur-md border border-[var(--color-border)] px-4 py-2.5 sm:px-6 sm:py-3 rounded-[10px] text-[var(--color-text-1)] text-[13px] font-bold shadow-2xl transition-all active:scale-95"
+                className="absolute bottom-20 right-4 sm:bottom-24 sm:right-8 z-40 bg-[var(--color-bg-surface)]/95 hover:bg-[var(--color-bg-hover)] backdrop-blur-md border border-[var(--color-border)] px-4 py-2 rounded-[8px] text-[var(--color-text-1)] text-[12px] font-bold shadow-2xl transition-all active:scale-95"
               >
                 Bỏ qua Ending
               </button>
@@ -900,123 +900,121 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                   const el = document.getElementById('cinevina-player');
                   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }}
-                className="absolute top-2 right-2 w-8 h-8 bg-black/80 rounded-full flex items-center justify-center text-white hover:bg-[var(--color-primary)] z-50 transition-colors"
+                className="absolute top-2 right-2 w-7 h-7 bg-black/80 rounded-full flex items-center justify-center text-white hover:bg-[var(--color-primary)] z-50 transition-colors"
                 aria-label="Đóng mini player"
               >
-                <XMarkIcon className="w-5 h-5" />
+                <XMarkIcon className="w-4 h-4" />
               </button>
             )}
 
             {/* ── Native Controls Overlay (HLS) ── */}
             {streamType === 'hls' && !isMiniPlayer && (
               <div
-                className={`absolute inset-0 flex flex-col justify-between transition-opacity duration-250 z-30 pointer-events-none ${
+                className={`absolute inset-0 flex flex-col justify-between transition-opacity duration-200 z-30 pointer-events-none ${
                   controlsVisible ? 'opacity-100' : 'opacity-0'
                 }`}
               >
-                {/* Top Bar */}
-                <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-5 bg-gradient-to-b from-black/85 via-black/40 to-transparent pointer-events-auto">
+                {/* Top Bar (Single clean bar, no overlapping elements) */}
+                <div className="flex items-center gap-3 p-3 sm:p-4 bg-gradient-to-b from-black/80 via-black/35 to-transparent pointer-events-auto">
                   {onBack && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onBack();
                       }}
-                      className="p-2 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center text-white hover:text-[var(--color-primary)] transition-colors rounded-full hover:bg-white/10"
+                      className="p-1.5 w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-white/90 hover:text-white rounded-full hover:bg-white/10 transition-colors"
                       aria-label="Quay lại"
                     >
-                      <ArrowLeftIcon className="w-6 h-6 sm:w-7 sm:h-7" />
+                      <ArrowLeftIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                     </button>
                   )}
                   <div className="flex-1 min-w-0 pr-2">
-                    <h2 className="text-white font-heading text-[16px] sm:text-[20px] md:text-[22px] uppercase tracking-wide truncate drop-shadow">
+                    <h2 className="text-white font-heading text-[15px] sm:text-[18px] md:text-[20px] uppercase tracking-wide truncate drop-shadow">
                       {movieName}
                     </h2>
                     {currentEpisode && episodes.length > 1 && (
-                      <p className="text-white/80 text-[12px] sm:text-[13px] font-medium truncate">
+                      <p className="text-white/70 text-[11px] sm:text-[12px] font-medium truncate">
                         {episodes[currentIdx]?.name || `Tập ${currentIdx + 1}`}
                       </p>
                     )}
                   </div>
 
                   <div className="flex items-center gap-1">
-                    {/* Share Button */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleShare();
                       }}
-                      className="p-2 w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                      className="p-1.5 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-white/80 hover:text-white rounded-full hover:bg-white/10 transition-colors"
                       title="Chia sẻ phim"
                       aria-label="Chia sẻ"
                     >
-                      <ShareIcon className="w-5 h-5" />
+                      <ShareIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
 
-                    {/* Fit Mode Toggle */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setFitMode((f) => (f === 'contain' ? 'cover' : 'contain'));
-                        showFeedback(
-                          <FilmIcon className="w-10 h-10" />,
-                          fitMode === 'contain' ? 'Phóng to tràn khung' : 'Tỷ lệ gốc'
-                        );
                       }}
-                      className="p-2 w-9 h-9 sm:w-10 sm:h-10 hidden sm:flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                      className="p-1.5 w-8 h-8 sm:w-9 sm:h-9 hidden sm:flex items-center justify-center text-white/80 hover:text-white rounded-full hover:bg-white/10 transition-colors"
                       title="Khung hình"
                       aria-label="Khung hình"
                     >
-                      <FilmIcon className={`w-5 h-5 ${fitMode === 'cover' ? 'text-[var(--color-primary)]' : ''}`} />
+                      <FilmIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${fitMode === 'cover' ? 'text-[var(--color-primary)]' : ''}`} />
                     </button>
                   </div>
                 </div>
 
-                {/* Big Center Play/Pause Button */}
-                <div className="flex items-center justify-center gap-6 sm:gap-10 pointer-events-auto absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      skipTime(-10);
-                    }}
-                    className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center text-white/90 hover:text-white border border-white/15 transition-all active:scale-95"
-                    aria-label="Lùi 10 giây"
-                  >
-                    <BackwardIcon className="w-6 h-6 sm:w-7 sm:h-7" />
-                  </button>
+                {/* Center Play/Pause Cluster (ONLY visible when not loading/buffering to avoid icon collisions) */}
+                {controlsVisible && !isLoading && !isBuffering && (
+                  <div className="flex items-center justify-center gap-6 sm:gap-8 pointer-events-auto absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        skipTime(-10);
+                        triggerSideFeedback('left');
+                      }}
+                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-sm flex items-center justify-center text-white/90 hover:text-white border border-white/15 transition-all active:scale-90"
+                      aria-label="Lùi 10 giây"
+                    >
+                      <BackwardIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      togglePlay();
-                    }}
-                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-[var(--color-primary)]/90 hover:bg-[var(--color-primary)] shadow-2xl flex items-center justify-center text-white transition-all transform hover:scale-105 active:scale-95"
-                    aria-label={playing ? 'Tạm dừng' : 'Phát'}
-                  >
-                    {playing ? (
-                      <PauseIcon className="w-8 h-8 sm:w-11 sm:h-11" />
-                    ) : (
-                      <PlayIcon className="w-8 h-8 sm:w-11 sm:h-11 ml-1" />
-                    )}
-                  </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePlay();
+                      }}
+                      className="w-13 h-13 sm:w-16 sm:h-16 rounded-full bg-[var(--color-primary)]/90 hover:bg-[var(--color-primary)] shadow-2xl flex items-center justify-center text-white transition-all transform hover:scale-105 active:scale-95"
+                      aria-label={playing ? 'Tạm dừng' : 'Phát'}
+                    >
+                      {playing ? (
+                        <PauseIcon className="w-7 h-7 sm:w-9 sm:h-9" />
+                      ) : (
+                        <PlayIcon className="w-7 h-7 sm:w-9 sm:h-9 ml-0.5" />
+                      )}
+                    </button>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      skipTime(10);
-                    }}
-                    className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center text-white/90 hover:text-white border border-white/15 transition-all active:scale-95"
-                    aria-label="Tới 10 giây"
-                  >
-                    <ForwardIcon className="w-6 h-6 sm:w-7 sm:h-7" />
-                  </button>
-                </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        skipTime(10);
+                        triggerSideFeedback('right');
+                      }}
+                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-sm flex items-center justify-center text-white/90 hover:text-white border border-white/15 transition-all active:scale-90"
+                      aria-label="Tới 10 giây"
+                    >
+                      <ForwardIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+                  </div>
+                )}
 
                 {/* Bottom Bar Container */}
-                <div className="bg-gradient-to-t from-black/95 via-black/70 to-transparent pt-12 pb-3 sm:pb-4 px-3 sm:px-6 pointer-events-auto">
-                  {/* Progress Scrubber (enlarged hit target for touch) */}
+                <div className="bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-10 pb-3 px-3 sm:px-5 pointer-events-auto">
+                  {/* Progress Scrubber */}
                   <div
-                    className="relative mb-2 sm:mb-4 cursor-pointer flex items-center h-8 group/progress touch-none"
+                    className="relative mb-2 sm:mb-3 cursor-pointer flex items-center h-7 group/progress touch-none"
                     onClick={(e) => e.stopPropagation()}
                     onMouseMove={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
@@ -1042,32 +1040,30 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                       aria-label="Thanh tiến trình"
                     />
 
-                    {/* Background Bar */}
-                    <div className="relative w-full h-1.5 sm:h-2 rounded-full bg-white/25 overflow-hidden transition-all group-hover/progress:h-2.5">
-                      {/* Buffered bar */}
+                    {/* Background Track */}
+                    <div className="relative w-full h-1 sm:h-1.5 rounded-full bg-white/25 overflow-hidden transition-all group-hover/progress:h-2">
                       <div
                         className="absolute inset-y-0 left-0 bg-white/40 transition-all duration-200"
                         style={{ width: `${duration > 0 ? (buffered / duration) * 100 : 0}%` }}
                       />
-                      {/* Played bar */}
                       <div
                         className="absolute inset-y-0 left-0 bg-[var(--color-primary)] transition-all duration-75"
                         style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
                       />
                     </div>
 
-                    {/* Scrubber thumb */}
+                    {/* Dragger Thumb */}
                     <div
-                      className="absolute w-4 h-4 sm:w-4.5 sm:h-4.5 bg-[var(--color-primary)] rounded-full shadow-lg pointer-events-none z-10 transition-transform scale-90 group-hover/progress:scale-125 border-2 border-white"
+                      className="absolute w-3.5 h-3.5 sm:w-4 sm:h-4 bg-[var(--color-primary)] rounded-full shadow-md pointer-events-none z-10 transition-transform scale-90 group-hover/progress:scale-125 border-2 border-white"
                       style={{
-                        left: `calc(${duration > 0 ? (currentTime / duration) * 100 : 0}% - 8px)`,
+                        left: `calc(${duration > 0 ? (currentTime / duration) * 100 : 0}% - 7px)`,
                       }}
                     />
 
-                    {/* Scrubber Time Tooltip */}
+                    {/* Tooltip */}
                     {showTooltip && controlsVisible && (
                       <div
-                        className="absolute bottom-9 -translate-x-1/2 bg-[var(--color-bg-surface)] px-2.5 py-1 rounded-[6px] text-white text-[12px] font-bold pointer-events-none border border-[var(--color-border)] shadow-xl whitespace-nowrap"
+                        className="absolute bottom-8 -translate-x-1/2 bg-[var(--color-bg-surface)] px-2 py-0.5 rounded-[6px] text-white text-[11px] font-bold pointer-events-none border border-[var(--color-border)] shadow-xl whitespace-nowrap"
                         style={{ left: `${hoverPos * 100}%` }}
                       >
                         {formatTime(hoverTime)}
@@ -1077,45 +1073,44 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
 
                   {/* Controls Row */}
                   <div className="flex items-center justify-between gap-1 sm:gap-3">
-                    {/* Left Controls (Mobile-friendly: Play, 10s back/forward, Time) */}
-                    <div className="flex items-center gap-0.5 sm:gap-2 shrink-0">
-                      {/* Play/Pause Button - ALWAYS VISIBLE */}
+                    {/* Left Controls */}
+                    <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           togglePlay();
                         }}
-                        className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        className="p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
                         aria-label={playing ? 'Tạm dừng' : 'Phát'}
                       >
-                        {playing ? <PauseIcon className="w-6 h-6 sm:w-7 sm:h-7" /> : <PlayIcon className="w-6 h-6 sm:w-7 sm:h-7" />}
+                        {playing ? <PauseIcon className="w-5 h-5 sm:w-6 sm:h-6" /> : <PlayIcon className="w-5 h-5 sm:w-6 sm:h-6" />}
                       </button>
 
-                      {/* Rewind 10s - ALWAYS VISIBLE */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           skipTime(-10);
+                          triggerSideFeedback('left');
                         }}
-                        className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-white/90 hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        className="p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center text-white/90 hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
                         aria-label="Lùi 10 giây"
                       >
-                        <BackwardIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                        <BackwardIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                       </button>
 
-                      {/* Forward 10s - ALWAYS VISIBLE */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           skipTime(10);
+                          triggerSideFeedback('right');
                         }}
-                        className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-white/90 hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        className="p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center text-white/90 hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
                         aria-label="Tới 10 giây"
                       >
-                        <ForwardIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                        <ForwardIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                       </button>
 
-                      {/* Volume Slider (Desktop) */}
+                      {/* Desktop Volume */}
                       <div className="hidden sm:flex items-center group/volume relative ml-1">
                         <button
                           onClick={(e) => {
@@ -1126,16 +1121,16 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                               return nm;
                             });
                           }}
-                          className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                          className="p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
                           aria-label={muted || volume === 0 ? 'Bật tiếng' : 'Tắt tiếng'}
                         >
                           {muted || volume === 0 ? (
-                            <SpeakerXMarkIcon className="w-6 h-6" />
+                            <SpeakerXMarkIcon className="w-5 h-5" />
                           ) : (
-                            <SpeakerWaveIcon className="w-6 h-6" />
+                            <SpeakerWaveIcon className="w-5 h-5" />
                           )}
                         </button>
-                        <div className="w-0 overflow-hidden group-hover/volume:w-20 sm:group-hover/volume:w-24 transition-all duration-300 flex items-center">
+                        <div className="w-0 overflow-hidden group-hover/volume:w-20 transition-all duration-300 flex items-center">
                           <input
                             type="range"
                             min="0"
@@ -1151,7 +1146,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                       </div>
 
                       {/* Time Readout */}
-                      <div className="text-[12px] sm:text-[13px] font-bold text-white/90 whitespace-nowrap ml-1 sm:ml-2">
+                      <div className="text-[11px] sm:text-[12px] font-bold text-white/90 whitespace-nowrap ml-1 sm:ml-2">
                         <span className="text-white">{formatTime(currentTime)}</span>
                         <span className="mx-1 text-white/40">/</span>
                         <span className="text-white/70">{formatTime(duration)}</span>
@@ -1159,19 +1154,8 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                     </div>
 
                     {/* Right Controls */}
-                    <div className="flex items-center gap-0.5 sm:gap-1.5">
-                      {/* Skip Intro (Desktop) */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          skipTime(85);
-                        }}
-                        className="text-white text-[12px] font-bold bg-white/15 hover:bg-[var(--color-primary)] px-3 py-1.5 rounded-[6px] transition-colors hidden md:block"
-                      >
-                        Bỏ qua Intro
-                      </button>
-
-                      {/* Playback Speed Menu */}
+                    <div className="flex items-center gap-0.5 sm:gap-1">
+                      {/* Speed Menu */}
                       <div className="relative" onMouseLeave={() => setShowSpeedMenu(false)}>
                         <button
                           onClick={(e) => {
@@ -1179,13 +1163,13 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                             setShowSpeedMenu((v) => !v);
                             setShowQualityMenu(false);
                           }}
-                          className="px-2 py-1.5 min-w-[38px] h-9 sm:h-10 flex items-center justify-center text-white text-[12px] sm:text-[13px] font-bold hover:bg-white/10 rounded-[6px] transition-colors"
+                          className="px-2 py-1 min-w-[34px] h-8 flex items-center justify-center text-white text-[11px] sm:text-[12px] font-bold hover:bg-white/10 rounded-[6px] transition-colors"
                           aria-label="Tốc độ phát"
                         >
                           {playbackSpeed}x
                         </button>
                         {showSpeedMenu && (
-                          <div className="absolute bottom-full right-0 mb-3 bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1.5 min-w-[110px] shadow-2xl z-50">
+                          <div className="absolute bottom-full right-0 mb-2 bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1 min-w-[100px] shadow-2xl z-50">
                             {[0.5, 0.75, 1, 1.25, 1.5, 2].map((speed) => (
                               <div
                                 key={speed}
@@ -1195,13 +1179,13 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                                   if (videoRef.current) videoRef.current.playbackRate = speed;
                                   setShowSpeedMenu(false);
                                 }}
-                                className={`px-4 py-2 text-[13px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
+                                className={`px-3.5 py-1.5 text-[12px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
                                   playbackSpeed === speed
                                     ? 'text-[var(--color-primary)] font-bold'
                                     : 'text-white hover:bg-white/10'
                                 }`}
                               >
-                                {speed}x {playbackSpeed === speed && <CheckCircleIcon className="w-4 h-4" />}
+                                {speed}x {playbackSpeed === speed && <CheckCircleIcon className="w-3.5 h-3.5" />}
                               </div>
                             ))}
                           </div>
@@ -1217,13 +1201,13 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                               setShowQualityMenu((v) => !v);
                               setShowSpeedMenu(false);
                             }}
-                            className="p-2 min-w-[38px] min-h-[38px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                            className="p-1.5 min-w-[34px] min-h-[34px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
                             aria-label="Chất lượng"
                           >
-                            <Cog6ToothIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                            <Cog6ToothIcon className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
                           </button>
                           {showQualityMenu && (
-                            <div className="absolute bottom-full right-0 mb-3 bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1.5 min-w-[130px] shadow-2xl z-50">
+                            <div className="absolute bottom-full right-0 mb-2 bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1 min-w-[120px] shadow-2xl z-50">
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1231,13 +1215,13 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                                   setCurrentQuality(-1);
                                   setShowQualityMenu(false);
                                 }}
-                                className={`px-4 py-2 text-[13px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
+                                className={`px-3.5 py-1.5 text-[12px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
                                   currentQuality === -1
                                     ? 'text-[var(--color-primary)] font-bold'
                                     : 'text-white hover:bg-white/10'
                                 }`}
                               >
-                                Tự động {currentQuality === -1 && <CheckCircleIcon className="w-4 h-4" />}
+                                Tự động {currentQuality === -1 && <CheckCircleIcon className="w-3.5 h-3.5" />}
                               </div>
                               {qualityLevels.map((lvl, idx) => (
                                 <div
@@ -1248,13 +1232,13 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                                     setCurrentQuality(idx);
                                     setShowQualityMenu(false);
                                   }}
-                                  className={`px-4 py-2 text-[13px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
+                                  className={`px-3.5 py-1.5 text-[12px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
                                     currentQuality === idx
                                       ? 'text-[var(--color-primary)] font-bold'
                                       : 'text-white hover:bg-white/10'
                                   }`}
                                 >
-                                  {lvl.height}p {currentQuality === idx && <CheckCircleIcon className="w-4 h-4" />}
+                                  {lvl.height}p {currentQuality === idx && <CheckCircleIcon className="w-3.5 h-3.5" />}
                                 </div>
                               ))}
                             </div>
@@ -1262,17 +1246,17 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                         </div>
                       )}
 
-                      {/* Episode Drawer Button (Mobile/Tablet) */}
+                      {/* Mobile Episode List Button */}
                       {episodes.length > 1 && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowOverlay((v) => !v);
                           }}
-                          className="p-2 min-w-[38px] min-h-[38px] lg:hidden flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                          className="p-1.5 min-w-[34px] min-h-[34px] lg:hidden flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
                           aria-label="Danh sách tập"
                         >
-                          <ListBulletIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                          <ListBulletIcon className="w-5 h-5" />
                         </button>
                       )}
 
@@ -1282,11 +1266,11 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                           e.stopPropagation();
                           setCinemaMode((v) => !v);
                         }}
-                        className="p-2 min-w-[38px] min-h-[38px] hidden lg:flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        className="p-1.5 min-w-[34px] min-h-[34px] hidden lg:flex items-center justify-center text-white/80 hover:text-white rounded-full hover:bg-white/10 transition-colors"
                         title="Chế độ rạp phim"
                         aria-label="Chế độ rạp phim"
                       >
-                        <FilmIcon className={`w-5 h-5 ${cinemaMode ? 'text-[var(--color-primary)]' : ''}`} />
+                        <FilmIcon className={`w-4.5 h-4.5 sm:w-5 sm:h-5 ${cinemaMode ? 'text-[var(--color-primary)]' : ''}`} />
                       </button>
 
                       {/* Fullscreen Button */}
@@ -1295,13 +1279,13 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                           e.stopPropagation();
                           toggleFullscreen();
                         }}
-                        className="p-2 min-w-[38px] min-h-[38px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
+                        className="p-1.5 min-w-[34px] min-h-[34px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
                         aria-label={fullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
                       >
                         {fullscreen ? (
-                          <ArrowsPointingInIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                          <ArrowsPointingInIcon className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
                         ) : (
-                          <ArrowsPointingOutIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                          <ArrowsPointingOutIcon className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
                         )}
                       </button>
                     </div>
@@ -1310,7 +1294,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
               </div>
             )}
 
-            {/* Episode Overlay Drawer (Mobile/Tablet Fullscreen) */}
+            {/* Episode Overlay Drawer (Mobile/Tablet) */}
             {showOverlay && episodes.length > 0 && (
               <div
                 className="absolute inset-0 z-50 bg-[var(--color-bg-base)]/95 backdrop-blur-md flex flex-col p-4 sm:p-6 animate-in fade-in duration-200 pointer-events-auto"
@@ -1321,7 +1305,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
               >
                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-[var(--color-border)]">
                   <div>
-                    <h3 className="text-[var(--color-text-1)] font-heading text-[18px] sm:text-[22px] uppercase tracking-wide">
+                    <h3 className="text-[var(--color-text-1)] font-heading text-[18px] sm:text-[20px] uppercase tracking-wide">
                       Danh sách tập
                     </h3>
                     <p className="text-[var(--color-text-3)] text-[12px]">{episodes.length} tập có sẵn</p>
@@ -1338,7 +1322,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                   </button>
                 </div>
 
-                {/* Server Selector if Multiple */}
+                {/* Server Selector */}
                 {servers.length > 1 && (
                   <div
                     className="flex flex-wrap gap-2 mb-4 bg-[var(--color-bg-surface)] p-1.5 rounded-[8px] border border-[var(--color-border)]"
@@ -1395,13 +1379,13 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
             )}
           </div>
 
-          {/* ── Episode Sidebar (Desktop + Tablet Landscape) ── */}
+          {/* ── Episode Sidebar (Desktop) ── */}
           {showList && episodes.length > 0 && (
             <div
               className={`bg-[var(--color-bg-surface)] border-t lg:border-t-0 lg:border-l border-[var(--color-border)] flex flex-col shrink-0 transition-all duration-300 ${
                 cinemaMode
                   ? 'w-full lg:w-72 xl:w-80'
-                  : 'w-full lg:w-72 xl:w-84 max-h-[280px] sm:max-h-[340px] lg:max-h-none'
+                  : 'w-full lg:w-72 xl:w-84 max-h-[260px] sm:max-h-[320px] lg:max-h-none'
               }`}
             >
               <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-[var(--color-border)] shrink-0">
