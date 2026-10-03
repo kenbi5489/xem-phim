@@ -3,11 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ExclamationTriangleIcon, ServerStackIcon } from '@heroicons/react/24/outline';
 import { useMovieStream, useMovieDetail } from '../hooks/useMovies';
 import { EmbeddedPlayer } from '../components/ui/EmbeddedPlayer';
+import { useScreenWakeLock } from '../utils/wakeLock';
 import type { ServerData } from '../services/api';
 
 export const Player: React.FC = () => {
   const { slug, episode } = useParams();
   const navigate = useNavigate();
+
+  // Ngăn màn hình tự động tắt/sleep khi ở trong trình phát phim
+  useScreenWakeLock(true);
 
   const [selectedServerIdx, setSelectedServerIdx] = useState<number>(0);
 

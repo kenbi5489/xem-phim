@@ -25,6 +25,7 @@ import {
   ForwardIcon,
 } from '@heroicons/react/24/solid';
 import type { ServerData } from '../../services/api';
+import { wakeLock, useScreenWakeLock } from '../../utils/wakeLock';
 
 interface EmbeddedPlayerProps {
   streamUrl: string;
@@ -57,6 +58,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [playing, setPlaying] = useState(false);
+
   const [fullscreen, setFullscreen] = useState(false);
   const [showList] = useState(true);
   const [showOverlay, setShowOverlay] = useState(false);
@@ -70,6 +72,10 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain');
   const [isBuffering, setIsBuffering] = useState(false);
+
+  // Screen Wake Lock: Giữ màn hình luôn sáng khi xem phim (cả HLS lẫn Embed iframe)
+  const isWatching = streamType === 'embed' || (streamType === 'hls' && (playing || isBuffering || isScrubbing || !hasError));
+  useScreenWakeLock(isWatching);
 
   // Menus
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -354,19 +360,29 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     const onPlaying = () => {
       setIsBuffering(false);
       setPlaying(true);
+      wakeLock.acquire();
     };
-    const onPause = () => setPlaying(false);
+    const onPause = () => {
+      setPlaying(false);
+      wakeLock.release();
+    };
+    const onEnded = () => {
+      setPlaying(false);
+      wakeLock.release();
+    };
 
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('playing', onPlaying);
     video.addEventListener('pause', onPause);
+    video.addEventListener('ended', onEnded);
 
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('pause', onPause);
+      video.removeEventListener('ended', onEnded);
     };
   }, [isScrubbing, nextEp, skipEndingVisible]);
 
@@ -805,12 +821,17 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                     fitMode === 'cover' ? 'scale-105' : ''
                   }`}
                   allowFullScreen
-                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture; screen-wake-lock"
                   title={movieName || 'CINEVINA Player'}
                 />
 
                 {/* Embed Floating Helper Toolbar (Placed cleanly at top right) */}
                 <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5 bg-black/70 backdrop-blur-md p-1 rounded-[8px] border border-white/10 shadow-lg">
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 text-emerald-400 text-[11px] font-semibold select-none" title="Chống tắt màn hình tự động đang hoạt động">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="hidden sm:inline">Giữ màn hình sáng</span>
+                  </div>
+
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

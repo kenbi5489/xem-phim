@@ -2,10 +2,14 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMovieStream, useMovieDetail } from '../../hooks/useMovies';
 import { EmbeddedPlayer } from '../../components/ui/EmbeddedPlayer';
+import { useScreenWakeLock } from '../../utils/wakeLock';
 
 export const TVPlayer: React.FC = () => {
   const { slug, episode } = useParams();
   const navigate = useNavigate();
+
+  // Ngăn màn hình TV / điện thoại tự động sleep khi phát
+  useScreenWakeLock(true);
 
   // If no episode is provided, try to play the first episode
   const { data: movie, isLoading: loadMovie, error: errMovie } = useMovieDetail(slug || '');
