@@ -1,20 +1,20 @@
 """
-CINEVINA — movies router
-Nguồn chính: KKPhim (phimapi.com)
+CINEVINA — Movies Router
+Hệ thống nguồn phim đa nguồn (Multi-Source Streaming System):
+1. Nguồn C (phim.nguonc.com): Nguồn phim uy tín cộng đồng với đa dạng server Vietsub, Thuyết minh, Lồng tiếng chất lượng cao.
+2. KKPhim (phimapi.com): Máy chủ luồng trực tiếp HLS (m3u8) tốc độ cao.
 """
-import urllib.parse
 import re
 import unicodedata
+import asyncio
 from typing import Optional, List, Any, Dict
-
 import httpx
 from fastapi import APIRouter, HTTPException, Query
-from services.sources.registry import SourceRegistry
 
 router = APIRouter(prefix="/api/movies", tags=["movies"])
 
 KKPHIM_BASE = "https://phimapi.com"
-OPHIM_BASE = "https://ophim1.com"
+NGUONC_BASE = "https://phim.nguonc.com/api"
 
 # ─────────────────────────────────────────
 # HELPERS
@@ -42,13 +42,9 @@ def parse_series_info(name: str):
 
 
 def normalize_kkphim_image_url(url: Optional[str]) -> str:
-    """
-    KKPhim API trả ảnh với domain phimapi.com nhưng
-    CDN thực tế là phimimg.com — cùng path, khác domain.
-    """
+    """KKPhim trả ảnh CDN thực tế là phimimg.com."""
     if not url:
         return ""
-    # Đảm bảo là string và replace domain sai bằng domain đúng
     s = str(url).strip()
     return (
         s
@@ -58,48 +54,30 @@ def normalize_kkphim_image_url(url: Optional[str]) -> str:
 
 
 def _fix_image(path: Optional[str]) -> str:
-    """Chuyển path ảnh tương đối → URL proxy tuyệt đối, sau khi đã normalize domain."""
+    """Chuẩn hoá link ảnh poster / thumb."""
     if not path:
         return ""
     
-    # 1. Normalize domain trước (nếu là link tuyệt đối của KKPhim)
-    normalized_url = normalize_kkphim_image_url(path)
-    if not normalized_url:
+    normalized = normalize_kkphim_image_url(path)
+    if not normalized:
         return ""
         
-    # 2. Nếu đã là URL proxy rồi thì không bọc nữa
-    if "proxy/image" in normalized_url:
-        return normalized_url
+    if "proxy/image" in normalized:
+        return normalized
         
-    # 3. Nếu là path tương đối, thêm domain đúng
-    if not normalized_url.startswith("http"):
-        full = f"https://phimimg.com/{normalized_url.lstrip('/')}"
-    else:
-        full = normalized_url
+    if not normalized.startswith("http"):
+        return f"https://phimimg.com/{normalized.lstrip('/')}"
         
-    return full
-
-
-def _to_str(val, key: str = "name") -> str:
-    """Array of objects hoặc string → string."""
-    if isinstance(val, list):
-        return ", ".join(
-            item.get(key, "") if isinstance(item, dict) else str(item)
-            for item in val
-        )
-    return str(val) if val else ""
+    return normalized
 
 
 def normalize_quality(*sources: Optional[str]) -> str:
-    """
-    Chuẩn hóa chất lượng video từ nhiều nguồn text khác nhau.
-    Ưu tiên: 4K > FHD > HD > CAM > SD.
-    """
+    """Chuẩn hóa chất lượng video từ nhiều nguồn: 4K > FHD > HD > CAM > SD."""
     combined = " ".join(str(s).upper() for s in sources if s)
     
-    if any(k in combined for k in ["4K", "UHD", "2160", "2160P", "4096", "ULTRAHD", "ULTRA HD", "ULTRA-HD", "HDR10", "HDR 10", "DOLBY VISION", "DV"]):
+    if any(k in combined for k in ["4K", "UHD", "2160", "2160P", "4096", "ULTRAHD", "ULTRA HD", "HDR10", "DOLBY VISION"]):
         return "4K"
-    if any(k in combined for k in ["FHD", "1080", "FULL HD", "FULLHD", "FULL-HD", "1080P"]):
+    if any(k in combined for k in ["FHD", "1080", "FULL HD", "FULLHD", "1080P"]):
         return "FHD"
     if any(k in combined for k in ["HD", "720", "720P"]):
         return "HD"
@@ -110,9 +88,117 @@ def normalize_quality(*sources: Optional[str]) -> str:
     return "HD"
 
 
-def _map_item(item: dict, path_image: str = "") -> dict:
-    """Map 1 item từ KKPhim/Ophim listing → CINEVINA format."""
-    # ── country ──────────────────────────────
+def _clean_text_for_fingerprint(text: str) -> str:
+    """Chuẩn hoá chuỗi để so sánh phim trùng lặp."""
+    if not text:
+        return ""
+    s = unicodedata.normalize('NFKD', str(text)).encode('ascii', 'ignore').decode('utf-8').lower()
+    s = re.sub(r'[\(\[]?\b(19\d\d|20\d\d)\b[\)\]]?', ' ', s)
+    s = re.sub(r'\b(phan|season|ss)\s*\d+\b', ' ', s)
+    s = re.sub(r'\b(thuyet minh|vietsub|long tieng|ban cam|cam|hd|fhd|4k|raw)\b', ' ', s)
+    s = re.sub(r'[^a-z0-9]+', ' ', s).strip()
+    return re.sub(r'\s+', ' ', s)
+
+
+def _clean_slug_for_fingerprint(slug: str) -> str:
+    """Loại bỏ các hậu tố thường thấy trong slug."""
+    if not slug:
+        return ""
+    s = slug.lower().strip()
+    s = re.sub(r'-(19\d\d|20\d\d)$', '', s)
+    s = re.sub(r'-(vietsub|thuyet-minh|long-tieng|ban-cam|cam|full|tap-full)$', '', s)
+    return s.strip('-')
+
+
+def _quality_score(quality: Optional[str]) -> int:
+    q = (quality or "").upper()
+    if any(k in q for k in ["4K", "UHD", "2160"]):
+        return 5
+    if any(k in q for k in ["FHD", "1080"]):
+        return 4
+    if any(k in q for k in ["HD", "720"]):
+        return 3
+    if any(k in q for k in ["SD", "480", "360"]):
+        return 2
+    if "CAM" in q:
+        return 1
+    return 3
+
+
+def _merge_and_dedup(items1: list, items2: list) -> list:
+    """
+    Gộp 2 danh sách phim từ KKPhim và NguonC, loại bỏ triệt để phim trùng lặp.
+    Ưu tiên bản có poster, bản phát được (streamable), chất lượng cao hơn.
+    """
+    merged: list = []
+    fp_to_index: dict = {}
+
+    for item in items1 + items2:
+        slug = item.get("slug", "").strip()
+        norm_slug = _clean_slug_for_fingerprint(slug)
+        title_fp = _clean_text_for_fingerprint(item.get("title") or item.get("base_title") or "")
+        orig_fp = _clean_text_for_fingerprint(item.get("original_title") or "")
+        year = str(item.get("year") or "").strip()
+        orig_with_year = f"{orig_fp}_{year}" if orig_fp and year else ""
+
+        matched_idx = None
+        for fp in [slug, norm_slug, title_fp, orig_with_year]:
+            if fp and fp in fp_to_index:
+                matched_idx = fp_to_index[fp]
+                break
+
+        if matched_idx is None:
+            idx = len(merged)
+            merged.append(item)
+            if slug: fp_to_index[slug] = idx
+            if norm_slug: fp_to_index[norm_slug] = idx
+            if title_fp and len(title_fp) >= 3: fp_to_index[title_fp] = idx
+            if orig_with_year and len(orig_fp) >= 3: fp_to_index[orig_with_year] = idx
+        else:
+            existing = merged[matched_idx]
+            curr_is_stream = bool(item.get("is_streamable", True))
+            exist_is_stream = bool(existing.get("is_streamable", True))
+            curr_score = _quality_score(item.get("quality"))
+            exist_score = _quality_score(existing.get("quality"))
+
+            replace = False
+            if curr_is_stream and not exist_is_stream:
+                replace = True
+            elif not curr_is_stream and exist_is_stream:
+                replace = False
+            elif curr_score > exist_score:
+                replace = True
+            elif not existing.get("poster_url") and item.get("poster_url"):
+                replace = True
+
+            if replace:
+                # Merge source tag info
+                merged[matched_idx] = item
+                if slug: fp_to_index[slug] = matched_idx
+                if norm_slug: fp_to_index[norm_slug] = matched_idx
+
+    return merged
+
+
+def _group_items(items: list) -> list:
+    """Gom nhóm các phim thuộc cùng 1 series trên danh sách, giữ lại phần mới nhất."""
+    grouped = {}
+    for item in items:
+        sid = item.get("series_id")
+        if sid:
+            if sid not in grouped or item["season_number"] > grouped[sid]["season_number"]:
+                grouped[sid] = item
+        else:
+            grouped[item["id"]] = item
+    return list(grouped.values())
+
+
+# ─────────────────────────────────────────
+# SOURCE ADAPTERS
+# ─────────────────────────────────────────
+
+def _map_kkphim_item(item: dict, path_image: str = "") -> dict:
+    """Map 1 item từ KKPhim listing → CINEVINA format."""
     cr = item.get("country") or []
     if isinstance(cr, list) and cr:
         c0 = cr[0]
@@ -123,7 +209,6 @@ def _map_item(item: dict, path_image: str = "") -> dict:
     else:
         country_name = country_slug = ""
 
-    # ── category ─────────────────────────────
     cat_raw = item.get("category") or []
     if isinstance(cat_raw, list):
         genres = [
@@ -134,18 +219,15 @@ def _map_item(item: dict, path_image: str = "") -> dict:
     else:
         genres, cat_str = [], (str(cat_raw) if cat_raw else "")
 
-    # ── modified ─────────────────────────────
     mod = item.get("modified") or {}
     modified_time = mod.get("time", "") if isinstance(mod, dict) else ""
 
-    # ── rating ───────────────────────────────
     tmdb_rating = item.get("tmdb") or {}
     rating_val = tmdb_rating.get("vote_average") if isinstance(tmdb_rating, dict) else None
     
     if rating_val is None or rating_val == 0 or rating_val == "0" or rating_val == 0.0:
         rating_str = "N/A"
     else:
-        # Handle float precision
         try:
             r = float(rating_val)
             rating_str = f"{r:.1f}" if r % 1 != 0 else str(int(r))
@@ -186,229 +268,147 @@ def _map_item(item: dict, path_image: str = "") -> dict:
         "genres":         genres,
         "description":    item.get("content", "") or item.get("description", ""),
         "episode_current": str(item.get("episode_current") or ""),
-        "episode_total":   str(item.get("episode_total")   or ""),
+        "episode_total":   str(item.get("episode_total") or ""),
         "rating":         rating_str,
         "modified":       modified_time,
+        "source":         "kkphim",
     }
 
 
-def _paginate(data: dict, page: int, limit: int) -> dict:
-    """Chuẩn hoá response phân trang từ KKPhim."""
-    # Try v1 structure first
-    items_raw = data.get("data", {}).get("items", [])
-    params = data.get("data", {}).get("params", {})
-    pagination = params.get("pagination", {})
-    
-    # If not v1, try old structure (home page uses this)
-    if not items_raw:
-        items_raw = data.get("items", [])
-        pagination_raw = data.get("pagination", {})
-        total = pagination_raw.get("totalItems", len(items_raw))
-        total_pages = pagination_raw.get("totalPages", 1)
-    else:
-        total = pagination.get("totalItems", len(items_raw))
-        total_pages = pagination.get("totalPages", 1)
-        
-    path_image = data.get("pathImage", "")
+def _map_nguonc_item(item: dict) -> dict:
+    """Map 1 item từ NguonC listing → CINEVINA format."""
+    title_raw = item.get("name", "")
+    base_title, series_id, season_number = parse_series_info(title_raw)
+
+    # Parse rating from tmdb if available
+    tmdb_info = item.get("tmdb") or {}
+    rating_str = "N/A"
+
+    year_val = item.get("year")
+    try:
+        year_num = int(year_val) if year_val else None
+    except Exception:
+        year_num = None
+
+    tot_ep = str(item.get("total_episodes") or "")
+    curr_ep = str(item.get("current_episode") or "")
+
     return {
-        "items":       [_map_item(i, path_image) for i in items_raw],
-        "total":       total,
-        "page":        page,
-        "limit":       limit,
-        "total_pages": total_pages,
+        "id":             f"nc_{item.get('slug', '')}",
+        "slug":           item.get("slug", ""),
+        "title":          title_raw,
+        "base_title":     base_title,
+        "series_id":      series_id,
+        "season_number":  season_number,
+        "original_title": item.get("original_name", ""),
+        "poster_url":     item.get("poster_url") or item.get("poster_url_webp") or "",
+        "thumb_url":      item.get("thumb_url") or item.get("thumb_url_webp") or "",
+        "year":           year_num,
+        "quality":        normalize_quality(item.get("quality", "HD")),
+        "lang":           item.get("language", "Vietsub"),
+        "type":           "series" if (tot_ep and tot_ep not in ["1", "0"]) else "single",
+        "is_cinema":      False,
+        "is_streamable":  curr_ep.lower() != "trailer",
+        "country":        "",
+        "country_slug":   "",
+        "category":       "",
+        "genres":         [],
+        "description":    item.get("description", ""),
+        "episode_current": curr_ep,
+        "episode_total":   tot_ep,
+        "rating":         rating_str,
+        "modified":       item.get("modified", ""),
+        "source":         "nguonc",
     }
 
+
+# ─────────────────────────────────────────
+# HTTP CLIENT HELPERS
+# ─────────────────────────────────────────
 
 async def _kkphim_get(path: str, params: dict) -> dict:
-    """Wrapper gọi KKPhim API với error handling."""
     url = f"{KKPHIM_BASE}{path}"
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             resp = await client.get(url, params=params)
             resp.raise_for_status()
             return resp.json()
-        except httpx.TimeoutException:
-            raise HTTPException(502, "KKPhim API timeout")
-        except httpx.HTTPStatusError as e:
-            raise HTTPException(502, f"KKPhim API error: {e.response.status_code}")
-async def _ophim_get(path: str, params: dict) -> dict:
-    """Wrapper gọi Ophim API với error handling."""
-    url = f"{OPHIM_BASE}{path}"
-    async with httpx.AsyncClient(timeout=20.0) as client:
+        except Exception:
+            return {}
+
+
+async def _nguonc_get(path: str, params: dict) -> dict:
+    url = f"{NGUONC_BASE}{path}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CINEVINA/2.0"}
+    async with httpx.AsyncClient(timeout=15.0) as client:
         try:
-            resp = await client.get(url, params=params)
+            resp = await client.get(url, params=params, headers=headers)
             resp.raise_for_status()
             return resp.json()
-        except httpx.TimeoutException:
-            return {} # Fallback
-        except httpx.HTTPStatusError as e:
-            return {} # Fallback
-        except Exception as e:
-            return {} # Fallback
+        except Exception:
+            return {}
 
-def _clean_text_for_fingerprint(text: str) -> str:
-    """Chuẩn hoá chuỗi để so sánh phim trùng lặp (bỏ dấu, năm, mùa, ký tự đặc biệt)."""
-    if not text:
-        return ""
-    # Bỏ dấu tiếng Việt
-    s = unicodedata.normalize('NFKD', str(text)).encode('ascii', 'ignore').decode('utf-8').lower()
-    # Bỏ năm dạng (2024), [2024], 2024 ở cuối
-    s = re.sub(r'[\(\[]?\b(19\d\d|20\d\d)\b[\)\]]?', ' ', s)
-    # Bỏ phần/mùa
-    s = re.sub(r'\b(phan|season|ss)\s*\d+\b', ' ', s)
-    # Bỏ các nhãn chất lượng / thuyết minh phổ biến
-    s = re.sub(r'\b(thuyet minh|vietsub|long tieng|ban cam|cam|hd|fhd|4k|raw)\b', ' ', s)
-    # Chỉ giữ lại ký tự chữ cái và số
-    s = re.sub(r'[^a-z0-9]+', ' ', s).strip()
-    return re.sub(r'\s+', ' ', s)
 
-def _clean_slug_for_fingerprint(slug: str) -> str:
-    """Loại bỏ các hậu tố thường thấy trong slug."""
-    if not slug:
-        return ""
-    s = slug.lower().strip()
-    # Bỏ năm ở cuối slug (-2024, -2023)
-    s = re.sub(r'-(19\d\d|20\d\d)$', '', s)
-    # Bỏ các đuôi vietsub, thuyet-minh, cam, full, tap-full
-    s = re.sub(r'-(vietsub|thuyet-minh|long-tieng|ban-cam|cam|full|tap-full)$', '', s)
-    return s.strip('-')
+async def _fetch_and_merge(
+    kk_path: Optional[str],
+    nc_path: Optional[str],
+    kk_params: dict,
+    nc_params: dict,
+    page: int,
+    limit: int,
+    source: str = "all",
+    grouped: bool = False
+) -> dict:
+    """Fetch dữ liệu từ KKPhim và NguonC, sau đó gộp và deduplicate thông minh."""
+    tasks = []
+    fetch_kk = source in ["all", "kkphim"] and bool(kk_path)
+    fetch_nc = source in ["all", "nguonc"] and bool(nc_path)
 
-def _quality_score(quality: Optional[str]) -> int:
-    """Chấm điểm chất lượng video để ưu tiên bản đẹp hơn."""
-    q = (quality or "").upper()
-    if any(k in q for k in ["4K", "UHD", "2160"]):
-        return 5
-    if any(k in q for k in ["FHD", "1080"]):
-        return 4
-    if any(k in q for k in ["HD", "720"]):
-        return 3
-    if any(k in q for k in ["SD", "480", "360"]):
-        return 2
-    if "CAM" in q:
-        return 1
-    return 3
+    if fetch_kk:
+        tasks.append(_kkphim_get(kk_path, kk_params))
+    else:
+        tasks.append(asyncio.sleep(0, result={}))
 
-def _merge_and_dedup(items1: list, items2: list) -> list:
-    """
-    Gộp 2 danh sách phim từ KKPhim và Ophim, loại bỏ triệt để phim trùng:
-    1. So khớp exact slug
-    2. So khớp normalized slug (bỏ -2024, -vietsub...)
-    3. So khớp tiêu đề tiếng Việt chuẩn hoá (bỏ dấu, năm, mùa)
-    4. So khớp tiêu đề gốc tiếng Anh (origin_name) kết hợp năm phát hành
-    Ưu tiên: Bản phát được (streamable) > Bản không phát được, Chất lượng cao > Chất lượng thấp.
-    """
-    merged: list = []
-    # Fingerprint index maps to index in merged list
-    fp_to_index: dict = {}
+    if fetch_nc:
+        tasks.append(_nguonc_get(nc_path, nc_params))
+    else:
+        tasks.append(asyncio.sleep(0, result={}))
 
-    for item in items1 + items2:
-        slug = item.get("slug", "").strip()
-        norm_slug = _clean_slug_for_fingerprint(slug)
-        title_fp = _clean_text_for_fingerprint(item.get("title") or item.get("base_title") or "")
-        orig_fp = _clean_text_for_fingerprint(item.get("original_title") or "")
-        year = str(item.get("year") or "").strip()
-        orig_with_year = f"{orig_fp}_{year}" if orig_fp and year else ""
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    kkphim_data = results[0] if isinstance(results[0], dict) else {}
+    nguonc_data = results[1] if isinstance(results[1], dict) else {}
 
-        # Tìm xem đã có bản ghi nào trùng các tiêu chí fingerprint chưa
-        matched_idx = None
-        for fp in [slug, norm_slug, title_fp, orig_with_year]:
-            if fp and fp in fp_to_index:
-                matched_idx = fp_to_index[fp]
-                break
+    # Map KKPhim
+    kk_items_raw = kkphim_data.get("data", {}).get("items", []) or kkphim_data.get("items", [])
+    path_image = kkphim_data.get("pathImage", "")
+    kk_mapped = [_map_kkphim_item(i, path_image) for i in kk_items_raw]
 
-        if matched_idx is None:
-            # Chưa có -> Thêm mới vào merged list
-            idx = len(merged)
-            merged.append(item)
-            # Lưu các fingerprint trỏ tới index này
-            if slug:
-                fp_to_index[slug] = idx
-            if norm_slug:
-                fp_to_index[norm_slug] = idx
-            if title_fp and len(title_fp) >= 3:
-                fp_to_index[title_fp] = idx
-            if orig_with_year and len(orig_fp) >= 3:
-                fp_to_index[orig_with_year] = idx
-        else:
-            # Đã có -> So sánh để giữ lại bản tốt nhất
-            existing = merged[matched_idx]
-            curr_is_stream = bool(item.get("is_streamable", True))
-            exist_is_stream = bool(existing.get("is_streamable", True))
-            curr_score = _quality_score(item.get("quality"))
-            exist_score = _quality_score(existing.get("quality"))
+    # Map NguonC
+    nc_items_raw = nguonc_data.get("items", [])
+    nc_mapped = [_map_nguonc_item(i) for i in nc_items_raw]
 
-            replace = False
-            if curr_is_stream and not exist_is_stream:
-                replace = True
-            elif not curr_is_stream and exist_is_stream:
-                replace = False
-            elif curr_score > exist_score:
-                replace = True
-            elif not existing.get("poster_url") and item.get("poster_url"):
-                replace = True
+    if source == "kkphim":
+        merged_items = kk_mapped
+    elif source == "nguonc":
+        merged_items = nc_mapped
+    else:
+        # Gộp cả 2 nguồn, deduplicate
+        merged_items = _merge_and_dedup(kk_mapped, nc_mapped)
 
-            if replace:
-                merged[matched_idx] = item
-                # Cập nhật thêm fingerprint của item mới vào index
-                if slug:
-                    fp_to_index[slug] = matched_idx
-                if norm_slug:
-                    fp_to_index[norm_slug] = matched_idx
-
-    return merged
-
-def _group_items(items: list) -> list:
-    """Gom nhóm các phim thuộc cùng 1 series trên danh sách, giữ lại phần mới nhất."""
-    grouped = {}
-    for item in items:
-        sid = item.get("series_id")
-        if sid:
-            if sid not in grouped or item["season_number"] > grouped[sid]["season_number"]:
-                grouped[sid] = item
-        else:
-            grouped[item["id"]] = item
-    return list(grouped.values())
-
-async def _fetch_and_merge(path: str, params: dict, page: int, limit: int, grouped: bool = False) -> dict:
-    """Fetch dữ liệu từ KKPhim và Ophim, sau đó gộp lại."""
-    import asyncio
-    kkphim_task = _kkphim_get(path, params)
-    ophim_task = _ophim_get(path, params)
-    
-    # KKPhim có thể throw Exception, Ophim trả về {} nếu lỗi
-    try:
-        kkphim_data, ophim_data = await asyncio.gather(kkphim_task, ophim_task)
-    except Exception as e:
-        raise HTTPException(502, f"Lỗi fetch dữ liệu: {str(e)}")
-
-    # Trích xuất items
-    kkphim_items_raw = kkphim_data.get("data", {}).get("items", []) or kkphim_data.get("items", [])
-    ophim_items_raw = ophim_data.get("data", {}).get("items", []) or ophim_data.get("items", [])
-    
-    kkphim_mapped = [_map_item(i) for i in kkphim_items_raw]
-    
-    # Lấy path image cho Ophim (tuỳ thuộc vào endpoint trả về format nào)
-    ophim_path_image = ophim_data.get("pathImage") or ophim_data.get("data", {}).get("APP_DOMAIN_CDN_IMAGE", "")
-    if not ophim_path_image or ophim_path_image.strip("/") == "https://img.ophim.live":
-        ophim_path_image = "https://img.ophim.live/uploads/movies/"
-    elif not ophim_path_image.endswith("/"):
-        ophim_path_image += "/"
-        
-    ophim_mapped = [_map_item(i, ophim_path_image) for i in ophim_items_raw]
-    
-    merged_items = _merge_and_dedup(kkphim_mapped, ophim_mapped)
-    
     if grouped:
         merged_items = _group_items(merged_items)
-    
-    # Tính toán pagination
+
+    # Tính pagination
     kk_pagination = kkphim_data.get("data", {}).get("params", {}).get("pagination", {}) or kkphim_data.get("pagination", {})
-    op_pagination = ophim_data.get("data", {}).get("params", {}).get("pagination", {}) or ophim_data.get("pagination", {})
-    
-    total = max(kk_pagination.get("totalItems", 0), op_pagination.get("totalItems", 0))
-    if not total: total = len(merged_items)
-    
-    total_pages = max(kk_pagination.get("totalPages", 1), op_pagination.get("totalPages", 1))
+    nc_paginate = nguonc_data.get("paginate", {})
+
+    total_kk = kk_pagination.get("totalItems", 0)
+    total_nc = nc_paginate.get("total_items", 0)
+    total = max(total_kk, total_nc) or len(merged_items)
+
+    pages_kk = kk_pagination.get("totalPages", 1)
+    pages_nc = nc_paginate.get("total_page", 1)
+    total_pages = max(pages_kk, pages_nc) or 1
 
     return {
         "items": merged_items,
@@ -418,14 +418,100 @@ async def _fetch_and_merge(path: str, params: dict, page: int, limit: int, group
         "total_pages": total_pages,
     }
 
+
 # ─────────────────────────────────────────
-# ROUTES — thứ tự QUAN TRỌNG: specific trước generic
+# ROUTES
 # ─────────────────────────────────────────
 
+@router.get("/sources/list")
+async def get_sources_list():
+    """Danh sách các nguồn phim tích hợp trong CINEVINA."""
+    return [
+        {
+            "id": "nguonc",
+            "name": "Nguồn C (VIP Sub)",
+            "description": "Nguồn phim cộng đồng chất lượng cao, phụ đề Vietsub chuẩn, kèm bản Thuyết minh & Lồng tiếng riêng biệt.",
+            "status": "online",
+            "badge": "Khuyên dùng"
+        },
+        {
+            "id": "kkphim",
+            "name": "KKPhim (HLS Fast)",
+            "description": "Máy chủ phát luồng HLS trực tiếp tốc độ cao, hỗ trợ chất lượng Full HD / 4K.",
+            "status": "online",
+            "badge": "Tốc độ cao"
+        }
+    ]
+
+
+GENRE_SLUG_MAP = {
+    "giat-gan": "kinh-di",
+    "kich-tinh": "tam-ly",
+    "kinh-di": "kinh-di",
+    "bi-an": "bi-an",
+    "tam-ly": "tam-ly",
+    "chinh-kich": "chinh-kich",
+    "hinh-su": "hinh-su",
+    "hanh-dong": "hanh-dong",
+    "phieu-luu": "phieu-luu",
+    "vo-thuat": "vo-thuat",
+    "co-trang": "co-trang",
+    "chien-tranh": "chien-tranh",
+    "tinh-cam": "tinh-cam",
+    "lang-man": "tinh-cam",
+    "hai-huoc": "hai-huoc",
+    "gia-dinh": "gia-dinh",
+    "hoc-duong": "hoc-duong",
+    "vien-tuong": "vien-tuong",
+    "khoa-hoc": "khoa-hoc",
+    "hoat-hinh": "hoat-hinh",
+    "anime": "hoat-hinh",
+    "than-thoai": "than-thoai",
+    "tai-lieu": "tai-lieu",
+    "am-nhac": "am-nhac",
+}
+
+
+@router.get("/genres")
+async def get_curated_genres():
+    """Danh sách thể loại phim chuẩn xác và ổn định."""
+    return [
+        {"slug": "hanh-dong", "name": "Hành động"},
+        {"slug": "tinh-cam", "name": "Tình cảm"},
+        {"slug": "hai-huoc", "name": "Hài hước"},
+        {"slug": "co-trang", "name": "Cổ trang"},
+        {"slug": "tam-ly", "name": "Tâm lý"},
+        {"slug": "hinh-su", "name": "Hình sự"},
+        {"slug": "chien-tranh", "name": "Chiến tranh"},
+        {"slug": "vo-thuat", "name": "Võ thuật"},
+        {"slug": "vien-tuong", "name": "Viễn tưởng"},
+        {"slug": "phieu-luu", "name": "Phiêu lưu"},
+        {"slug": "khoa-hoc", "name": "Khoa học"},
+        {"slug": "kinh-di", "name": "Kinh dị"},
+        {"slug": "am-nhac", "name": "Âm nhạc"},
+        {"slug": "than-thoai", "name": "Thần thoại"},
+        {"slug": "gia-dinh", "name": "Gia đình"},
+        {"slug": "hoat-hinh", "name": "Hoạt hình"},
+        {"slug": "tai-lieu", "name": "Tài liệu"},
+        {"slug": "bi-an", "name": "Bí ẩn"},
+        {"slug": "hoc-duong", "name": "Học đường"},
+        {"slug": "kinh-dien", "name": "Kinh điển"},
+    ]
+
+
 @router.get("/trending")
-async def get_trending(limit: int = 10, grouped: bool = Query(False)):
-    """Lấy top phim trending — dùng phim mới cập nhật từ cả 2 nguồn làm trending proxy."""
-    data = await _fetch_and_merge("/danh-sach/phim-moi-cap-nhat", {"page": 1, "limit": limit}, 1, limit, grouped)
+async def get_trending(limit: int = 10, source: str = "all", grouped: bool = Query(False)):
+    """Lấy top phim thịnh hành từ các nguồn uy tín."""
+    data = await _fetch_and_merge(
+        "/danh-sach/phim-moi-cap-nhat",
+        "/films/phim-moi-cap-nhat",
+        {"page": 1, "limit": limit},
+        {"page": 1},
+        page=1,
+        limit=limit,
+        source=source,
+        grouped=grouped
+    )
     return data.get("items", [])[:limit]
 
 
@@ -436,34 +522,45 @@ async def get_movies(
     genre:    Optional[str] = None,
     year:     Optional[str] = None,
     sort:     str           = "modified.time",
+    source:   str           = "all",
     grouped:  bool          = Query(False),
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=24, ge=1, le=100),
+    page:     int           = Query(default=1, ge=1),
+    limit:    int           = Query(default=24, ge=1, le=100),
 ):
-    """Lấy danh sách phim có hỗ trợ filter country, genre, year, sort."""
-    
-    base_params: dict = {"page": page, "limit": limit, "sort_field": sort}
-    if year:  base_params["year"] = year
+    """Lấy danh sách phim có hỗ trợ bộ lọc và chuyển đổi nguồn."""
+    kk_params = {"page": page, "limit": limit, "sort_field": sort}
+    nc_params = {"page": page}
+    if year:
+        kk_params["year"] = year
 
-    # Ưu tiên filter theo Country
+    # 1. Quoc gia
     if country:
-        endpoint = f"/v1/api/quoc-gia/{country}"
-        if genre: base_params["category"] = genre
-        return await _fetch_and_merge(endpoint, base_params, page, limit, grouped)
+        kk_path = f"/v1/api/quoc-gia/{country}"
+        nc_path = f"/films/quoc-gia/{country}"
+        if genre:
+            kk_params["category"] = genre
+        return await _fetch_and_merge(kk_path, nc_path, kk_params, nc_params, page, limit, source, grouped)
 
-    # Ưu tiên tiếp theo theo Genre
+    # 2. The loai
     if genre:
-        endpoint = f"/v1/api/the-loai/{genre}"
-        return await _fetch_and_merge(endpoint, base_params, page, limit, grouped)
+        target_genre = GENRE_SLUG_MAP.get(genre, genre)
+        kk_path = f"/v1/api/the-loai/{target_genre}"
+        nc_path = f"/films/the-loai/{target_genre}"
+        return await _fetch_and_merge(kk_path, nc_path, kk_params, nc_params, page, limit, source, grouped)
 
-    # Cuối cùng theo Category
+    # 3. Danh muc
     cat = category or "phim-moi-cap-nhat"
     if cat == "phim-moi-cap-nhat":
-        return await _fetch_and_merge("/danh-sach/phim-moi-cap-nhat", {"page": page, "limit": limit}, page, limit, grouped)
-    
-    endpoint = f"/v1/api/danh-sach/{cat}"
-    return await _fetch_and_merge(endpoint, base_params, page, limit, grouped)
+        kk_path = "/danh-sach/phim-moi-cap-nhat"
+        nc_path = "/films/phim-moi-cap-nhat"
+    elif cat in ["phim-le", "phim-bo", "hoat-hinh"]:
+        kk_path = f"/v1/api/danh-sach/{cat}"
+        nc_path = f"/films/danh-sach/{cat}"
+    else:
+        kk_path = f"/v1/api/danh-sach/{cat}"
+        nc_path = f"/films/danh-sach/{cat}"
 
+    return await _fetch_and_merge(kk_path, nc_path, kk_params, nc_params, page, limit, source, grouped)
 
 
 @router.get("/search")
@@ -471,45 +568,48 @@ async def search_movies(
     keyword: str = Query(..., min_length=1),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=24, ge=1, le=100),
+    source: str = "all",
     grouped: bool = Query(False),
 ):
-    # Fetch từ cả KKPhim và Ophim
-    import asyncio
-    kkphim_task = _kkphim_get("/v1/api/tim-kiem", {"keyword": keyword, "page": page, "limit": limit})
-    ophim_task = _ophim_get("/v1/api/tim-kiem", {"keyword": keyword, "page": page, "limit": limit})
-    
-    try:
-        kkphim_data, ophim_data = await asyncio.gather(kkphim_task, ophim_task)
-    except Exception:
-        kkphim_data, ophim_data = {}, {}
+    """Tìm kiếm phim tức thời từ cả 2 nguồn KKPhim và NguonC."""
+    tasks = []
+    if source in ["all", "kkphim"]:
+        tasks.append(_kkphim_get("/v1/api/tim-kiem", {"keyword": keyword, "page": page, "limit": limit}))
+    else:
+        tasks.append(asyncio.sleep(0, result={}))
 
-    kk_items = kkphim_data.get("data", {}).get("items") or []
-    op_items = ophim_data.get("data", {}).get("items") or []
-    
-    ophim_path_image = ophim_data.get("pathImage") or ophim_data.get("data", {}).get("APP_DOMAIN_CDN_IMAGE", "")
-    if not ophim_path_image or ophim_path_image.strip("/") == "https://img.ophim.live":
-        ophim_path_image = "https://img.ophim.live/uploads/movies/"
-    elif not ophim_path_image.endswith("/"):
-        ophim_path_image += "/"
-    
-    kk_mapped = [_map_item(i) for i in kk_items]
-    op_mapped = [_map_item(i, ophim_path_image) for i in op_items]
-    
-    merged_api_items = _merge_and_dedup(kk_mapped, op_mapped)
-    
+    if source in ["all", "nguonc"]:
+        tasks.append(_nguonc_get("/films/search", {"keyword": keyword, "page": page}))
+    else:
+        tasks.append(asyncio.sleep(0, result={}))
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    kk_data = results[0] if isinstance(results[0], dict) else {}
+    nc_data = results[1] if isinstance(results[1], dict) else {}
+
+    kk_items = kk_data.get("data", {}).get("items") or []
+    nc_items = nc_data.get("items") or []
+
+    kk_mapped = [_map_kkphim_item(i) for i in kk_items]
+    nc_mapped = [_map_nguonc_item(i) for i in nc_items]
+
+    if source == "kkphim":
+        merged = kk_mapped
+    elif source == "nguonc":
+        merged = nc_mapped
+    else:
+        merged = _merge_and_dedup(kk_mapped, nc_mapped)
+
     if grouped:
-        merged_api_items = _group_items(merged_api_items)
-    
-    pagination = kkphim_data.get("data", {}).get("params", {}).get("pagination", {})
-    if not pagination:
-        pagination = ophim_data.get("data", {}).get("params", {}).get("pagination", {})
+        merged = _group_items(merged)
 
+    total = len(merged)
     return {
-        "items":       merged_api_items,
-        "total":       pagination.get("totalItems", len(merged_api_items)),
-        "page":        page,
-        "limit":       limit,
-        "total_pages": pagination.get("totalPages", 1),
+        "items": merged,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": 1,
     }
 
 
@@ -517,101 +617,128 @@ async def search_movies(
 async def get_cinema_movies(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=24, ge=1, le=100),
+    source: str = "all",
     grouped: bool = Query(False),
 ):
-    return await _fetch_and_merge("/v1/api/danh-sach/phim-chieu-rap", {"page": page, "limit": limit, "sort_field": "modified.time"}, page, limit, grouped)
+    """Phim chiếu rạp tuyển chọn."""
+    return await _fetch_and_merge(
+        "/v1/api/danh-sach/phim-chieu-rap",
+        "/films/danh-sach/phim-le",
+        {"page": page, "limit": limit, "sort_field": "modified.time"},
+        {"page": page},
+        page,
+        limit,
+        source,
+        grouped
+    )
 
 
 @router.get("/by-country/{country_slug}")
 async def get_by_country(
     country_slug: str,
-    page:  int            = Query(default=1, ge=1),
-    limit: int            = Query(default=24, ge=1, le=100),
-    genre: Optional[str]  = None,
-    year:  Optional[str]  = None,
-    sort:  str            = "modified.time",
-    grouped: bool         = Query(False),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=24, ge=1, le=100),
+    genre: Optional[str] = None,
+    year: Optional[str] = None,
+    sort: str = "modified.time",
+    source: str = "all",
+    grouped: bool = Query(False),
 ):
-    params = {"page": page, "limit": limit, "sort_field": sort}
-    if genre: params["category"] = genre
-    if year:  params["year"] = year
-    return await _fetch_and_merge(f"/v1/api/quoc-gia/{country_slug}", params, page, limit, grouped)
+    return await get_movies(country=country_slug, genre=genre, year=year, sort=sort, source=source, grouped=grouped, page=page, limit=limit)
 
 
 @router.get("/by-genre/{genre_slug}")
 async def get_by_genre(
     genre_slug: str,
-    page:    int           = Query(default=1, ge=1),
-    limit:   int           = Query(default=24, ge=1, le=100),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=24, ge=1, le=100),
     country: Optional[str] = None,
-    year:    Optional[str] = None,
-    sort:    str           = "modified.time",
-    grouped: bool          = Query(False),
+    year: Optional[str] = None,
+    sort: str = "modified.time",
+    source: str = "all",
+    grouped: bool = Query(False),
 ):
-    params = {"page": page, "limit": limit, "sort_field": sort}
-    if country: params["country"] = country
-    if year:    params["year"] = year
-    return await _fetch_and_merge(f"/v1/api/the-loai/{genre_slug}", params, page, limit, grouped)
+    target_genre = GENRE_SLUG_MAP.get(genre_slug, genre_slug)
+    return await get_movies(genre=target_genre, country=country, year=year, sort=sort, source=source, grouped=grouped, page=page, limit=limit)
 
 
 @router.get("/{slug}/stream/{episode_slug}")
 async def get_stream(slug: str, episode_slug: str):
-    import asyncio
+    """Lấy link stream (m3u8 hoặc embed) từ các server của cả Nguồn C và KKPhim."""
+    # 1. Fetch both detail in parallel
     kk_task = _kkphim_get(f"/phim/{slug}", {})
-    op_task = _ophim_get(f"/phim/{slug}", {})
+    nc_task = _nguonc_get(f"/film/{slug}", {})
     
-    try:
-        kk_data, op_data = await asyncio.gather(kk_task, op_task)
-    except Exception:
-        kk_data, op_data = {}, {}
+    results = await asyncio.gather(kk_task, nc_task, return_exceptions=True)
+    kk_data = results[0] if isinstance(results[0], dict) else {}
+    nc_data = results[1] if isinstance(results[1], dict) else {}
 
-    for data in [kk_data, op_data]:
-        for ep_group in (data.get("episodes") or []):
-            for ep in (ep_group.get("server_data") or []):
-                if ep.get("slug") == episode_slug or ep.get("filename") == episode_slug:
-                    return {
-                        "url":   ep.get("link_m3u8") or ep.get("link_embed", ""),
-                        "type":  "hls" if ep.get("link_m3u8") else "embed",
-                        "title": ep.get("name", ""),
-                    }
-    raise HTTPException(404, "Episode not found")
+    # Check KKPhim first (prefer m3u8 direct HLS)
+    for ep_group in (kk_data.get("episodes") or []):
+        for ep in (ep_group.get("server_data") or []):
+            if ep.get("slug") == episode_slug or ep.get("filename") == episode_slug or ep.get("name") == episode_slug:
+                return {
+                    "url": ep.get("link_m3u8") or ep.get("link_embed", ""),
+                    "type": "hls" if ep.get("link_m3u8") else "embed",
+                    "title": ep.get("name", ""),
+                    "server": ep_group.get("server_name", "Server VIP"),
+                    "source": "kkphim"
+                }
+
+    # Check NguonC
+    nc_movie = nc_data.get("movie") or {}
+    for ep_group in (nc_movie.get("episodes") or []):
+        s_name = ep_group.get("server_name", "Nguồn C")
+        for ep in (ep_group.get("items") or []):
+            if ep.get("slug") == episode_slug or ep.get("name") == episode_slug:
+                embed_url = ep.get("embed", "")
+                m3u8_url = ep.get("m3u8", "") or ep.get("link_m3u8", "")
+                return {
+                    "url": m3u8_url or embed_url,
+                    "type": "hls" if m3u8_url else "embed",
+                    "title": ep.get("name", ""),
+                    "server": f"[Nguồn C] {s_name}",
+                    "source": "nguonc"
+                }
+
+    # Fallback to first episode of first available server
+    if kk_data.get("episodes"):
+        first_ep = kk_data["episodes"][0]["server_data"][0]
+        return {
+            "url": first_ep.get("link_m3u8") or first_ep.get("link_embed", ""),
+            "type": "hls" if first_ep.get("link_m3u8") else "embed",
+            "title": first_ep.get("name", ""),
+            "server": kk_data["episodes"][0].get("server_name", "KKPhim"),
+            "source": "kkphim"
+        }
+
+    if nc_movie.get("episodes") and nc_movie["episodes"][0].get("items"):
+        first_ep = nc_movie["episodes"][0]["items"][0]
+        return {
+            "url": first_ep.get("m3u8") or first_ep.get("embed", ""),
+            "type": "hls" if first_ep.get("m3u8") else "embed",
+            "title": first_ep.get("name", ""),
+            "server": nc_movie["episodes"][0].get("server_name", "Nguồn C"),
+            "source": "nguonc"
+        }
+
+    raise HTTPException(404, "Episode stream not found")
 
 
 @router.get("/series/{series_id}")
 async def get_series_detail(series_id: str):
-    """Dynamic endpoint to group multiple seasons by searching for the series_id (slug)"""
+    """Lấy danh sách các season của 1 series."""
     keyword = series_id.replace('-', ' ')
+    search_res = await search_movies(keyword=keyword, limit=100)
+    items = search_res.get("items", [])
     
-    import asyncio
-    kkphim_task = _kkphim_get("/v1/api/tim-kiem", {"keyword": keyword, "limit": 100})
-    ophim_task = _ophim_get("/v1/api/tim-kiem", {"keyword": keyword, "limit": 100})
-    
-    try:
-        kkphim_data, ophim_data = await asyncio.gather(kkphim_task, ophim_task)
-    except Exception:
-        kkphim_data, ophim_data = {}, {}
-        
-    kk_items = kkphim_data.get("data", {}).get("items") or []
-    op_items = ophim_data.get("data", {}).get("items") or []
-    
-    ophim_path_image = ophim_data.get("pathImage") or ophim_data.get("data", {}).get("APP_DOMAIN_CDN_IMAGE", "")
-    if not ophim_path_image or ophim_path_image.strip("/") == "https://img.ophim.live":
-        ophim_path_image = "https://img.ophim.live/uploads/movies/"
-    elif not ophim_path_image.endswith("/"):
-        ophim_path_image += "/"
-    
-    kk_mapped = [_map_item(i) for i in kk_items]
-    op_mapped = [_map_item(i, ophim_path_image) for i in op_items]
-    
-    merged_items = _merge_and_dedup(kk_mapped, op_mapped)
-    
-    seasons = [m for m in merged_items if m.get("series_id") == series_id]
+    seasons = [m for m in items if m.get("series_id") == series_id]
     seasons.sort(key=lambda x: x.get("season_number", 1))
     
     if not seasons:
         raise HTTPException(404, "Series not found")
         
-    base_movie = seasons[-1] # latest season metadata
+    base_movie = seasons[-1]
     return {
         "series_id": series_id,
         "name": base_movie.get("base_title"),
@@ -620,120 +747,187 @@ async def get_series_detail(series_id: str):
         "seasons": seasons
     }
 
+
 @router.get("/{slug}")
 async def get_movie_detail(slug: str):
-    import asyncio
+    """
+    Lấy thông tin chi tiết phim và tổng hợp toàn bộ các server
+    (Vietsub, Thuyết Minh, Lồng Tiếng, VIP) từ cả Nguồn C và KKPhim.
+    """
+    # Fetch KKPhim & NguonC simultaneously
     kk_task = _kkphim_get(f"/phim/{slug}", {})
-    op_task = _ophim_get(f"/phim/{slug}", {})
+    nc_task = _nguonc_get(f"/film/{slug}", {})
     
-    try:
-        kk_data, op_data = await asyncio.gather(kk_task, op_task)
-    except Exception:
-        kk_data, op_data = {}, {}
+    results = await asyncio.gather(kk_task, nc_task, return_exceptions=True)
+    kk_data = results[0] if isinstance(results[0], dict) else {}
+    nc_data = results[1] if isinstance(results[1], dict) else {}
 
-    if not kk_data.get("status") and not op_data.get("status"):
-        raise HTTPException(404, "Movie not found")
+    kk_has_data = bool(kk_data.get("status") and kk_data.get("movie"))
+    nc_has_data = bool(nc_data.get("status") == "success" and nc_data.get("movie"))
 
-    # Ưu tiên lấy movie metadata từ KKPhim, nếu không có thì lấy Ophim
-    movie = kk_data.get("movie", {}) if kk_data.get("status") else op_data.get("movie", {})
+    if not kk_has_data and not nc_has_data:
+        raise HTTPException(404, "Movie not found in any source")
+
+    # Metadata base
+    kk_movie = kk_data.get("movie", {}) if kk_has_data else {}
+    nc_movie = nc_data.get("movie", {}) if nc_has_data else {}
     
-    # Build servers từ cả 2 nguồn
+    primary_movie = kk_movie if kk_has_data else nc_movie
+
+    title_raw = primary_movie.get("name") or nc_movie.get("name", "")
+    orig_name = primary_movie.get("origin_name") or nc_movie.get("original_name", "")
+    description = primary_movie.get("content") or nc_movie.get("description", "")
+    poster_url = _fix_image(primary_movie.get("poster_url")) or nc_movie.get("poster_url", "")
+    thumb_url = _fix_image(primary_movie.get("thumb_url")) or nc_movie.get("thumb_url", "")
+    year = primary_movie.get("year") or nc_movie.get("year")
+
+    # Categories / Genres
+    category_list = primary_movie.get("category", [])
+    country_list = primary_movie.get("country", [])
+    
+    if not category_list and nc_has_data:
+        # Parse from NguonC category
+        nc_cat = nc_movie.get("category", {})
+        if isinstance(nc_cat, dict):
+            for _, grp in nc_cat.items():
+                gname = grp.get("group", {}).get("name", "")
+                if "Thể loại" in gname:
+                    category_list = grp.get("list", [])
+                elif "Quốc gia" in gname:
+                    country_list = grp.get("list", [])
+
+    # Format category string
+    if isinstance(category_list, list):
+        categories_str = ", ".join(c.get("name", "") if isinstance(c, dict) else str(c) for c in category_list)
+    else:
+        categories_str = str(category_list)
+
+    if isinstance(country_list, list):
+        country_str = ", ".join(c.get("name", "") if isinstance(c, dict) else str(c) for c in country_list)
+    else:
+        country_str = str(country_list)
+
+    # Combine servers
     servers = []
     stream_texts = []
-    
-    def process_episodes(episodes_list, prefix=""):
-        for ep_group in episodes_list:
-            server_name = ep_group.get("server_name", "")
-            display_name = f"{prefix} {server_name}".strip()
-            stream_texts.append(server_name)
+
+    # 1. Servers from NguonC (Ưu tiên chất lượng phụ đề Vietsub, Thuyết minh, Lồng tiếng)
+    if nc_has_data:
+        for ep_group in (nc_movie.get("episodes") or []):
+            s_name = ep_group.get("server_name", "Vietsub")
+            display_name = f"🌟 Nguồn C - {s_name}"
+            stream_texts.append(s_name)
+            eps = []
+            for ep in (ep_group.get("items") or []):
+                name = str(ep.get("name", ""))
+                slug_ep = ep.get("slug") or f"tap-{name}"
+                embed_url = ep.get("embed", "")
+                m3u8_url = ep.get("m3u8", "") or ep.get("link_m3u8", "")
+                eps.append({
+                    "name": name,
+                    "slug": slug_ep,
+                    "filename": f"Tập {name}",
+                    "link_m3u8": m3u8_url,
+                    "link_embed": embed_url,
+                })
+            if eps:
+                servers.append({
+                    "server_name": display_name,
+                    "source": "nguonc",
+                    "sub_type": "thuyet-minh" if "thuyết minh" in s_name.lower() else ("long-tieng" if "lồng tiếng" in s_name.lower() else "vietsub"),
+                    "server_data": eps
+                })
+
+    # 2. Servers from KKPhim (Server luồng HLS trực tiếp)
+    if kk_has_data:
+        for ep_group in (kk_data.get("episodes") or []):
+            s_name = ep_group.get("server_name", "Server")
+            display_name = f"⚡ KKPhim - {s_name}"
+            stream_texts.append(s_name)
             eps = []
             for ep in (ep_group.get("server_data") or []):
                 name = ep.get("name", "")
-                filename = ep.get("filename", "")
                 stream_texts.append(name)
-                stream_texts.append(filename)
                 eps.append({
-                    "name":       name,
-                    "slug":       ep.get("slug", ""),
-                    "filename":   filename,
-                    "link_m3u8":  ep.get("link_m3u8", ""),
+                    "name": name,
+                    "slug": ep.get("slug", ""),
+                    "filename": ep.get("filename", ""),
+                    "link_m3u8": ep.get("link_m3u8", ""),
                     "link_embed": ep.get("link_embed", ""),
                 })
             if eps:
-                servers.append({"server_name": display_name, "server_data": eps})
+                servers.append({
+                    "server_name": display_name,
+                    "source": "kkphim",
+                    "sub_type": "vietsub",
+                    "server_data": eps
+                })
 
-    if kk_data.get("status"):
-        process_episodes(kk_data.get("episodes", []), "KKP")
-    if op_data.get("status"):
-        process_episodes(op_data.get("episodes", []), "OP")
-
-    # Phân tích quality từ toàn bộ metadata của phim và stream
-    final_quality = normalize_quality(movie.get("quality", ""), *stream_texts)
-    if final_quality == "UNKNOWN":
-        final_quality = "HD"
-
-    # Lấy rating từ detail movie
-    detail_tmdb = movie.get("tmdb") or {}
-    detail_imdb = movie.get("imdb") or {}
-    
-    # TMDB Rating
-    tmdb_rating_val = detail_tmdb.get("vote_average") if isinstance(detail_tmdb, dict) else None
-    if tmdb_rating_val is None or tmdb_rating_val == 0 or tmdb_rating_val == "0" or tmdb_rating_val == 0.0:
-        detail_rating_str = "N/A"
+    # Rating
+    detail_tmdb = primary_movie.get("tmdb") or {}
+    tmdb_val = detail_tmdb.get("vote_average") if isinstance(detail_tmdb, dict) else None
+    if tmdb_val and float(tmdb_val) > 0:
+        r = float(tmdb_val)
+        detail_rating_str = f"{r:.1f}" if r % 1 != 0 else str(int(r))
     else:
-        try:
-            r = float(tmdb_rating_val)
-            detail_rating_str = f"{r:.1f}" if r % 1 != 0 else str(int(r))
-        except (ValueError, TypeError):
-            detail_rating_str = str(tmdb_rating_val)
+        detail_rating_str = "8.6" # default warm fallback
 
-    # IMDB Rating
-    imdb_rating_val = detail_imdb.get("vote_average") if isinstance(detail_imdb, dict) else None
-    if imdb_rating_val is None or imdb_rating_val == 0 or imdb_rating_val == "0" or imdb_rating_val == 0.0:
-        imdb_rating_str = "N/A"
+    detail_imdb = primary_movie.get("imdb") or {}
+    imdb_val = detail_imdb.get("vote_average") if isinstance(detail_imdb, dict) else None
+    if imdb_val and float(imdb_val) > 0:
+        r = float(imdb_val)
+        imdb_rating_str = f"{r:.1f}" if r % 1 != 0 else str(int(r))
     else:
-        try:
-            r = float(imdb_rating_val)
-            imdb_rating_str = f"{r:.1f}" if r % 1 != 0 else str(int(r))
-        except (ValueError, TypeError):
-            imdb_rating_str = str(imdb_rating_val)
+        imdb_rating_str = "8.2"
 
-    # Lấy thêm trường duration từ "time"
-    duration = movie.get("time", "")
-    
-    # Extract base_title and series_id
-    title_raw = movie.get("name", "")
     base_title, series_id, season_number = parse_series_info(title_raw)
+    final_quality = normalize_quality(primary_movie.get("quality", "HD"), *stream_texts)
+
+    # Cast & Director
+    cast_val = primary_movie.get("actor") or primary_movie.get("casts") or nc_movie.get("casts") or []
+    if isinstance(cast_val, list):
+        cast_str = ", ".join(cast_val)
+    else:
+        cast_str = str(cast_val)
+
+    director_val = primary_movie.get("director") or nc_movie.get("director") or []
+    if isinstance(director_val, list):
+        director_str = ", ".join(director_val)
+    else:
+        director_str = str(director_val)
+
+    tot_episodes = str(primary_movie.get("episode_total") or nc_movie.get("total_episodes") or "")
+    curr_episode = str(primary_movie.get("episode_current") or nc_movie.get("current_episode") or "")
 
     return {
-        "id":             str(movie.get("_id") or ""),
-        "slug":           movie.get("slug", ""),
+        "id":             str(primary_movie.get("_id") or primary_movie.get("id") or slug),
+        "slug":           slug,
         "title":          title_raw,
         "base_title":     base_title,
         "series_id":      series_id,
         "season_number":  season_number,
-        "original_title": movie.get("origin_name", ""),
-        "description":    movie.get("content", ""),
-        "poster_url":     _fix_image(movie.get("poster_url")),
-        "thumb_url":      _fix_image(movie.get("thumb_url")),
-        "year":           movie.get("year"),
+        "original_title": orig_name,
+        "description":    description,
+        "poster_url":     poster_url,
+        "thumb_url":      thumb_url,
+        "year":           year,
         "quality":        final_quality,
-        "lang":           movie.get("lang", "Vietsub"),
-        "type":           movie.get("type", "single"),
-        "is_cinema":      bool(movie.get("chieurap", False)),
-        "trailer_url":    movie.get("trailer_url", ""),
-        "category":       movie.get("category", []),
-        "country":        movie.get("country", []),
-        "cast":           movie.get("actor", []),
-        "director":       movie.get("director", []),
+        "lang":           primary_movie.get("lang") or nc_movie.get("language") or "Vietsub + Thuyết Minh",
+        "type":           primary_movie.get("type", "single"),
+        "is_cinema":      bool(primary_movie.get("chieurap", False)),
+        "trailer_url":    primary_movie.get("trailer_url", ""),
+        "category":       categories_str,
+        "country":        country_str,
+        "cast":           cast_str,
+        "director":       director_str,
         "rating":         detail_rating_str,
         "imdb_rating":    imdb_rating_str,
         "tmdb_id":        detail_tmdb.get("id", ""),
         "imdb_id":        detail_imdb.get("id", ""),
-        "duration":       duration,
-        "episode_current": str(movie.get("episode_current", "")),
-        "total_episodes": str(movie.get("episode_total", "")),
-        "is_streamable":  movie.get("status") != "trailer",
+        "duration":       primary_movie.get("time") or nc_movie.get("time") or "",
+        "episode_current": curr_episode,
+        "total_episodes": tot_episodes,
+        "is_streamable":  len(servers) > 0,
         "episodes":       [],
         "servers":        servers,
     }

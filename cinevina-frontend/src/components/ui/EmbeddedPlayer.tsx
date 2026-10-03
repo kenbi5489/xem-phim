@@ -12,6 +12,9 @@ import {
   CheckCircleIcon,
   ArrowLeftIcon,
   ArrowPathIcon,
+  ChatBubbleBottomCenterTextIcon,
+  ServerStackIcon,
+  DocumentArrowUpIcon,
 } from '@heroicons/react/24/outline';
 import {
   SpeakerWaveIcon,
@@ -74,6 +77,64 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   const [qualityLevels, setQualityLevels] = useState<any[]>([]);
   const [currentQuality, setCurrentQuality] = useState<number>(-1);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
+
+  // Subtitles & Server Switcher State
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
+  const [subCues, setSubCues] = useState<{ start: number; end: number; text: string }[]>([]);
+  const [subFontSize, setSubFontSize] = useState<number>(18);
+  const [subColor, setSubColor] = useState<string>('#FFFFFF');
+  const [subBg, setSubBg] = useState<string>('rgba(0,0,0,0.75)');
+  const [subOffset, setSubOffset] = useState<number>(0);
+  const [subFileName, setSubFileName] = useState<string>('');
+  const [showSubMenu, setShowSubMenu] = useState(false);
+  const [showServerMenu, setShowServerMenu] = useState(false);
+  const subFileInputRef = useRef<HTMLInputElement>(null);
+
+  const parseSubFile = (content: string) => {
+    const timeToSec = (t: string) => {
+      const parts = t.trim().replace(',', '.').split(':');
+      if (parts.length === 3) {
+        return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+      }
+      if (parts.length === 2) {
+        return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+      }
+      return 0;
+    };
+    const cues: { start: number; end: number; text: string }[] = [];
+    const blocks = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n\n');
+    for (const b of blocks) {
+      const lines = b.trim().split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('-->')) {
+          const [s, e] = lines[i].split('-->');
+          const start = timeToSec(s);
+          const end = timeToSec(e);
+          const text = lines.slice(i + 1).join('<br/>');
+          if (text) cues.push({ start, end, text });
+          break;
+        }
+      }
+    }
+    return cues;
+  };
+
+  const handleSubFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        if (text) {
+          const parsed = parseSubFile(text);
+          setSubCues(parsed);
+          setSubFileName(file.name);
+          setSubtitlesEnabled(true);
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
 
   // Scrubber Hover
   const [hoverTime, setHoverTime] = useState(0);
@@ -357,26 +418,52 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  // Controls auto-hide: only hides when playing; never auto-hide when paused or scrubbing
+  // Controls auto-hide: only hides when playing; never auto-hide when paused, scrubbing, or when menus are open
+  const isAnyMenuOpen = showSpeedMenu || showQualityMenu || showSubMenu || showServerMenu;
+
   const resetHideTimer = useCallback(() => {
     setControlsVisible(true);
     clearTimeout(hideTimer.current);
-    if (playing && !isScrubbing && !showSpeedMenu && !showQualityMenu) {
+    if (playing && !isScrubbing && !showSpeedMenu && !showQualityMenu && !showSubMenu && !showServerMenu) {
       hideTimer.current = setTimeout(() => {
         setControlsVisible(false);
       }, 4000);
     }
-  }, [playing, isScrubbing, showSpeedMenu, showQualityMenu]);
+  }, [playing, isScrubbing, showSpeedMenu, showQualityMenu, showSubMenu, showServerMenu]);
 
   useEffect(() => {
-    if (playing) {
+    if (isAnyMenuOpen) {
+      setControlsVisible(true);
+      clearTimeout(hideTimer.current);
+    } else if (playing) {
       resetHideTimer();
     } else {
       setControlsVisible(true);
       clearTimeout(hideTimer.current);
     }
     return () => clearTimeout(hideTimer.current);
-  }, [playing, resetHideTimer]);
+  }, [playing, isAnyMenuOpen, resetHideTimer]);
+
+  // Global outside click listener to close player popups reliably without mouseLeave flicker
+  useEffect(() => {
+    if (!isAnyMenuOpen) return;
+
+    const handleOutsideMenuClick = () => {
+      setShowSpeedMenu(false);
+      setShowQualityMenu(false);
+      setShowSubMenu(false);
+      setShowServerMenu(false);
+    };
+
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleOutsideMenuClick);
+    }, 20);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleOutsideMenuClick);
+    };
+  }, [isAnyMenuOpen]);
 
   // Clean Play/Pause toggle: updates state directly without generating duplicate overlapping popup icons
   const togglePlay = useCallback(() => {
@@ -667,7 +754,7 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                 : ''
             }`}
             onMouseMove={handleMouseMove}
-            onMouseLeave={() => playing && !isScrubbing && setControlsVisible(false)}
+            onMouseLeave={() => playing && !isScrubbing && !isAnyMenuOpen && setControlsVisible(false)}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             onClick={handleContainerClick}
@@ -687,6 +774,26 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                 onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
               />
             )}
+
+            {/* Custom Subtitles Overlay */}
+            {streamType === 'hls' && subtitlesEnabled && subCues.length > 0 && (() => {
+              const currentCue = subCues.find(c => (currentTime + subOffset) >= c.start && (currentTime + subOffset) <= c.end);
+              if (!currentCue) return null;
+              return (
+                <div className="absolute bottom-20 left-4 right-4 flex justify-center pointer-events-none z-30">
+                  <span
+                    style={{
+                      fontSize: `${subFontSize}px`,
+                      color: subColor,
+                      backgroundColor: subBg === 'none' ? 'transparent' : 'rgba(0, 0, 0, 0.75)',
+                      textShadow: subBg === 'none' ? '0 2px 4px rgba(0,0,0,0.9), 0 0 2px #000' : 'none',
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg text-center font-semibold max-w-[85%] leading-normal backdrop-blur-[2px]"
+                    dangerouslySetInnerHTML={{ __html: currentCue.text }}
+                  />
+                </div>
+              );
+            })()}
 
             {/* Embed Iframe Stream */}
             {streamType === 'embed' && (
@@ -849,6 +956,26 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
               </div>
             )}
 
+            {/* Custom Subtitles Display Overlay */}
+            {subtitlesEnabled && subCues.length > 0 && !isMiniPlayer && (() => {
+              const adjusted = currentTime + subOffset;
+              const cue = subCues.find(c => adjusted >= c.start && adjusted <= c.end);
+              if (!cue) return null;
+              return (
+                <div className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 pointer-events-none z-30 max-w-[90%] text-center px-4">
+                  <span
+                    style={{
+                      fontSize: `${subFontSize}px`,
+                      color: subColor,
+                      backgroundColor: subBg,
+                    }}
+                    className="px-3 py-1.5 rounded-lg font-medium tracking-wide shadow-lg inline-block drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
+                    dangerouslySetInnerHTML={{ __html: cue.text }}
+                  />
+                </div>
+              );
+            })()}
+
             {/* Auto Next Episode Overlay */}
             {showNextOverlay && !isMiniPlayer && nextEp && (
               <div className="absolute bottom-20 right-4 sm:bottom-24 sm:right-8 z-40 bg-[var(--color-bg-surface)]/95 backdrop-blur-md border border-[var(--color-border)] p-4 rounded-[12px] shadow-2xl flex flex-col gap-2.5 max-w-[260px]">
@@ -938,6 +1065,71 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                       </p>
                     )}
                   </div>
+
+                  {/* Server Switcher Pill */}
+                  {servers.length > 1 && (
+                    <div className="relative mr-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowServerMenu((v) => !v);
+                          setShowSubMenu(false);
+                          setShowSpeedMenu(false);
+                          setShowQualityMenu(false);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-white/15 hover:bg-white/25 border border-white/20 rounded-full text-white text-[12px] font-semibold transition-all shadow-sm"
+                      >
+                        <ServerStackIcon className="w-4 h-4 text-emerald-400" />
+                        <span className="hidden sm:inline">{currentServer?.server_name || 'Đổi máy chủ'}</span>
+                        <span className="sm:hidden">Server</span>
+                      </button>
+
+                      {showServerMenu && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-full right-0 pt-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+                        >
+                          <div className="bg-slate-900/95 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden py-1 min-w-[210px] shadow-2xl">
+                            <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-white/10 flex items-center justify-between">
+                              <span>Chọn Máy Chủ Nguồn Phát</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowServerMenu(false);
+                                }}
+                                className="text-slate-400 hover:text-white p-0.5 rounded transition-colors"
+                                aria-label="Đóng menu máy chủ"
+                              >
+                                <XMarkIcon className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            {servers.map((s, idx) => (
+                              <div
+                                key={idx}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveServer(idx);
+                                  setShowServerMenu(false);
+                                  const targetEp = s.server_data?.find(ep => ep.slug === currentEpisode)?.slug || s.server_data?.[0]?.slug || currentEpisode;
+                                  onEpisodeChange(idx, targetEp);
+                                }}
+                                className={`px-3 py-2 text-[12px] font-semibold cursor-pointer transition-colors flex items-center justify-between ${
+                                  activeServer === idx
+                                    ? 'text-indigo-400 bg-white/10'
+                                    : 'text-white hover:bg-white/10'
+                                }`}
+                              >
+                                <span>{s.server_name}</span>
+                                {activeServer === idx && <CheckCircleIcon className="w-4 h-4 text-emerald-400" />}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-1">
                     <button
@@ -1156,12 +1348,15 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                     {/* Right Controls */}
                     <div className="flex items-center gap-0.5 sm:gap-1">
                       {/* Speed Menu */}
-                      <div className="relative" onMouseLeave={() => setShowSpeedMenu(false)}>
+                      <div className="relative">
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowSpeedMenu((v) => !v);
                             setShowQualityMenu(false);
+                            setShowSubMenu(false);
+                            setShowServerMenu(false);
                           }}
                           className="px-2 py-1 min-w-[34px] h-8 flex items-center justify-center text-white text-[11px] sm:text-[12px] font-bold hover:bg-white/10 rounded-[6px] transition-colors"
                           aria-label="Tốc độ phát"
@@ -1169,37 +1364,45 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                           {playbackSpeed}x
                         </button>
                         {showSpeedMenu && (
-                          <div className="absolute bottom-full right-0 mb-2 bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1 min-w-[100px] shadow-2xl z-50">
-                            {[0.5, 0.75, 1, 1.25, 1.5, 2].map((speed) => (
-                              <div
-                                key={speed}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPlaybackSpeed(speed);
-                                  if (videoRef.current) videoRef.current.playbackRate = speed;
-                                  setShowSpeedMenu(false);
-                                }}
-                                className={`px-3.5 py-1.5 text-[12px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
-                                  playbackSpeed === speed
-                                    ? 'text-[var(--color-primary)] font-bold'
-                                    : 'text-white hover:bg-white/10'
-                                }`}
-                              >
-                                {speed}x {playbackSpeed === speed && <CheckCircleIcon className="w-3.5 h-3.5" />}
-                              </div>
-                            ))}
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute bottom-full right-0 pb-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+                          >
+                            <div className="bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1 min-w-[100px] shadow-2xl">
+                              {[0.5, 0.75, 1, 1.25, 1.5, 2].map((speed) => (
+                                <div
+                                  key={speed}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPlaybackSpeed(speed);
+                                    if (videoRef.current) videoRef.current.playbackRate = speed;
+                                    setShowSpeedMenu(false);
+                                  }}
+                                  className={`px-3.5 py-1.5 text-[12px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
+                                    playbackSpeed === speed
+                                      ? 'text-[var(--color-primary)] font-bold'
+                                      : 'text-white hover:bg-white/10'
+                                  }`}
+                                >
+                                  {speed}x {playbackSpeed === speed && <CheckCircleIcon className="w-3.5 h-3.5" />}
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
 
                       {/* Quality Menu */}
                       {qualityLevels.length > 1 && (
-                        <div className="relative" onMouseLeave={() => setShowQualityMenu(false)}>
+                        <div className="relative">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowQualityMenu((v) => !v);
                               setShowSpeedMenu(false);
+                              setShowSubMenu(false);
+                              setShowServerMenu(false);
                             }}
                             className="p-1.5 min-w-[34px] min-h-[34px] flex items-center justify-center text-white hover:text-[var(--color-primary)] rounded-full hover:bg-white/10 transition-colors"
                             aria-label="Chất lượng"
@@ -1207,40 +1410,233 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
                             <Cog6ToothIcon className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
                           </button>
                           {showQualityMenu && (
-                            <div className="absolute bottom-full right-0 mb-2 bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1 min-w-[120px] shadow-2xl z-50">
-                              <div
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (hlsRef.current) hlsRef.current.currentLevel = -1;
-                                  setCurrentQuality(-1);
-                                  setShowQualityMenu(false);
-                                }}
-                                className={`px-3.5 py-1.5 text-[12px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
-                                  currentQuality === -1
-                                    ? 'text-[var(--color-primary)] font-bold'
-                                    : 'text-white hover:bg-white/10'
-                                }`}
-                              >
-                                Tự động {currentQuality === -1 && <CheckCircleIcon className="w-3.5 h-3.5" />}
-                              </div>
-                              {qualityLevels.map((lvl, idx) => (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute bottom-full right-0 pb-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+                            >
+                              <div className="bg-[#141414]/95 backdrop-blur-md border border-white/10 rounded-[8px] overflow-hidden py-1 min-w-[120px] shadow-2xl">
                                 <div
-                                  key={idx}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (hlsRef.current) hlsRef.current.currentLevel = idx;
-                                    setCurrentQuality(idx);
+                                    if (hlsRef.current) hlsRef.current.currentLevel = -1;
+                                    setCurrentQuality(-1);
                                     setShowQualityMenu(false);
                                   }}
                                   className={`px-3.5 py-1.5 text-[12px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
-                                    currentQuality === idx
+                                    currentQuality === -1
                                       ? 'text-[var(--color-primary)] font-bold'
                                       : 'text-white hover:bg-white/10'
                                   }`}
                                 >
-                                  {lvl.height}p {currentQuality === idx && <CheckCircleIcon className="w-3.5 h-3.5" />}
+                                  Tự động {currentQuality === -1 && <CheckCircleIcon className="w-3.5 h-3.5" />}
                                 </div>
-                              ))}
+                                {qualityLevels.map((lvl, idx) => (
+                                  <div
+                                    key={idx}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (hlsRef.current) hlsRef.current.currentLevel = idx;
+                                      setCurrentQuality(idx);
+                                      setShowQualityMenu(false);
+                                    }}
+                                    className={`px-3.5 py-1.5 text-[12px] font-medium cursor-pointer transition-colors flex items-center justify-between ${
+                                      currentQuality === idx
+                                        ? 'text-[var(--color-primary)] font-bold'
+                                        : 'text-white hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {lvl.height}p {currentQuality === idx && <CheckCircleIcon className="w-3.5 h-3.5" />}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Subtitle Manager Button */}
+                      {streamType === 'hls' && (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowSubMenu((v) => !v);
+                              setShowSpeedMenu(false);
+                              setShowQualityMenu(false);
+                              setShowServerMenu(false);
+                            }}
+                            className={`p-1.5 min-w-[34px] min-h-[34px] flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ${
+                              subtitlesEnabled && subCues.length > 0 ? 'text-indigo-400' : 'text-white'
+                            }`}
+                            aria-label="Phụ đề"
+                            title="Cài đặt phụ đề"
+                          >
+                            <ChatBubbleBottomCenterTextIcon className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
+                          </button>
+
+                          {showSubMenu && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute bottom-full right-0 pb-2 z-50 animate-in fade-in zoom-in-95 duration-150 text-white"
+                            >
+                              <div className="bg-slate-900/95 backdrop-blur-md border border-white/15 rounded-2xl overflow-hidden p-3.5 min-w-[270px] shadow-2xl flex flex-col gap-3">
+                                <div className="flex items-center justify-between pb-2 border-b border-white/10 text-[12px] font-bold">
+                                  <span>Phụ Đề (Subtitles)</span>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSubtitlesEnabled(!subtitlesEnabled);
+                                      }}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                                        subtitlesEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-300'
+                                      }`}
+                                    >
+                                      {subtitlesEnabled ? 'Bật' : 'Tắt'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowSubMenu(false);
+                                      }}
+                                      className="p-0.5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors"
+                                      aria-label="Đóng cài đặt phụ đề"
+                                    >
+                                      <XMarkIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Upload custom sub */}
+                                <div className="flex flex-col gap-1.5">
+                                  <span className="text-[11px] text-slate-400 font-medium">Tải file phụ đề rời (.srt, .vtt):</span>
+                                  <input
+                                    ref={subFileInputRef}
+                                    type="file"
+                                    accept=".srt,.vtt"
+                                    onChange={handleSubFileUpload}
+                                    className="hidden"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      subFileInputRef.current?.click();
+                                    }}
+                                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-[12px] font-semibold transition-colors"
+                                  >
+                                    <DocumentArrowUpIcon className="w-4 h-4 text-emerald-400" />
+                                    <span className="truncate max-w-[180px]">
+                                      {subFileName || 'Chọn file từ máy tính'}
+                                    </span>
+                                  </button>
+                                </div>
+
+                                {/* Font size */}
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-slate-400">Cỡ chữ:</span>
+                                  <div className="flex gap-1">
+                                    {[14, 18, 22, 26].map(sz => (
+                                      <button
+                                        type="button"
+                                        key={sz}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSubFontSize(sz);
+                                        }}
+                                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${
+                                          subFontSize === sz ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                                        }`}
+                                      >
+                                        {sz === 14 ? 'Nhỏ' : sz === 18 ? 'Vừa' : sz === 22 ? 'Lớn' : 'XL'}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Timing offset */}
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-slate-400">Đồng bộ (+/- giây):</span>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSubOffset(o => o - 0.5);
+                                      }}
+                                      className="px-2 py-0.5 bg-white/10 hover:bg-white/20 rounded font-bold"
+                                    >
+                                      -0.5s
+                                    </button>
+                                    <span className="font-mono text-indigo-400 px-1">{subOffset >= 0 ? `+${subOffset}` : subOffset}s</span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSubOffset(o => o + 0.5);
+                                      }}
+                                      className="px-2 py-0.5 bg-white/10 hover:bg-white/20 rounded font-bold"
+                                    >
+                                      +0.5s
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Subtitle Color */}
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-slate-400">Màu chữ:</span>
+                                  <div className="flex gap-1.5 items-center">
+                                    {[
+                                      { name: 'Trắng', code: '#FFFFFF' },
+                                      { name: 'Vàng', code: '#FACC15' },
+                                      { name: 'Xanh', code: '#38BDF8' }
+                                    ].map(c => (
+                                      <button
+                                        type="button"
+                                        key={c.code}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSubColor(c.code);
+                                        }}
+                                        style={{ backgroundColor: c.code }}
+                                        className={`w-4 h-4 rounded-full border-2 transition-transform ${
+                                          subColor === c.code ? 'border-indigo-400 scale-110 shadow' : 'border-transparent opacity-80 hover:opacity-100'
+                                        }`}
+                                        title={c.name}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Subtitle Background */}
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-slate-400">Nền:</span>
+                                  <div className="flex gap-1">
+                                    {[
+                                      { label: 'Tối', val: 'rgba(0,0,0,0.75)' },
+                                      { label: 'Rõ', val: 'transparent' },
+                                      { label: 'Đen', val: '#000000' }
+                                    ].map(bg => (
+                                      <button
+                                        type="button"
+                                        key={bg.val}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSubBg(bg.val);
+                                        }}
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                                          subBg === bg.val ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                                        }`}
+                                      >
+                                        {bg.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>

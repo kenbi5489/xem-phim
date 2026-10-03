@@ -1,9 +1,9 @@
 import React from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { movieApi } from '../services/api';
+import { FunnelIcon, XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { MovieCard } from '../components/ui/MovieCard';
-import { FunnelIcon, XMarkIcon, ExclamationTriangleIcon, FilmIcon } from '@heroicons/react/24/outline';
 import { Button } from '../components/ui/Button';
 
 const COUNTRY_SLUGS = [
@@ -29,7 +29,12 @@ const GENRE_OPTIONS = [
   { slug: "kinh-di", name: "Kinh dị" },
   { slug: "am-nhac", name: "Âm nhạc" },
   { slug: "than-thoai", name: "Thần thoại" },
-  { slug: "gia-dinh", name: "Gia đình" }
+  { slug: "gia-dinh", name: "Gia đình" },
+  { slug: "hoat-hinh", name: "Hoạt hình" },
+  { slug: "tai-lieu", name: "Tài liệu" },
+  { slug: "bi-an", name: "Bí ẩn" },
+  { slug: "hoc-duong", name: "Học đường" },
+  { slug: "kinh-dien", name: "Kinh điển" },
 ];
 
 const COUNTRY_OPTIONS = [
@@ -45,15 +50,13 @@ const COUNTRY_OPTIONS = [
   { slug: "duc", name: "Đức" }
 ];
 
-const YEAR_OPTIONS = ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011", "2010"];
-
-const RATING_OPTIONS = [
-  { value: "10", name: "10 điểm" },
-  { value: "9", name: "Từ 9 điểm" },
-  { value: "8", name: "Từ 8 điểm" },
-  { value: "7", name: "Từ 7 điểm" },
-  { value: "under_6", name: "Dưới 6 điểm" }
+const SOURCE_OPTIONS = [
+  { value: "all", name: "Tất cả nguồn (Khuyên dùng)" },
+  { value: "nguonc", name: "🌟 Nguồn C (VIP Sub)" },
+  { value: "kkphim", name: "⚡ KKPhim (HLS Fast)" }
 ];
+
+const YEAR_OPTIONS = ["2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011", "2010"];
 
 const SORT_OPTIONS = [
   { value: "modified.time", name: "Mới cập nhật" },
@@ -64,6 +67,7 @@ const SORT_OPTIONS = [
 export const Browse: React.FC = () => {
   const { slug = 'phim-le' } = useParams<{ slug: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   
   const isCountry = COUNTRY_SLUGS.includes(slug);
   const isCategory = CATEGORY_SLUGS.includes(slug);
@@ -73,13 +77,13 @@ export const Browse: React.FC = () => {
   const countryFilter = searchParams.get('country') || '';
   const yearFilter = searchParams.get('year') || '';
   const sortFilter = searchParams.get('sort') || 'modified.time';
-  const ratingFilter = searchParams.get('rating') || '';
+  const sourceFilter = searchParams.get('source') || 'all';
   const page = parseInt(searchParams.get('page') || '1', 10);
 
   const updateParams = (updates: Record<string, string>) => {
     const newParams = new URLSearchParams(searchParams);
     Object.entries(updates).forEach(([k, v]) => {
-      if (v) newParams.set(k, v);
+      if (v && v !== 'all') newParams.set(k, v);
       else newParams.delete(k);
     });
     setSearchParams(newParams);
@@ -89,21 +93,21 @@ export const Browse: React.FC = () => {
   const setCountryFilter = (val: string) => updateParams({ country: val, page: '1' });
   const setYearFilter = (val: string) => updateParams({ year: val, page: '1' });
   const setSortFilter = (val: string) => updateParams({ sort: val, page: '1' });
-  const setRatingFilter = (val: string) => updateParams({ rating: val, page: '1' });
+  const setSourceFilter = (val: string) => updateParams({ source: val, page: '1' });
   const setPage = (val: number | ((p: number) => number)) => {
     const next = typeof val === 'function' ? val(page) : val;
     updateParams({ page: next.toString() });
   };
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["browse", slug, page, genreFilter, countryFilter, yearFilter, sortFilter],
+    queryKey: ["browse", slug, page, genreFilter, countryFilter, yearFilter, sortFilter, sourceFilter],
     queryFn: () => {
       if (isCountry) return movieApi.getMoviesByCountry(slug, page, {
         genre: genreFilter, year: yearFilter, sort: sortFilter
-      });
+      }, sourceFilter);
       if (isGenre) return movieApi.getMoviesByGenre(slug, page, {
         country: countryFilter, year: yearFilter, sort: sortFilter
-      });
+      }, sourceFilter);
       return movieApi.getMovies({
         category: slug,
         page,
@@ -111,198 +115,184 @@ export const Browse: React.FC = () => {
         country: countryFilter,
         year: yearFilter,
         sort: sortFilter,
+        source: sourceFilter,
       });
     },
     staleTime: 30_000,
   });
 
-  const displayItems = React.useMemo(() => {
-    if (!data?.items) return [];
-    if (!ratingFilter) return data.items;
 
-    return data.items.filter((movie: any) => {
-      const rating = parseFloat(movie.rating) || 0;
-      if (ratingFilter === '10') return rating === 10;
-      if (ratingFilter === '9') return rating >= 9 && rating < 10;
-      if (ratingFilter === '8') return rating >= 8 && rating < 9;
-      if (ratingFilter === '7') return rating >= 7 && rating < 8;
-      if (ratingFilter === 'under_6') return rating > 0 && rating < 6;
-      return true;
-    });
-  }, [data?.items, ratingFilter]);
+  const hasActiveFilters = Boolean(genreFilter || countryFilter || yearFilter || (sourceFilter && sourceFilter !== 'all'));
 
-  const getTitle = () => {
-    if (isCountry) return `Phim ${COUNTRY_OPTIONS.find(c => c.slug === slug)?.name || slug}`;
-    if (isGenre) return `Phim ${GENRE_OPTIONS.find(g => g.slug === slug)?.name || slug}`;
-    if (slug === 'phim-le') return 'Phim Lẻ';
-    if (slug === 'phim-bo') return 'Phim Bộ';
-    if (slug === 'hoat-hinh') return 'Hoạt Hình / Anime';
-    if (slug === 'tv-shows') return 'TV Shows';
-    if (slug === 'phim-chieu-rap') return 'Phim Chiếu Rạp';
-    if (slug === 'phim-moi-cap-nhat') return 'Phim Mới Cập Nhật';
-    return 'Khám phá';
+  const clearFilters = () => {
+    setSearchParams(new URLSearchParams());
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-base)] pt-24 pb-28 lg:pb-16 px-4 md:px-8">
+    <div className="min-h-screen pt-24 pb-28 lg:pb-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-[1440px] mx-auto w-full">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-[36px] md:text-[48px] font-heading text-[var(--color-text-1)] uppercase tracking-wide">
-              {getTitle()}
-            </h1>
-            <p className="text-[var(--color-text-3)] text-[14px] font-medium">
-              {data?.total ? `${data.total.toLocaleString()} nội dung` : 'Đang tìm kiếm...'}
-            </p>
+        
+        {/* Top Control Bar (No genre title header) */}
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] sm:text-[14px] text-slate-700 dark:text-slate-300 font-bold">
+              {data?.total ? `${data.total.toLocaleString()} bộ phim` : ''}
+            </span>
+          </div>
+
+          {/* Quick source pills */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+            {SOURCE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setSourceFilter(opt.value)}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all ${
+                  sourceFilter === opt.value
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white'
+                }`}
+              >
+                {opt.name}
+              </button>
+            ))}
           </div>
         </div>
 
+        {/* Quick Genre Pills Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-3 mb-4 -mx-1 px-1">
+          {GENRE_OPTIONS.map(g => {
+            const isSelected = isGenre ? slug === g.slug : genreFilter === g.slug;
+            return (
+              <button
+                key={g.slug}
+                onClick={() => {
+                  if (isGenre) {
+                    navigate(`/browse/${g.slug}`);
+                  } else {
+                    setGenreFilter(isSelected ? '' : g.slug);
+                  }
+                }}
+                className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold shrink-0 transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                }`}
+              >
+                {g.name}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Filter Bar */}
-        <div className="bg-[var(--color-bg-surface)] p-4 md:p-6 rounded-[16px] mb-12 flex flex-wrap gap-4 items-center border border-[var(--color-border)]">
-          <div className="flex items-center gap-2 mr-2">
-            <FunnelIcon className="w-5 h-5 text-[var(--color-text-2)]" />
-            <span className="text-[14px] font-semibold text-[var(--color-text-2)] uppercase tracking-wider">Bộ lọc</span>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl mb-8 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-2 mr-1 text-slate-900 dark:text-slate-100 font-bold text-[13px]">
+            <FunnelIcon className="w-4 h-4 text-indigo-600" />
+            <span>Lọc:</span>
           </div>
 
-          <div className="flex flex-wrap gap-3 flex-1">
-            {(isCountry || isCategory) && (
-              <select 
-                value={genreFilter}
-                onChange={(e) => setGenreFilter(e.target.value)}
-                className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[140px] appearance-none"
-              >
-                <option value="">Thể loại</option>
-                {GENRE_OPTIONS.map(g => <option key={g.slug} value={g.slug}>{g.name}</option>)}
-              </select>
-            )}
-
-            {(isGenre || isCategory) && (
-              <select 
-                value={countryFilter}
-                onChange={(e) => setCountryFilter(e.target.value)}
-                className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[140px] appearance-none"
-              >
-                <option value="">Quốc gia</option>
-                {COUNTRY_OPTIONS.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-              </select>
-            )}
-
-            <select 
-              value={yearFilter}
-              onChange={(e) => setYearFilter(e.target.value)}
-              className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[100px] appearance-none"
+          {(isCountry || isCategory) && (
+            <select
+              value={genreFilter}
+              onChange={(e) => setGenreFilter(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-[13px] font-semibold px-3 py-2 rounded-xl focus:border-indigo-500 outline-none transition-colors"
             >
-              <option value="">Năm</option>
-              {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+              <option value="">Tất cả thể loại</option>
+              {GENRE_OPTIONS.map(g => <option key={g.slug} value={g.slug}>{g.name}</option>)}
             </select>
+          )}
 
-            <select 
-              value={sortFilter}
-              onChange={(e) => setSortFilter(e.target.value)}
-              className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[140px] appearance-none"
+          {(isGenre || isCategory) && (
+            <select
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-[13px] font-semibold px-3 py-2 rounded-xl focus:border-indigo-500 outline-none transition-colors"
             >
-              {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.name}</option>)}
+              <option value="">Tất cả quốc gia</option>
+              {COUNTRY_OPTIONS.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
             </select>
+          )}
 
-            <select 
-              value={ratingFilter}
-              onChange={(e) => setRatingFilter(e.target.value)}
-              className="bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-[var(--color-text-1)] text-[13px] font-medium px-4 py-2 rounded-[8px] focus:border-[var(--color-primary)] outline-none transition-colors min-w-[140px] appearance-none"
-            >
-              <option value="">Điểm đánh giá</option>
-              {RATING_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.name}</option>)}
-            </select>
-          </div>
+          <select
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-[13px] font-semibold px-3 py-2 rounded-xl focus:border-indigo-500 outline-none transition-colors"
+          >
+            <option value="">Năm phát hành</option>
+            {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
 
-          {(genreFilter || countryFilter || yearFilter || sortFilter !== "modified.time" || ratingFilter) && (
-            <button 
-              onClick={() => {
-                setGenreFilter("");
-                setCountryFilter("");
-                setYearFilter("");
-                setSortFilter("modified.time");
-                setRatingFilter("");
-              }}
-              className="p-2 rounded-[8px] text-[var(--color-text-2)] hover:text-[var(--color-live)] hover:bg-[var(--color-live-bg)] transition-colors border border-[var(--color-border-subtle)]"
-              title="Xóa bộ lọc"
-              aria-label="Xóa bộ lọc"
+          <select
+            value={sortFilter}
+            onChange={(e) => setSortFilter(e.target.value)}
+            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-[13px] font-semibold px-3 py-2 rounded-xl focus:border-indigo-500 outline-none transition-colors"
+          >
+            {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.name}</option>)}
+          </select>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1 px-3 py-2 text-[12px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors ml-auto"
             >
-              <XMarkIcon className="w-5 h-5" />
+              <XMarkIcon className="w-4 h-4" /> Xóa bộ lọc
             </button>
           )}
         </div>
 
-        {/* Grid Content */}
+        {/* Movie Grid */}
         {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 lg:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-2 w-full">
-                <div className="w-full aspect-[2/3] bg-[var(--color-surface)] animate-skeleton rounded-[var(--radius-card)]" />
-                <div className="h-3.5 bg-[var(--color-surface)] animate-skeleton rounded w-3/4 mt-1" />
-                <div className="h-3 bg-[var(--color-surface)] animate-skeleton rounded w-1/2" />
+              <div key={i} className="flex flex-col gap-2.5">
+                <div className="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-2xl" />
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-3/4" />
+                <div className="h-3 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-1/2" />
               </div>
             ))}
           </div>
         ) : isError ? (
-          <div className="py-24 text-center bg-[var(--color-surface)] rounded-[var(--radius-card)] flex flex-col items-center gap-4 border border-[var(--color-border-subtle)]">
-            <ExclamationTriangleIcon className="w-16 h-16 text-[var(--color-text-muted)]" />
-            <h3 className="text-[24px] font-heading text-[var(--color-text-primary)] uppercase">Lỗi kết nối API</h3>
-            <p className="text-[14px] text-[var(--color-text-muted)]">Không thể tải dữ liệu. Vui lòng thử lại.</p>
+          <div className="py-16 text-center flex flex-col items-center gap-3">
+            <ExclamationTriangleIcon className="w-12 h-12 text-amber-500" />
+            <p className="text-slate-600 dark:text-slate-300 font-semibold">Lỗi tải danh sách phim.</p>
             <Button variant="primary" onClick={() => refetch()}>Thử lại</Button>
           </div>
-        ) : data?.items?.length ? (
-          <>
-            {displayItems?.length ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 lg:gap-6">
-                {displayItems.map((movie: any) => (
-                  <MovieCard key={movie.slug} {...movie} className="w-full" />
-                ))}
-              </div>
-            ) : (
-              <div className="py-24 text-center bg-[var(--color-bg-surface)] rounded-[16px] flex flex-col items-center gap-2 border border-[var(--color-border)]">
-                <p className="text-[18px] font-semibold text-[var(--color-text-1)]">Trang này không có phim phù hợp</p>
-                <p className="text-[14px] text-[var(--color-text-3)]">Hãy thử xóa bớt bộ lọc hoặc sang trang tiếp theo.</p>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {data.total_pages > 1 && (
-              <div className="flex flex-col items-center gap-3 mt-12 pt-8 border-t border-[var(--color-border-subtle)]">
-                <div className="flex justify-center items-center gap-3">
-                  <Button 
-                    variant="secondary"
-                    disabled={page === 1}
-                    onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                    className="w-[100px]"
-                  >
-                    Trước
-                  </Button>
-                  
-                  <div className="w-10 h-10 rounded-[8px] bg-[var(--color-primary)] flex items-center justify-center text-white font-semibold text-[14px]">
-                    {page}
-                  </div>
-
-                  <Button 
-                    variant="secondary"
-                    disabled={page === data.total_pages}
-                    onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                    className="w-[100px]"
-                  >
-                    Tiếp theo
-                  </Button>
-                </div>
-                <p className="text-[13px] text-[var(--color-text-muted)]">Trang {page} / {data.total_pages}</p>
-              </div>
-            )}
-          </>
+        ) : !data?.items || data.items.length === 0 ? (
+          <div className="py-20 text-center flex flex-col items-center gap-3">
+            <p className="text-slate-600 dark:text-slate-300 text-lg font-bold">Không tìm thấy phim phù hợp</p>
+            <p className="text-slate-400 text-sm">Hãy thử chọn lại tiêu chí tìm kiếm hoặc chuyển đổi nguồn phim.</p>
+          </div>
         ) : (
-          <div className="py-24 text-center bg-[var(--color-surface)] rounded-[var(--radius-card)] flex flex-col items-center gap-3 border border-[var(--color-border-subtle)]">
-            <FilmIcon className="w-16 h-16 text-[var(--color-text-muted)]" />
-            <p className="text-[18px] font-semibold text-[var(--color-text-primary)]">Không tìm thấy phim phù hợp</p>
-            <p className="text-[14px] text-[var(--color-text-muted)]">Hãy thử với từ khóa hoặc bộ lọc khác.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+            {data.items.map((movie) => (
+              <MovieCard key={movie.slug} {...movie} />
+            ))}
           </div>
         )}
+
+        {/* Pagination */}
+        {data && data.total_pages > 1 && (
+          <div className="flex items-center justify-center gap-3 mt-12">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-4 py-2 rounded-xl text-[13px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              ← Trang trước
+            </button>
+            <span className="text-[13px] font-semibold text-slate-600 dark:text-slate-400">
+              Trang <span className="font-bold text-slate-900 dark:text-white">{page}</span> / {data.total_pages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(data.total_pages, p + 1))}
+              disabled={page >= data.total_pages}
+              className="px-4 py-2 rounded-xl text-[13px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              Trang sau →
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   );

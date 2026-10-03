@@ -7,6 +7,9 @@ router = APIRouter(prefix="/api/proxy", tags=["proxy"])
 ALLOWED_DOMAINS = [
     "phimimg.com",
     "phimapi.com",
+    "img.nguonc.com",
+    "nguonc.com",
+    "streamc.xyz",
     "googleusercontent.com",
     "imgur.com",
     "cloudinary.com",

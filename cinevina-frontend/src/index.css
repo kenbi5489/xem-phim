@@ -1,46 +1,50 @@
 @import "tailwindcss";
 
-@theme {
+@variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+:root {
   /* Fonts */
-  --font-heading: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-  /* Cinematic Premium Dark Navy Colors */
-  --color-bg-app: #070A12;
-  --color-bg-app-2: #0B1020;
-  --color-surface: #111827;
-  --color-surface-elevated: #172033;
-  --color-surface-soft: rgba(255, 255, 255, 0.04);
-  --color-border-subtle: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.14);
+  /* ☀️ Tươi Sáng & Trang Nhã (Modern Bright Palette) */
+  --color-bg-app: #F8FAFC;
+  --color-bg-app-2: #FFFFFF;
+  --color-surface: #FFFFFF;
+  --color-surface-elevated: #F1F5F9;
+  --color-surface-soft: rgba(0, 0, 0, 0.04);
+  --color-border-subtle: #E2E8F0;
+  --color-border-strong: #CBD5E1;
 
-  --color-primary: #8B5CF6;
-  --color-primary-hover: #A78BFA;
-  --color-primary-active: #7C3AED;
+  /* Brand Vibrant Accents */
+  --color-primary: #4F46E5;
+  --color-primary-hover: #4338CA;
+  --color-primary-active: #3730A3;
 
-  --color-secondary: #06B6D4;
-  --color-secondary-hover: #22D3EE;
+  --color-secondary: #0284C7;
+  --color-secondary-hover: #0369A1;
 
   --color-live: #EF4444;
-  --color-live-bg: rgba(239, 68, 68, 0.14);
+  --color-live-bg: rgba(239, 68, 68, 0.1);
 
-  --color-rating: #FACC15;
-  --color-success: #22C55E;
+  --color-rating: #F59E0B;
+  --color-success: #10B981;
   --color-warning: #F59E0B;
   --color-danger: #EF4444;
 
-  --color-text-primary: #F8FAFC;
-  --color-text-secondary: #CBD5E1;
-  --color-text-muted: #94A3B8;
+  --color-text-primary: #090D16;
+  --color-text-secondary: #1E293B;
+  --color-text-muted: #475569;
   --color-text-disabled: #64748B;
-  
+
   --radius-card: 16px;
   --radius-button: 999px;
-  
-  --shadow-card: 0 16px 40px rgba(0,0,0,0.35);
 
-  /* Legacy mappings (to prevent immediate breaks) */
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 20px 25px -5px rgba(79, 70, 229, 0.12), 0 8px 10px -6px rgba(79, 70, 229, 0.08);
+
+  /* Legacy mappings */
   --color-bg-base: var(--color-bg-app);
   --color-bg-surface-legacy: var(--color-surface);
   --color-bg-hover: var(--color-surface-elevated);
@@ -49,6 +53,72 @@
   --color-text-2: var(--color-text-secondary);
   --color-text-3: var(--color-text-muted);
   --color-gold: var(--color-rating);
+}
+
+.dark {
+  /* 🌙 Chế độ Tối Hiện Đại & Sang Trọng (Deep Slate Modern Dark) */
+  --color-bg-app: #0B0F19;
+  --color-bg-app-2: #111827;
+  --color-surface: #172033;
+  --color-surface-elevated: #1E293B;
+  --color-surface-soft: rgba(255, 255, 255, 0.05);
+  --color-border-subtle: rgba(255, 255, 255, 0.1);
+  --color-border-strong: rgba(255, 255, 255, 0.18);
+
+  --color-primary: #6366F1;
+  --color-primary-hover: #818CF8;
+  --color-primary-active: #4F46E5;
+
+  --color-secondary: #38BDF8;
+  --color-secondary-hover: #0EA5E9;
+
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #CBD5E1;
+  --color-text-muted: #94A3B8;
+  --color-text-disabled: #64748B;
+
+  --shadow-card: 0 10px 30px rgba(0,0,0,0.35);
+  --shadow-card-hover: 0 20px 35px rgba(99, 102, 241, 0.25);
+}
+
+@theme {
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+  --font-sans: var(--font-sans);
+
+  --color-bg-app: var(--color-bg-app);
+  --color-bg-app-2: var(--color-bg-app-2);
+  --color-surface: var(--color-surface);
+  --color-surface-elevated: var(--color-surface-elevated);
+  --color-surface-soft: var(--color-surface-soft);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-border-strong: var(--color-border-strong);
+
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-active: var(--color-primary-active);
+
+  --color-secondary: var(--color-secondary);
+  --color-secondary-hover: var(--color-secondary-hover);
+
+  --color-live: var(--color-live);
+  --color-live-bg: var(--color-live-bg);
+
+  --color-rating: var(--color-rating);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-disabled: var(--color-text-disabled);
+
+  --radius-card: var(--radius-card);
+  --radius-button: var(--radius-button);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-card-hover: var(--shadow-card-hover);
 }
 
 @layer base {
@@ -73,6 +143,7 @@
     position: relative;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
   
   main {
@@ -90,115 +161,61 @@
   
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
-    letter-spacing: 0.02em;
+    letter-spacing: -0.01em;
   }
 
-  /* TV Navigation Focus Outlines */
   *:focus-visible {
-    outline: 3px solid var(--color-primary);
-    outline-offset: 4px;
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
     border-radius: 8px;
-    transition: all 0.2s ease-out;
   }
 }
 
 @layer utilities {
   .scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
   .scrollbar-hide::-webkit-scrollbar {
-    display: none; /* Chrome, Safari and Opera */
+    display: none;
   }
 
-  /* Thin scrollbar for episode lists, etc. */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-text-3) transparent;
+    scrollbar-color: var(--color-border-strong) transparent;
   }
   .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 5px;
+    height: 5px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: var(--color-text-3);
+    background: var(--color-border-strong);
     border-radius: 999px;
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: var(--color-text-2);
-  }
 
-  /* Skeleton animation */
   @keyframes skeleton-loading {
-    0% { background-color: var(--color-surface); }
-    50% { background-color: var(--color-surface-elevated); }
-    100% { background-color: var(--color-surface); }
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
   }
   
   .animate-skeleton {
-    animation: skeleton-loading 2s ease-in-out infinite;
-  }
-}
-
-@layer components {
-  .movie-card-container {
-    perspective: 1000px;
+    animation: skeleton-loading 1.6s ease-in-out infinite;
   }
 
-  .glass-panel {
-    background: rgba(17, 17, 24, 0.7);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--color-border);
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
   }
-}
-
-/* ── Mobile touch improvements ── */
-@media (max-width: 768px) {
-  button, a {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
-}
-
-/* ── Safe area support for notched devices ── */
-@supports (padding: max(0px)) {
-  .safe-bottom { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
-  .safe-top    { padding-top:    max(1.5rem, env(safe-area-inset-top)); }
-}
-
-body.is-tv * {
-  /* Disable backdrop filter to save GPU */
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-body.is-tv .glass-panel {
-  background-color: var(--color-surface) !important;
-}
-
-/* Disable box-shadows on TV */
-body.is-tv .shadow-lg,
-body.is-tv .shadow-xl {
-  box-shadow: none !important;
-}
-
-/* Reduce scale transition on movie card to avoid reflow/repaint */
-body.is-tv .group:hover img.group-hover\:scale-105 {
-  transform: none !important;
-}
-
-/* Disable skeleton animation */
-body.is-tv .animate-skeleton {
-  animation: none !important;
-  background-color: var(--color-surface) !important;
-}
-
-/* Virtualization CSS */
-.content-virtualized {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 300px;
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
 }

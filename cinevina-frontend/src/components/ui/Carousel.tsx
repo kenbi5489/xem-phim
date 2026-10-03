@@ -1,11 +1,12 @@
 import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { ChevronLeftIcon, ChevronRightIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import { cn } from './Button';
 
 interface CarouselProps {
   title: string;
-  emoji?: string; // Kept for API compatibility but won't render
+  subtitle?: string;
+  badge?: string;
   children?: React.ReactNode;
   className?: string;
   isLoading?: boolean;
@@ -15,10 +16,19 @@ interface CarouselProps {
 }
 
 export const Carousel: React.FC<CarouselProps> = ({
-  title, children, className, isLoading, error, onRetry, viewAllLink
+  title,
+  subtitle,
+  badge,
+  children,
+  className,
+  isLoading,
+  error,
+  onRetry,
+  viewAllLink,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const childrenCount = React.Children.count(children);
+
   if (!isLoading && !error && childrenCount === 0) {
     return null;
   }
@@ -29,39 +39,58 @@ export const Carousel: React.FC<CarouselProps> = ({
       const amount = clientWidth * 0.75;
       scrollRef.current.scrollTo({
         left: direction === 'left' ? scrollLeft - amount : scrollLeft + amount,
-        behavior: 'smooth'
+        behavior: 'smooth',
       });
     }
   };
 
   return (
-    <div className={cn('flex flex-col gap-3 w-full max-w-[1440px] mx-auto group/carousel', className)}>
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between px-4 lg:px-8">
-        <div className="flex items-center gap-2.5">
-          <div className="w-1.5 h-5 bg-[var(--color-primary)] rounded-full" />
-          <h2 className="font-heading text-[17px] sm:text-[19px] font-bold text-[var(--color-text-primary)] tracking-wide">{title}</h2>
+    <section className={cn('flex flex-col gap-3.5 w-full max-w-[1440px] mx-auto', className)}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-3">
+          <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <h2 className="font-heading text-[18px] sm:text-[20px] font-extrabold text-slate-900 dark:text-white tracking-tight">
+                {title}
+              </h2>
+              {badge && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                  {badge}
+                </span>
+              )}
+            </div>
+            {subtitle && (
+              <p className="text-[12px] sm:text-[13px] text-slate-700 dark:text-slate-300 font-semibold">
+                {subtitle}
+              </p>
+            )}
+          </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {viewAllLink && (
-            <Link to={viewAllLink} className="text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] text-[13px] font-medium transition-colors mr-2">
-              Xem tất cả &rarr;
+            <Link
+              to={viewAllLink}
+              className="inline-flex items-center gap-1 text-[13px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors mr-1 sm:mr-3"
+            >
+              Xem tất cả <ArrowRightIcon className="w-3.5 h-3.5" />
             </Link>
           )}
 
           {/* Desktop Arrow Controls */}
-          <div className="hidden md:flex items-center gap-1">
-            <button 
+          <div className="hidden sm:flex items-center gap-1.5">
+            <button
               onClick={() => scroll('left')}
-              className="p-1.5 rounded-full bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-white transition-all active:scale-90"
+              className="p-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-all active:scale-95"
               aria-label="Cuộn sang trái"
             >
               <ChevronLeftIcon className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={() => scroll('right')}
-              className="p-1.5 rounded-full bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-white transition-all active:scale-90"
+              className="p-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-all active:scale-95"
               aria-label="Cuộn sang phải"
             >
               <ChevronRightIcon className="w-4 h-4" />
@@ -70,41 +99,42 @@ export const Carousel: React.FC<CarouselProps> = ({
         </div>
       </div>
 
-      {/* ── Scroll Area ── */}
+      {/* Scroll Area */}
       <div className="relative w-full">
-        <div 
+        <div
           ref={scrollRef}
-          className="flex gap-3 sm:gap-4 md:gap-5 overflow-x-auto scrollbar-hide snap-x snap-mandatory px-4 lg:px-8 pb-3"
-          style={{ 
-            scrollbarWidth: 'none', 
+          className="flex gap-3.5 sm:gap-4 md:gap-5 overflow-x-auto scrollbar-hide snap-x px-4 sm:px-6 lg:px-8 pb-4 pt-1"
+          style={{
+            scrollbarWidth: 'none',
             msOverflowStyle: 'none',
-            WebkitOverflowScrolling: 'touch'
+            WebkitOverflowScrolling: 'touch',
           }}
         >
           {error ? (
-            <div className="w-full flex flex-col items-center justify-center p-8 bg-[var(--color-surface)] rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] gap-3">
+            <div className="w-full flex flex-col items-center justify-center p-8 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 gap-3">
               <p className="text-[14px]">Không thể tải nội dung.</p>
               {onRetry && (
-                <button onClick={onRetry} className="text-[var(--color-primary)] text-[13px] font-medium hover:underline">
+                <button
+                  onClick={onRetry}
+                  className="px-4 py-1.5 rounded-full bg-indigo-600 text-white text-[13px] font-semibold hover:bg-indigo-700 transition-colors"
+                >
                   Thử lại
                 </button>
               )}
             </div>
           ) : isLoading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="snap-start flex flex-col gap-2 w-[135px] sm:w-[155px] md:w-[170px] shrink-0">
-                <div className="w-full aspect-[2/3] bg-[var(--color-surface)] animate-skeleton rounded-[var(--radius-card)]" />
-                <div className="h-3.5 bg-[var(--color-surface)] animate-skeleton rounded w-3/4 mt-1" />
-                <div className="h-3 bg-[var(--color-surface)] animate-skeleton rounded w-1/2" />
+              <div key={i} className="snap-start flex flex-col gap-2 w-[140px] sm:w-[165px] md:w-[185px] shrink-0">
+                <div className="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-2xl" />
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-3/4 mt-1" />
+                <div className="h-3 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-1/2" />
               </div>
             ))
           ) : (
-            React.Children.map(children, child => (
-              <div className="snap-start shrink-0">{child}</div>
-            ))
+            children
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 };

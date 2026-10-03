@@ -1,241 +1,504 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  MagnifyingGlassIcon, UserCircleIcon,
-  XMarkIcon, Bars3Icon,
-  HomeIcon, FilmIcon,
-  PlayCircleIcon
+  MagnifyingGlassIcon,
+  XMarkIcon,
+  Bars3Icon,
+  HomeIcon,
+  SunIcon,
+  MoonIcon,
+  Squares2X2Icon,
+  HeartIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline';
 import {
+  PlayCircleIcon,
   HomeIcon as HomeSolid,
-  FilmIcon as FilmSolid,
-  UserCircleIcon as UserSolid
+  Squares2X2Icon as Squares2X2Solid,
+  HeartIcon as HeartSolid,
+  StarIcon,
 } from '@heroicons/react/24/solid';
-
+import { useSearchMovies, useDebounce } from '../../hooks/useMovies';
+import { useThemeStore } from '../../store/useThemeStore';
 
 const NAV_LINKS = [
-  { name: 'Trang chủ', to: '/' },
-  { name: 'Phim lẻ', to: '/browse/phim-le' },
-  { name: 'Phim bộ', to: '/browse/phim-bo' },
-  { name: 'Chiếu rạp', to: '/browse/phim-chieu-rap' },
+  { name: 'Trang Chủ', to: '/' },
+  { name: 'Phim Lẻ', to: '/browse/phim-le' },
+  { name: 'Phim Bộ', to: '/browse/phim-bo' },
+  { name: 'Chiếu Rạp', to: '/browse/phim-chieu-rap' },
+  { name: 'Hoạt Hình', to: '/browse/hoat-hinh' },
 ];
 
-const MOBILE_NAV = [
-  { name: 'Trang chủ', to: '/', Icon: HomeIcon, IconSolid: HomeSolid },
-  { name: 'Phim lẻ', to: '/browse/phim-le', Icon: FilmIcon, IconSolid: FilmSolid },
-  { name: 'Phim bộ', to: '/browse/phim-bo', Icon: FilmIcon, IconSolid: FilmSolid },
-  { name: 'Tìm kiếm', to: '/search', Icon: MagnifyingGlassIcon, IconSolid: MagnifyingGlassIcon },
-  { name: 'Tài khoản', to: '/account', Icon: UserCircleIcon, IconSolid: UserSolid },
+const CURATED_NAV_GENRES = [
+  { slug: 'hanh-dong', name: 'Hành động' },
+  { slug: 'tinh-cam', name: 'Tình cảm' },
+  { slug: 'hai-huoc', name: 'Hài hước' },
+  { slug: 'co-trang', name: 'Cổ trang' },
+  { slug: 'tam-ly', name: 'Tâm lý' },
+  { slug: 'hinh-su', name: 'Hình sự' },
+  { slug: 'chien-tranh', name: 'Chiến tranh' },
+  { slug: 'vo-thuat', name: 'Võ thuật' },
+  { slug: 'vien-tuong', name: 'Viễn tưởng' },
+  { slug: 'phieu-luu', name: 'Phiêu lưu' },
+  { slug: 'khoa-hoc', name: 'Khoa học' },
+  { slug: 'kinh-di', name: 'Kinh dị' },
+  { slug: 'am-nhac', name: 'Âm nhạc' },
+  { slug: 'than-thoai', name: 'Thần thoại' },
+  { slug: 'gia-dinh', name: 'Gia đình' },
+  { slug: 'hoat-hinh', name: 'Hoạt hình' },
 ];
 
 export const Navbar: React.FC = () => {
-  const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isGenreMenuOpen, setIsGenreMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const searchRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const genreMenuRef = useRef<HTMLDivElement>(null);
+  const genreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverOpenedTimeRef = useRef<number>(0);
 
-  const placeholders = ['Tìm tên phim, diễn viên...', 'Tìm phim chiếu rạp mới...', 'Tìm phim bộ Hàn, Trung...', 'Tìm kiếm Anime...'];
+  const { theme, toggleTheme } = useThemeStore();
+
+  const debouncedKeyword = useDebounce(searchQuery, 350);
+  const { data: searchResults, isLoading: isSearching } = useSearchMovies(debouncedKeyword);
+
+  const placeholders = [
+    'Tìm phim mới, diễn viên...',
+    'Tìm phim chiếu rạp Vietsub...',
+    'Tìm phim bộ Hàn, Trung thuyết minh...',
+    'Tìm Anime, hoạt hình HD...',
+  ];
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const popularSearches = ['Nữ Hoàng Nước Mắt', 'Gia Đình Mình Vui Bất Thình Lình', 'Mai', 'Lật Mặt 7', 'Dune'];
 
   useEffect(() => {
     const interval = setInterval(() => {
       setPlaceholderIdx(prev => (prev + 1) % placeholders.length);
-    }, 3500);
+    }, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [placeholders.length]);
 
+  // Close menus on navigation
   useEffect(() => {
-    setShowSearch(false);
     setIsMobileMenuOpen(false);
+    setIsSearchOpen(false);
+    setIsGenreMenuOpen(false);
     setSearchQuery('');
   }, [location.pathname]);
 
+  // Click outside search container & genre menu to close dropdowns
   useEffect(() => {
-    if (showSearch) searchRef.current?.focus();
-  }, [showSearch]);
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchOpen(false);
+      }
+      if (genreMenuRef.current && !genreMenuRef.current.contains(e.target as Node)) {
+        setIsGenreMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleGenreMouseEnter = () => {
+    if (genreTimeoutRef.current) {
+      clearTimeout(genreTimeoutRef.current);
+      genreTimeoutRef.current = null;
+    }
+    hoverOpenedTimeRef.current = Date.now();
+    setIsGenreMenuOpen(true);
+  };
+
+  const handleGenreMouseLeave = () => {
+    genreTimeoutRef.current = setTimeout(() => {
+      setIsGenreMenuOpen(false);
+    }, 200);
+  };
+
+  const handleGenreButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (genreTimeoutRef.current) {
+      clearTimeout(genreTimeoutRef.current);
+      genreTimeoutRef.current = null;
+    }
+    const timeSinceHover = Date.now() - hoverOpenedTimeRef.current;
+    // If hover just opened it in the last 400ms, user clicked to interact, so keep it open
+    if (isGenreMenuOpen && timeSinceHover < 400) {
+      return;
+    }
+    setIsGenreMenuOpen((v) => !v);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const q = searchQuery.trim();
     if (q.length >= 2) {
       navigate(`/search?q=${encodeURIComponent(q)}`);
-      setShowSearch(false);
+      setIsSearchOpen(false);
       setIsMobileMenuOpen(false);
-      setSearchQuery('');
     }
+  };
+
+  const handleSelectMovie = (slug: string) => {
+    setIsSearchOpen(false);
+    setSearchQuery('');
+    navigate(`/phim/${slug}`);
   };
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-[60] bg-[rgba(7,10,18,0.85)] backdrop-blur-[20px] border-b border-[var(--color-border-subtle)] h-[56px] pt-[env(safe-area-inset-top)] flex items-center transition-colors">
-        <div className="w-full max-w-[1440px] mx-auto px-4 lg:px-8 flex items-center justify-between">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-[#0B0F19]/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200">
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-[64px] flex items-center justify-between gap-4">
           
-          {/* Mobile: Hamburger & Logo */}
-          <div className="flex items-center gap-3 lg:hidden">
-            <button 
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-              className="p-1.5 text-[var(--color-text-1)] rounded-lg hover:bg-white/5 active:scale-95 transition-all"
-              aria-label="Menu"
+          {/* Left: Mobile hamburger & Brand */}
+          <div className="flex items-center gap-3 lg:gap-8">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl lg:hidden transition-colors"
+              aria-label="Mở menu"
             >
               {isMobileMenuOpen ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
             </button>
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-md shadow-purple-500/20">
-                <PlayCircleIcon className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-heading text-[20px] tracking-wider font-extrabold bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
-                CINE<span className="text-[var(--color-primary)]">VINA</span>
-              </span>
-            </Link>
-          </div>
 
-          {/* Desktop: Logo & Center Links */}
-          <div className="hidden lg:flex items-center gap-10">
+            {/* Logo */}
             <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-500/25 group-hover:scale-105 transition-transform duration-300">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 flex items-center justify-center shadow-md shadow-indigo-500/25 group-hover:scale-105 transition-transform duration-300">
                 <PlayCircleIcon className="w-5 h-5 text-white" />
               </div>
-              <span className="font-heading text-[24px] tracking-wider font-extrabold bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
-                CINE<span className="text-[var(--color-primary)]">VINA</span>
-              </span>
+              <div className="flex flex-col">
+                <span className="font-heading text-[21px] font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">
+                  CINE<span className="text-indigo-600 dark:text-indigo-400">VINA</span>
+                </span>
+                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 tracking-wider">
+                  Nguồn C + KKPhim
+                </span>
+              </div>
             </Link>
-            
-            <div className="flex items-center gap-7">
+
+            {/* Desktop Navigation Links */}
+            <nav className="hidden lg:flex items-center gap-1.5 ml-4">
               {NAV_LINKS.map(link => {
                 const isActive = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
                 return (
-                  <Link 
-                    key={link.name} 
+                  <Link
+                    key={link.name}
                     to={link.to}
-                    className={`text-[14px] font-semibold transition-colors duration-200 ${
-                      isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-2)] hover:text-white'
+                    className={`px-3.5 py-1.5 rounded-full text-[14px] font-semibold transition-all duration-200 ${
+                      isActive
+                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
+                        : 'text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
                     }`}
                   >
                     {link.name}
                   </Link>
                 );
               })}
-            </div>
+
+              {/* Curated Genres Dropdown */}
+              <div
+                ref={genreMenuRef}
+                className="relative"
+                onMouseEnter={handleGenreMouseEnter}
+                onMouseLeave={handleGenreMouseLeave}
+              >
+                <button
+                  type="button"
+                  onClick={handleGenreButtonClick}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[14px] font-semibold transition-all duration-200 cursor-pointer ${
+                    isGenreMenuOpen || location.pathname.includes('/the-loai') || location.pathname.includes('/browse')
+                      ? 'bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-bold'
+                      : 'text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
+                  }`}
+                >
+                  <span>Thể Loại</span>
+                  <ChevronDownIcon className={`w-3.5 h-3.5 mt-0.5 transition-transform duration-200 ${isGenreMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isGenreMenuOpen && (
+                  <div className="absolute top-full left-0 pt-2 w-[360px] z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-2xl grid grid-cols-2 gap-1.5">
+                      {CURATED_NAV_GENRES.map(g => (
+                        <Link
+                          key={g.slug}
+                          to={`/browse/${g.slug}`}
+                          onClick={() => setIsGenreMenuOpen(false)}
+                          className="px-3 py-2 rounded-xl text-[13px] font-bold text-slate-800 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                        >
+                          {g.name}
+                        </Link>
+                      ))}
+                      <div className="col-span-2 pt-2 mt-1 border-t border-slate-100 dark:border-slate-800 text-center">
+                        <Link
+                          to="/browse/hanh-dong"
+                          onClick={() => setIsGenreMenuOpen(false)}
+                          className="text-[12px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                        >
+                          Xem tất cả thể loại & bộ lọc →
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </nav>
           </div>
 
-          {/* Right: Search, Account */}
-          <div className="flex items-center gap-3 lg:gap-5 shrink-0">
-            {/* Desktop Search */}
-            <div className="hidden lg:block relative">
-              <form onSubmit={handleSearch} className={`relative flex items-center transition-all duration-300 ${showSearch ? 'w-[300px]' : 'w-10'}`}>
-                {showSearch ? (
-                  <>
-                    <MagnifyingGlassIcon className="absolute left-3.5 w-4 h-4 text-[var(--color-text-3)] pointer-events-none" />
-                    <input
-                      ref={searchRef}
-                      type="text"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      onFocus={() => setIsSearchFocused(true)}
-                      onBlur={() => setTimeout(() => setIsSearchFocused(false), 250)}
-                      placeholder={placeholders[placeholderIdx]}
-                      className="w-full bg-[var(--color-surface)] border border-[var(--color-border-subtle)] rounded-full py-2 pl-10 pr-9 text-[13px] text-[var(--color-text-1)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]/30 transition-all"
-                    />
-                    <button type="button" onClick={() => setShowSearch(false)} className="absolute right-3 p-0.5 text-[var(--color-text-3)] hover:text-white transition-colors">
-                      <XMarkIcon className="w-4 h-4" />
-                    </button>
-                    {/* Search Suggestions */}
-                    {isSearchFocused && !searchQuery && (
-                      <div className="absolute top-full mt-2 right-0 w-[300px] bg-[var(--color-surface)] border border-[var(--color-border-subtle)] rounded-2xl shadow-2xl py-2 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                        <div className="px-4 py-1.5 text-[11px] font-semibold text-[var(--color-text-3)] uppercase tracking-wider">Từ khóa hot</div>
-                        {popularSearches.map((term, i) => (
-                          <button 
-                            key={i} 
-                            type="button"
-                            onClick={() => { setSearchQuery(term); navigate(`/search?q=${encodeURIComponent(term)}`); setShowSearch(false); }}
-                            className="w-full text-left px-4 py-2 text-[13px] text-[var(--color-text-2)] hover:text-white hover:bg-[var(--color-surface-elevated)] flex items-center gap-2.5 transition-colors"
-                          >
-                            <MagnifyingGlassIcon className="w-3.5 h-3.5 text-[var(--color-text-3)]" /> {term}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <button 
-                    type="button" 
-                    onClick={() => setShowSearch(true)} 
-                    className="p-2 text-[var(--color-text-2)] hover:text-white rounded-full hover:bg-white/5 active:scale-95 transition-all"
-                    aria-label="Tìm kiếm"
+          {/* Center/Right: Smart Instant Search & Tools */}
+          <div className="flex items-center gap-3">
+            
+            {/* Search Bar Container */}
+            <div ref={searchContainerRef} className="relative w-[200px] sm:w-[280px] md:w-[340px]">
+              <form onSubmit={handleSearchSubmit} className="relative">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (!isSearchOpen) setIsSearchOpen(true);
+                  }}
+                  onFocus={() => setIsSearchOpen(true)}
+                  placeholder={placeholders[placeholderIdx]}
+                  className="w-full h-10 pl-9 pr-9 text-[13px] bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 rounded-full border border-slate-200 dark:border-slate-700/80 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all"
+                />
+                <MagnifyingGlassIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      searchInputRef.current?.focus();
+                    }}
+                    className="absolute right-3 top-2.5 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full"
                   >
-                    <MagnifyingGlassIcon className="w-5 h-5" />
+                    <XMarkIcon className="w-4 h-4" />
                   </button>
                 )}
               </form>
+
+              {/* Instant Search Popup Dropdown */}
+              {isSearchOpen && searchQuery.trim().length >= 2 && (
+                <div className="absolute top-12 left-0 right-0 max-h-[420px] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 z-50 scrollbar-thin">
+                  <div className="px-3 py-1.5 flex items-center justify-between text-[11px] font-semibold text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                    <span>GỢI Ý TÌM KIẾM</span>
+                    {isSearching && <span>Đang tra cứu...</span>}
+                  </div>
+
+                  {isSearching && (
+                    <div className="py-6 flex items-center justify-center">
+                      <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+
+                  {!isSearching && searchResults && searchResults.length === 0 && (
+                    <div className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                      Không tìm thấy phim phù hợp
+                    </div>
+                  )}
+
+                  {!isSearching && searchResults && searchResults.length > 0 && (
+                    <div className="flex flex-col gap-1 mt-1">
+                      {searchResults.slice(0, 6).map((movie) => (
+                        <div
+                          key={movie.slug}
+                          onClick={() => handleSelectMovie(movie.slug)}
+                          className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                        >
+                          <img
+                            src={movie.posterUrl || movie.thumbUrl || '/fallback-poster.svg'}
+                            alt={movie.name}
+                            className="w-10 h-14 object-cover rounded-lg shrink-0 bg-slate-200 dark:bg-slate-800"
+                            loading="lazy"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">
+                              {movie.name}
+                            </h4>
+                            {movie.originalName && (
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                {movie.originalName}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              {movie.quality && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400">
+                                  {movie.quality}
+                                </span>
+                              )}
+                              {movie.year && (
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                                  {movie.year}
+                                </span>
+                              )}
+                              {movie.rating && movie.rating !== 'N/A' && (
+                                <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-500">
+                                  <StarIcon className="w-3 h-3 fill-current" />
+                                  {movie.rating}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={handleSearchSubmit}
+                        className="w-full py-2 mt-1 text-center text-[12px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition-colors"
+                      >
+                        Xem tất cả kết quả cho "{searchQuery}" →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Mobile Search Quick Link */}
-            <Link 
-              to="/search" 
-              className="lg:hidden p-2 text-[var(--color-text-2)] hover:text-white active:scale-95 transition-all"
-              aria-label="Tìm kiếm"
-            >
-              <MagnifyingGlassIcon className="w-5 h-5" />
-            </Link>
+            {/* Source Badge (Nguồn C + KKPhim) */}
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400 text-[11px] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Đa nguồn chuẩn</span>
+            </div>
 
-            {/* Account Button */}
-            <Link 
-              to="/account" 
-              className="flex items-center gap-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[var(--color-text-1)] px-3.5 py-1.5 rounded-full font-medium text-[13px] active:scale-95 transition-all"
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors"
+              title={theme === 'light' ? 'Chuyển sang Chế độ Tối' : 'Chuyển sang Chế độ Sáng'}
+              aria-label="Đổi giao diện"
             >
-              <UserCircleIcon className="w-5 h-5 text-[var(--color-primary)]" />
-              <span className="hidden sm:inline font-semibold">Tài khoản</span>
-            </Link>
+              {theme === 'light' ? (
+                <MoonIcon className="w-5 h-5 text-slate-700" />
+              ) : (
+                <SunIcon className="w-5 h-5 text-amber-400" />
+              )}
+            </button>
+
           </div>
         </div>
-      </nav>
 
-      {/* Mobile Slide-down Menu */}
-      <div className={`fixed inset-0 top-[56px] bg-[rgba(7,10,18,0.98)] backdrop-blur-2xl z-[55] transition-all duration-300 lg:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-        <div className="flex flex-col p-6 gap-3">
-          {NAV_LINKS.map(link => {
-            const isActive = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
-            return (
-              <Link 
-                key={link.name} 
-                to={link.to} 
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`text-[17px] font-semibold py-3 px-4 rounded-xl border border-transparent transition-all ${
-                  isActive ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/20' : 'text-[var(--color-text-1)] hover:bg-white/5'
-                }`}
+        {/* Mobile Navigation Drawer */}
+        {isMobileMenuOpen && (
+          <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-4 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200 shadow-xl">
+            <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-[12px] font-bold text-slate-400 uppercase tracking-wider">Danh mục phim</span>
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Nguồn C + KKPhim
+              </div>
+            </div>
+
+            {NAV_LINKS.map(link => {
+              const isActive = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
+              return (
+                <Link
+                  key={link.name}
+                  to={link.to}
+                  className={`px-3 py-2.5 rounded-xl text-[14px] font-semibold transition-colors ${
+                    isActive
+                      ? 'bg-indigo-600 text-white font-bold'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              );
+            })}
+
+            {/* Curated Genres Grid on Mobile Drawer */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <span className="text-[12px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 block">
+                Thể loại phim hấp dẫn
+              </span>
+              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
+                {CURATED_NAV_GENRES.map(g => (
+                  <Link
+                    key={g.slug}
+                    to={`/browse/${g.slug}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="px-3 py-2 rounded-xl text-[12px] font-bold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  >
+                    {g.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">Giao diện:</span>
+              <button
+                onClick={toggleTheme}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[12px] font-bold text-slate-800 dark:text-slate-200"
               >
-                {link.name}
-              </Link>
-            );
-          })}
+                {theme === 'light' ? (
+                  <><MoonIcon className="w-4 h-4" /> Chế độ Tối</>
+                ) : (
+                  <><SunIcon className="w-4 h-4 text-amber-400" /> Chế độ Sáng</>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* Mobile Bottom Navigation Bar for easy one-hand thumb access */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0B0F19]/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 pb-[max(8px,env(safe-area-inset-bottom))] shadow-lg">
+        <div className="flex items-center justify-around h-[58px] px-2">
+          <Link
+            to="/"
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors min-h-[48px] ${
+              location.pathname === '/' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            {location.pathname === '/' ? <HomeSolid className="w-5 h-5" /> : <HomeIcon className="w-5 h-5" />}
+            <span className="text-[11px] mt-0.5">Trang chủ</span>
+          </Link>
+
+          <Link
+            to="/browse/hanh-dong"
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors min-h-[48px] ${
+              location.pathname.includes('/browse') ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            {location.pathname.includes('/browse') ? <Squares2X2Solid className="w-5 h-5" /> : <Squares2X2Icon className="w-5 h-5" />}
+            <span className="text-[11px] mt-0.5">Thể loại</span>
+          </Link>
+
+          <Link
+            to="/search"
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors min-h-[48px] ${
+              location.pathname === '/search' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            <MagnifyingGlassIcon className="w-5 h-5" />
+            <span className="text-[11px] mt-0.5">Tìm kiếm</span>
+          </Link>
+
+          <Link
+            to="/account"
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors min-h-[48px] ${
+              location.pathname === '/account' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            {location.pathname === '/account' ? <HeartSolid className="w-5 h-5" /> : <HeartIcon className="w-5 h-5" />}
+            <span className="text-[11px] mt-0.5">Tủ phim</span>
+          </Link>
+
+          <button
+            onClick={toggleTheme}
+            className="flex flex-col items-center justify-center flex-1 py-1 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors min-h-[48px]"
+            aria-label="Đổi giao diện"
+          >
+            {theme === 'light' ? (
+              <MoonIcon className="w-5 h-5 text-slate-700" />
+            ) : (
+              <SunIcon className="w-5 h-5 text-amber-400" />
+            )}
+            <span className="text-[11px] mt-0.5">{theme === 'light' ? 'Nền tối' : 'Nền sáng'}</span>
+          </button>
         </div>
       </div>
-
-      {/* Mobile Bottom Navigation (Streamlined 5 Tabs) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[60] lg:hidden bg-[rgba(7,10,18,0.92)] backdrop-blur-2xl border-t border-[var(--color-border-subtle)] pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center justify-around h-[56px] px-1">
-          {MOBILE_NAV.map(item => {
-            const isActive = item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to);
-            const Icon = isActive ? item.IconSolid : item.Icon;
-            return (
-              <Link 
-                key={item.name} 
-                to={item.to} 
-                className="flex flex-col items-center justify-center flex-1 h-full py-1 active:scale-90 transition-transform"
-              >
-                <Icon className={`w-5 h-5 transition-colors ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-3)]'}`} />
-                <span className={`text-[10px] mt-1 font-semibold transition-colors ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-3)]'}`}>
-                  {item.name}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
     </>
   );
 };

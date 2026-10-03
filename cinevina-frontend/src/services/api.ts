@@ -37,6 +37,8 @@ export interface EpisodeData {
 
 export interface ServerData {
   server_name: string;
+  source?: 'nguonc' | 'kkphim' | string;
+  sub_type?: 'vietsub' | 'thuyet-minh' | 'long-tieng' | string;
   server_data: EpisodeData[];
 }
 
@@ -157,10 +159,62 @@ const normalizePaginated = (data: any, grouped: boolean = false): PaginatedMovie
   };
 };
 
+export interface MovieSource {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  badge: string;
+}
+
+export interface CuratedGenre {
+  slug: string;
+  name: string;
+  tagline: string;
+  icon: string;
+  color: string;
+}
+
 export const movieApi = {
+  getSources: async (): Promise<MovieSource[]> => {
+    try {
+      const res = await api.get('/movies/sources/list');
+      return res.data;
+    } catch (err) {
+      console.warn('[API] getSources error, using static fallback:', err);
+      return [
+        { id: 'all', name: 'Tất cả nguồn', description: 'Gộp tự động Nguồn C + KKPhim', status: 'online', badge: 'Tối ưu nhất' },
+        { id: 'nguonc', name: 'Nguồn C (VIP Sub)', description: 'Vietsub chuẩn, Thuyết minh & Lồng tiếng', status: 'online', badge: 'Khuyên dùng' },
+        { id: 'kkphim', name: 'KKPhim (HLS Fast)', description: 'Tốc độ cao HLS m3u8', status: 'online', badge: 'Tốc độ' },
+      ];
+    }
+  },
+
+  getGenres: async (): Promise<CuratedGenre[]> => {
+    try {
+      const res = await api.get('/movies/genres');
+      return res.data;
+    } catch {
+      return [
+        { slug: "hanh-dong", name: "Hành động", tagline: "Mãn nhãn, kỹ xảo bom tấn", icon: "💥", color: "from-red-500 to-orange-600" },
+        { slug: "tinh-cam", name: "Tình cảm", tagline: "Ngọt ngào, sâu lắng chạm trái tim", icon: "💖", color: "from-pink-500 to-rose-600" },
+        { slug: "hai-huoc", name: "Hài hước", tagline: "Cười thả ga, xua tan căng thẳng", icon: "🤣", color: "from-yellow-400 to-amber-600" },
+        { slug: "co-trang", name: "Cổ trang", tagline: "Cung đình, kiếm hiệp kỳ ảo", icon: "🏮", color: "from-rose-400 to-amber-600" },
+        { slug: "tam-ly", name: "Tâm lý", tagline: "Góc nhìn sâu sắc về con người", icon: "🧠", color: "from-indigo-500 to-sky-600" },
+        { slug: "hinh-su", name: "Hình sự", tagline: "Phá án ly kỳ, đối đầu ngầm nghẹt thở", icon: "🔍", color: "from-blue-600 to-slate-800" },
+        { slug: "kinh-di", name: "Kinh dị", tagline: "Thách thức lòng dũng cảm", icon: "👻", color: "from-emerald-700 to-slate-900" },
+        { slug: "vien-tuong", name: "Viễn tưởng", tagline: "Khám phá vũ trụ & tương lai kỳ vĩ", icon: "🚀", color: "from-cyan-500 to-blue-600" },
+        { slug: "phieu-luu", name: "Phiêu lưu", tagline: "Chinh phục những vùng đất bí ẩn", icon: "🗺️", color: "from-emerald-500 to-teal-700" },
+        { slug: "vo-thuat", name: "Võ thuật", tagline: "Kiếm hiệp giang hồ, quyền cước chân thực", icon: "⚔️", color: "from-amber-600 to-yellow-700" },
+        { slug: "hoat-hinh", name: "Hoạt hình", tagline: "Thế giới sắc màu của mọi lứa tuổi", icon: "🎨", color: "from-violet-500 to-fuchsia-600" },
+        { slug: "chien-tranh", name: "Chiến tranh", tagline: "Tái hiện những trang sử khốc liệt", icon: "🎖️", color: "from-slate-600 to-zinc-800" },
+      ];
+    }
+  },
+
   getMovies: async (params: MovieListParams): Promise<PaginatedMovieResponse> => {
     try {
-      const { category, page = 1, country, genre, year, sort, source = 'kkphim' } = params;
+      const { category, page = 1, country, genre, year, sort, source = 'all' } = params;
       const res = await api.get('/movies', {
         params: { category, page, country, genre, year, sort, source },
       });
@@ -171,7 +225,7 @@ export const movieApi = {
     }
   },
 
-  getMoviesByCountry: async (countrySlug: string, page = 1, filters?: { genre?: string; year?: string; sort?: string }, source = 'kkphim'): Promise<PaginatedMovieResponse> => {
+  getMoviesByCountry: async (countrySlug: string, page = 1, filters?: { genre?: string; year?: string; sort?: string }, source = 'all'): Promise<PaginatedMovieResponse> => {
     try {
       const res = await api.get(`/movies/by-country/${countrySlug}`, {
         params: { page, ...filters, source },
@@ -183,7 +237,7 @@ export const movieApi = {
     }
   },
 
-  getMoviesByGenre: async (genreSlug: string, page = 1, filters?: { country?: string; year?: string; sort?: string }, source = 'kkphim'): Promise<PaginatedMovieResponse> => {
+  getMoviesByGenre: async (genreSlug: string, page = 1, filters?: { country?: string; year?: string; sort?: string }, source = 'all'): Promise<PaginatedMovieResponse> => {
     try {
       const res = await api.get(`/movies/by-genre/${genreSlug}`, {
         params: { page, ...filters, source },
@@ -191,11 +245,19 @@ export const movieApi = {
       return normalizePaginated(res.data, true);
     } catch (err) {
       console.error(`[API] getMoviesByGenre error for ${genreSlug}:`, err);
-      throw err;
+      try {
+        const fallbackRes = await api.get('/movies', {
+          params: { genre: genreSlug, page, ...filters, source },
+        });
+        return normalizePaginated(fallbackRes.data, true);
+      } catch (fErr) {
+        console.error(`[API] Fallback /movies error for ${genreSlug}:`, fErr);
+        throw err;
+      }
     }
   },
 
-  searchMovies: async (keyword: string, page: number = 1, source = 'kkphim'): Promise<MovieInfo[]> => {
+  searchMovies: async (keyword: string, page: number = 1, source = 'all'): Promise<MovieInfo[]> => {
     try {
       const res = await api.get('/movies/search', {
         params: { keyword, page, source },
@@ -207,7 +269,7 @@ export const movieApi = {
     }
   },
 
-  getMovieDetail: async (slug: string, source = 'kkphim'): Promise<MovieInfo> => {
+  getMovieDetail: async (slug: string, source = 'all'): Promise<MovieInfo> => {
     try {
       const res = await api.get<any>(`/movies/${slug}`, { params: { source } });
       return adaptMovieDetail(res.data);
@@ -219,11 +281,9 @@ export const movieApi = {
 
   getSeriesDetail: async (seriesId: string): Promise<any> => {
     try {
-      // Vì backend deploy Vercel hiện tại có thể chưa support API /movies/series/{seriesId},
-      // ta fallback bằng cách gọi API search, lấy list, tự parse & group trên client.
       const keyword = seriesId.replace(/-/g, ' ');
       const res = await api.get('/movies/search', { params: { keyword, limit: 100 } });
-      const items = adaptMovies(res.data, false); // Không group để lấy full season
+      const items = adaptMovies(res.data, false);
       
       const seasons = items.filter(m => m.seriesId === seriesId).sort((a, b) => (a.seasonNumber || 1) - (b.seasonNumber || 1));
       
@@ -243,7 +303,7 @@ export const movieApi = {
     }
   },
 
-  getMovieStream: async (slug: string, episodeSlug: string, source = 'kkphim'): Promise<StreamInfo> => {
+  getMovieStream: async (slug: string, episodeSlug: string, source = 'all'): Promise<StreamInfo> => {
     try {
       const res = await api.get<StreamInfo>(`/movies/${slug}/stream/${episodeSlug}`, { params: { source } });
       return res.data;
@@ -253,7 +313,7 @@ export const movieApi = {
     }
   },
 
-  getCinemaMovies: async (page: number = 1, source = 'kkphim'): Promise<PaginatedMovieResponse> => {
+  getCinemaMovies: async (page: number = 1, source = 'all'): Promise<PaginatedMovieResponse> => {
     try {
       const res = await api.get('/movies/cinema', { params: { page, source } });
       return normalizePaginated(res.data, true);
@@ -263,13 +323,7 @@ export const movieApi = {
     }
   },
 
-  /**
-   * Lấy phim mới cập nhật gần nhất.
-   * NOTE: Backend /movies/trending thực chất trả phim-moi-cap-nhat
-   * (sorted by modified.time), không phải ranking popularity thật.
-   * Đặt tên getLatestMovies() để phản ánh đúng nguồn dữ liệu.
-   */
-  getLatestMovies: async (limit: number = 10, source = 'kkphim'): Promise<MovieInfo[]> => {
+  getLatestMovies: async (limit: number = 10, source = 'all'): Promise<MovieInfo[]> => {
     try {
       const res = await api.get('/movies/trending', { params: { limit, source } });
       return adaptMovies(res.data, true);
