@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { PlayIcon, StarIcon } from '@heroicons/react/24/solid';
+import { cn } from './Button';
 
 const FALLBACK_IMG = '/fallback-poster.svg';
 
@@ -72,7 +73,7 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
 
   if (isLoading) {
     return (
-      <div className={`flex flex-col gap-2.5 w-[140px] sm:w-[165px] md:w-[185px] shrink-0 ${className}`}>
+      <div className={cn("flex flex-col gap-2.5 w-[140px] sm:w-[165px] md:w-[185px] shrink-0", className)}>
         <div className="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-2xl" />
         <div className="h-4 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-4/5 mt-1" />
         <div className="h-3 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-1/2" />
@@ -97,7 +98,10 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
 
   return (
     <div
-      className={`group relative flex flex-col w-[140px] sm:w-[165px] md:w-[185px] shrink-0 transition-transform duration-300 ease-out hover:-translate-y-1.5 active:scale-[0.98] ${className}`}
+      className={cn(
+        "group relative flex flex-col w-[140px] sm:w-[165px] md:w-[185px] shrink-0 transition-transform duration-300 ease-out hover:-translate-y-1.5 active:scale-[0.98]",
+        className
+      )}
     >
       {/* Poster Media Box */}
       <Link

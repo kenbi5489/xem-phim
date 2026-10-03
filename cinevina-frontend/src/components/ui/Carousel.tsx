@@ -45,37 +45,40 @@ export const Carousel: React.FC<CarouselProps> = ({
   };
 
   return (
-    <section className={cn('flex flex-col gap-3.5 w-full max-w-[1440px] mx-auto', className)}>
+    <section className={cn('flex flex-col gap-3.5 w-full max-w-[1440px] mx-auto overflow-hidden', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3">
-          <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <h2 className="font-heading text-[18px] sm:text-[20px] font-extrabold text-slate-900 dark:text-white tracking-tight">
+      <div className="flex items-center justify-between px-3 sm:px-6 lg:px-8 gap-2 sm:gap-4">
+        {/* Left: Indicator + Titles */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="w-1 sm:w-1.5 h-5 sm:h-6 bg-indigo-600 rounded-full shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h2 className="font-heading text-[15px] sm:text-[19px] font-black text-slate-900 dark:text-white tracking-tight truncate">
                 {title}
               </h2>
               {badge && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                <span className="text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 shrink-0">
                   {badge}
                 </span>
               )}
             </div>
             {subtitle && (
-              <p className="text-[12px] sm:text-[13px] text-slate-700 dark:text-slate-300 font-semibold">
+              <p className="text-[11px] sm:text-[13px] text-slate-600 dark:text-slate-400 font-medium truncate sm:whitespace-normal">
                 {subtitle}
               </p>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Right: View All & Arrow controls */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {viewAllLink && (
             <Link
               to={viewAllLink}
-              className="inline-flex items-center gap-1 text-[13px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors mr-1 sm:mr-3"
+              className="inline-flex items-center gap-1 text-[12px] sm:text-[13px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors whitespace-nowrap py-1 shrink-0"
             >
-              Xem tất cả <ArrowRightIcon className="w-3.5 h-3.5" />
+              <span>Xem tất cả</span>
+              <ArrowRightIcon className="w-3.5 h-3.5 shrink-0" />
             </Link>
           )}
 
@@ -103,7 +106,7 @@ export const Carousel: React.FC<CarouselProps> = ({
       <div className="relative w-full">
         <div
           ref={scrollRef}
-          className="flex gap-3.5 sm:gap-4 md:gap-5 overflow-x-auto scrollbar-hide snap-x px-4 sm:px-6 lg:px-8 pb-4 pt-1"
+          className="flex gap-3 sm:gap-4 md:gap-5 overflow-x-auto scrollbar-hide snap-x px-3 sm:px-6 lg:px-8 pb-3 pt-1"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',

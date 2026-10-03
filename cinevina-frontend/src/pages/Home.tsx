@@ -178,7 +178,7 @@ export const Home: React.FC = () => {
       </section>
 
       {/* ── Quick Categories Bar ── */}
-      <div className="max-w-[1440px] mx-auto w-full px-4 sm:px-6 lg:px-8 -mt-5 relative z-30">
+      <div className="max-w-[1440px] mx-auto w-full px-3 sm:px-6 lg:px-8 -mt-5 relative z-30">
         <div className="bg-white dark:bg-slate-900 p-2 sm:p-3 rounded-2xl shadow-xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-2 overflow-x-auto scrollbar-hide">
           <Link
             to="/browse/phim-moi-cap-nhat"
@@ -268,22 +268,22 @@ export const Home: React.FC = () => {
         )}
 
         {/* ── KHÁM PHÁ THEO THỂ LOẠI TUYỂN CHỌN ── */}
-        <section className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-              <div>
-                <h2 className="font-heading text-[18px] sm:text-[20px] font-black text-slate-950 dark:text-white tracking-tight">
+        <section className="w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between gap-2 sm:gap-4 mb-4">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className="w-1 sm:w-1.5 h-5 sm:h-6 bg-indigo-600 rounded-full shrink-0" />
+              <div className="min-w-0">
+                <h2 className="font-heading text-[16px] sm:text-[20px] font-black text-slate-950 dark:text-white tracking-tight truncate">
                   Khám Phá Theo Thể Loại Tuyển Chọn
                 </h2>
-                <p className="text-[12px] sm:text-[13px] text-slate-700 dark:text-slate-300 font-semibold">
+                <p className="text-[11px] sm:text-[13px] text-slate-600 dark:text-slate-400 font-medium truncate sm:whitespace-normal">
                   Tìm kiếm nhanh các thể loại phim được yêu thích nhất
                 </p>
               </div>
             </div>
             <Link
               to="/browse/hanh-dong"
-              className="text-[13px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0"
+              className="text-[12px] sm:text-[13px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0 whitespace-nowrap py-1"
             >
               Xem tất cả →
             </Link>

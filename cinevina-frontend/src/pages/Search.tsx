@@ -301,9 +301,9 @@ export const Search: React.FC = () => {
             ))}
           </div>
         ) : filteredResults.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6 mt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-6 mt-4">
             {filteredResults.map((movie) => (
-              <MovieCard key={movie.slug || movie.id} {...movie} />
+              <MovieCard key={movie.slug || movie.id} {...movie} className="w-full shrink" />
             ))}
           </div>
         ) : debouncedQuery.trim().length >= 2 ? (
