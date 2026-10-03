@@ -151,10 +151,10 @@ export const Navbar: React.FC = () => {
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-[#0B0F19]/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200">
-        <div className="w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 h-[64px] flex items-center justify-between gap-2 sm:gap-4">
+        <div className="w-full max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 h-[64px] flex items-center justify-between gap-2 sm:gap-3 lg:gap-4">
           
           {/* Left: Mobile hamburger & Brand */}
-          <div className="flex items-center gap-2 sm:gap-3 lg:gap-8 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 lg:gap-3 xl:gap-5 shrink-0 min-w-0">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-1.5 sm:p-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl lg:hidden transition-colors shrink-0"
@@ -164,29 +164,29 @@ export const Navbar: React.FC = () => {
             </button>
 
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group shrink-0">
+            <Link to="/" className="flex items-center gap-2 group shrink-0">
               <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 flex items-center justify-center shadow-md shadow-indigo-500/25 group-hover:scale-105 transition-transform duration-300 shrink-0">
                 <PlayCircleIcon className="w-5 h-5 text-white" />
               </div>
               <div className="flex flex-col">
-                <span className="font-heading text-[18px] sm:text-[21px] font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">
+                <span className="font-heading text-[18px] sm:text-[20px] xl:text-[21px] font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">
                   CINE<span className="text-indigo-600 dark:text-indigo-400">VINA</span>
                 </span>
-                <span className="hidden sm:block text-[10px] font-medium text-slate-500 dark:text-slate-400 tracking-wider">
+                <span className="hidden xl:block text-[10px] font-medium text-slate-500 dark:text-slate-400 tracking-wider">
                   Nguồn C + KKPhim
                 </span>
               </div>
             </Link>
 
             {/* Desktop Navigation Links */}
-            <nav className="hidden lg:flex items-center gap-1.5 ml-4">
+            <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 ml-1 xl:ml-3 shrink-0">
               {NAV_LINKS.map(link => {
                 const isActive = link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to);
                 return (
                   <Link
                     key={link.name}
                     to={link.to}
-                    className={`px-3.5 py-1.5 rounded-full text-[14px] font-semibold transition-all duration-200 ${
+                    className={`px-2.5 xl:px-3.5 py-1.5 rounded-full text-[13px] xl:text-[14px] font-semibold whitespace-nowrap transition-all duration-200 ${
                       isActive
                         ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
                         : 'text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
@@ -200,14 +200,14 @@ export const Navbar: React.FC = () => {
               {/* Curated Genres Dropdown */}
               <div
                 ref={genreMenuRef}
-                className="relative"
+                className="relative shrink-0"
                 onMouseEnter={handleGenreMouseEnter}
                 onMouseLeave={handleGenreMouseLeave}
               >
                 <button
                   type="button"
                   onClick={handleGenreButtonClick}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[14px] font-semibold transition-all duration-200 cursor-pointer ${
+                  className={`flex items-center gap-1 xl:gap-1.5 px-2.5 xl:px-3.5 py-1.5 rounded-full text-[13px] xl:text-[14px] font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer ${
                     isGenreMenuOpen || location.pathname.includes('/the-loai') || location.pathname.includes('/browse')
                       ? 'bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-bold'
                       : 'text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
@@ -250,7 +250,7 @@ export const Navbar: React.FC = () => {
           <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-end min-w-0">
             
             {/* Search Bar Container */}
-            <div ref={searchContainerRef} className="relative flex-1 sm:flex-none sm:w-[260px] md:w-[320px] max-w-[260px] sm:max-w-none min-w-0">
+            <div ref={searchContainerRef} className="relative flex-1 sm:flex-none sm:w-[220px] lg:w-[190px] xl:w-[260px] 2xl:w-[320px] max-w-[260px] sm:max-w-none min-w-0 shrink-0">
               <form onSubmit={handleSearchSubmit} className="relative">
                 <input
                   ref={searchInputRef}
@@ -281,7 +281,7 @@ export const Navbar: React.FC = () => {
 
               {/* Instant Search Popup Dropdown */}
               {isSearchOpen && searchQuery.trim().length >= 2 && (
-                <div className="fixed top-[60px] left-3 right-3 sm:absolute sm:top-12 sm:left-0 sm:right-0 sm:w-full max-h-[70vh] sm:max-h-[420px] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 z-50 scrollbar-thin">
+                <div className="fixed top-[60px] left-3 right-3 sm:absolute sm:top-12 sm:right-0 sm:left-auto sm:w-[320px] md:w-[340px] max-h-[70vh] sm:max-h-[420px] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 z-50 scrollbar-thin">
                   <div className="px-3 py-1.5 flex items-center justify-between text-[11px] font-semibold text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
                     <span>GỢI Ý TÌM KIẾM</span>
                     {isSearching && <span>Đang tra cứu...</span>}
@@ -357,7 +357,7 @@ export const Navbar: React.FC = () => {
             </div>
 
             {/* Source Badge (Nguồn C + KKPhim) */}
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400 text-[11px] font-semibold">
+            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400 text-[11px] font-semibold whitespace-nowrap shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>Đa nguồn chuẩn</span>
             </div>
