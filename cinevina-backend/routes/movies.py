@@ -194,6 +194,93 @@ def _group_items(items: list) -> list:
 
 
 # ─────────────────────────────────────────
+# COUNTRY & INTENT HELPERS
+# ─────────────────────────────────────────
+
+COUNTRY_MAPPING = [
+    ("Hàn Quốc", "han-quoc", ["hàn quốc", "han quoc", "korea", "south korea", "kr"]),
+    ("Trung Quốc", "trung-quoc", ["trung quốc", "trung quoc", "china", "cn", "hoa ngữ", "hoa ngu"]),
+    ("Âu Mỹ", "au-my", ["âu mỹ", "au my", "mỹ", "my", "hoa kỳ", "united states", "usa", "us"]),
+    ("Nhật Bản", "nhat-ban", ["nhật bản", "nhat ban", "nhật", "nhat", "japan", "jp"]),
+    ("Thái Lan", "thai-lan", ["thái lan", "thai lan", "thái", "thai", "thailand", "th"]),
+    ("Việt Nam", "viet-nam", ["việt nam", "viet nam", "việt", "viet", "vietnam", "vn"]),
+    ("Đài Loan", "dai-loan", ["đài loan", "dai loan", "taiwan", "tw"]),
+    ("Ấn Độ", "an-do", ["ấn độ", "an do", "india", "in", "bollywood"]),
+    ("Hồng Kông", "hong-kong", ["hồng kông", "hong kong", "hongkong", "hk"]),
+    ("Anh", "anh", ["anh", "uk", "united kingdom"]),
+    ("Pháp", "phap", ["pháp", "phap", "france"]),
+]
+
+
+def normalize_country(country_name: str, country_slug: str = "") -> tuple[str, str]:
+    """Chuẩn hóa tên quốc gia và slug tương ứng."""
+    c_name = (country_name or "").strip()
+    c_slug = (country_slug or "").strip().lower()
+
+    if c_slug:
+        for name, slug, _ in COUNTRY_MAPPING:
+            if c_slug == slug:
+                return name, slug
+
+    combined = f"{c_name} {c_slug}".lower()
+    for name, slug, aliases in COUNTRY_MAPPING:
+        if any(alias in combined for alias in aliases):
+            return name, slug
+
+    return c_name, c_slug
+
+
+def parse_search_intent(query: str):
+    """
+    Phân tích ý định tìm kiếm tiếng Việt:
+    VD: 'phim bộ hàn quốc' -> category='phim-bo', country='han-quoc', clean_keyword=''
+    VD: 'phim lẻ trung quốc' -> category='phim-le', country='trung-quoc', clean_keyword=''
+    VD: 'phim bộ hàn quốc chàng hậu' -> category='phim-bo', country='han-quoc', clean_keyword='chàng hậu'
+    """
+    q = (query or "").strip().lower()
+
+    detected_category = None
+    detected_country = None
+
+    # 1. Detect Category / Type
+    if re.search(r'\b(phim\s+bộ|phim\s+bo|series)\b', q):
+        detected_category = "phim-bo"
+        q = re.sub(r'\b(phim\s+bộ|phim\s+bo|series)\b', ' ', q)
+    elif re.search(r'\b(phim\s+lẻ|phim\s+le|movie)\b', q):
+        detected_category = "phim-le"
+        q = re.sub(r'\b(phim\s+lẻ|phim\s+le|movie)\b', ' ', q)
+    elif re.search(r'\b(hoạt\s+hình|hoat\s+hinh|anime)\b', q):
+        detected_category = "hoat-hinh"
+        q = re.sub(r'\b(phim\s+)?(hoạt\s+hình|hoat\s+hinh|anime)\b', ' ', q)
+
+    # 2. Detect Country
+    country_patterns = [
+        ("han-quoc", r'\b(hàn\s*quốc|han\s*quoc|hàn|korea)\b'),
+        ("trung-quoc", r'\b(trung\s*quốc|trung\s*quoc|hoa\s*ngữ|hoa\s*ngu|trung)\b'),
+        ("au-my", r'\b(âu\s*mỹ|au\s*my|mỹ|hollywood|hoa\s*kỳ|us)\b'),
+        ("nhat-ban", r'\b(nhật\s*bản|nhat\s*ban|nhật|japan)\b'),
+        ("thai-lan", r'\b(thái\s*lan|thai\s*lan|thái|thailand)\b'),
+        ("viet-nam", r'\b(việt\s*nam|viet\s*nam|việt)\b'),
+        ("dai-loan", r'\b(đài\s*loan|dai\s*loan|đài)\b'),
+        ("an-do", r'\b(ấn\s*độ|an\s*do|bolliwood|bollywood)\b'),
+        ("hong-kong", r'\b(hồng\s*kông|hong\s*kong|hongkong)\b'),
+        ("anh", r'\b(nước\s*anh|phim\s*anh)\b'),
+        ("phap", r'\b(nước\s*pháp|phim\s*phap)\b'),
+    ]
+    for c_slug, pattern in country_patterns:
+        if re.search(pattern, q):
+            detected_country = c_slug
+            q = re.sub(pattern, ' ', q)
+            break
+
+    # Clean generic filler words
+    q = re.sub(r'\b(phim|xem|hay|moi|mới|full|hd|vietsub|thuyết\s*minh|thuyet\s*minh)\b', ' ', q)
+    clean_keyword = re.sub(r'\s+', ' ', q).strip()
+
+    return detected_category, detected_country, clean_keyword
+
+
+# ─────────────────────────────────────────
 # SOURCE ADAPTERS
 # ─────────────────────────────────────────
 
@@ -208,6 +295,8 @@ def _map_kkphim_item(item: dict, path_image: str = "") -> dict:
         country_name, country_slug = cr, ""
     else:
         country_name = country_slug = ""
+
+    country_name, country_slug = normalize_country(country_name, country_slug)
 
     cat_raw = item.get("category") or []
     if isinstance(cat_raw, list):
@@ -224,7 +313,7 @@ def _map_kkphim_item(item: dict, path_image: str = "") -> dict:
 
     tmdb_rating = item.get("tmdb") or {}
     rating_val = tmdb_rating.get("vote_average") if isinstance(tmdb_rating, dict) else None
-    
+
     if rating_val is None or rating_val == 0 or rating_val == "0" or rating_val == 0.0:
         rating_str = "N/A"
     else:
@@ -242,7 +331,7 @@ def _map_kkphim_item(item: dict, path_image: str = "") -> dict:
             poster_raw = f"{path_image.rstrip('/')}/{str(poster_raw).lstrip('/')}"
         if thumb_raw and not str(thumb_raw).startswith("http"):
             thumb_raw = f"{path_image.rstrip('/')}/{str(thumb_raw).lstrip('/')}"
-            
+
     title_raw = item.get("name", "")
     base_title, series_id, season_number = parse_series_info(title_raw)
 
@@ -293,6 +382,57 @@ def _map_nguonc_item(item: dict) -> dict:
     tot_ep = str(item.get("total_episodes") or "")
     curr_ep = str(item.get("current_episode") or "")
 
+    # Parse country / category from NguonC
+    country_name = ""
+    country_slug = ""
+    cat_raw = item.get("category")
+    cat_list = []
+    if isinstance(cat_raw, dict):
+        for _, grp in cat_raw.items():
+            gname = grp.get("group", {}).get("name", "")
+            if "Quốc gia" in gname:
+                c_list = grp.get("list", [])
+                if c_list and isinstance(c_list, list):
+                    c0 = c_list[0]
+                    if isinstance(c0, dict):
+                        country_name = c0.get("name", "")
+                        country_slug = c0.get("slug", "")
+                    else:
+                        country_name = str(c0)
+            elif "Thể loại" in gname:
+                cat_list = grp.get("list", [])
+    elif isinstance(cat_raw, list):
+        cat_list = cat_raw
+
+    c_direct = item.get("country")
+    if c_direct and not country_name:
+        if isinstance(c_direct, dict):
+            country_name = c_direct.get("name", "")
+            country_slug = c_direct.get("slug", "")
+        elif isinstance(c_direct, list) and c_direct:
+            c0 = c_direct[0]
+            if isinstance(c0, dict):
+                country_name = c0.get("name", "")
+                country_slug = c0.get("slug", "")
+            else:
+                country_name = str(c0)
+        else:
+            country_name = str(c_direct)
+
+    country_name, country_slug = normalize_country(country_name, country_slug)
+
+    # Determine type accurately
+    tot_ep_clean = re.sub(r'[^0-9]', '', tot_ep)
+    is_series = False
+    if tot_ep_clean and int(tot_ep_clean) > 1:
+        is_series = True
+    elif "tập" in curr_ep.lower() and not ("full" in curr_ep.lower() and not tot_ep_clean):
+        is_series = True
+    elif item.get("type") in ["series", "phim-bo"]:
+        is_series = True
+    elif "phần" in title_raw.lower() or "season" in title_raw.lower():
+        is_series = True
+
     return {
         "id":             f"nc_{item.get('slug', '')}",
         "slug":           item.get("slug", ""),
@@ -306,13 +446,13 @@ def _map_nguonc_item(item: dict) -> dict:
         "year":           year_num,
         "quality":        normalize_quality(item.get("quality", "HD")),
         "lang":           item.get("language", "Vietsub"),
-        "type":           "series" if (tot_ep and tot_ep not in ["1", "0"]) else "single",
+        "type":           "series" if is_series else "single",
         "is_cinema":      False,
         "is_streamable":  curr_ep.lower() != "trailer",
-        "country":        "",
-        "country_slug":   "",
-        "category":       "",
-        "genres":         [],
+        "country":        country_name,
+        "country_slug":   country_slug,
+        "category":       ", ".join(c.get("name", "") if isinstance(c, dict) else str(c) for c in cat_list) if cat_list else "",
+        "genres":         cat_list,
         "description":    item.get("description", ""),
         "episode_current": curr_ep,
         "episode_total":   tot_ep,
@@ -357,7 +497,9 @@ async def _fetch_and_merge(
     page: int,
     limit: int,
     source: str = "all",
-    grouped: bool = False
+    grouped: bool = False,
+    category_filter: Optional[str] = None,
+    country_filter: Optional[str] = None,
 ) -> dict:
     """Fetch dữ liệu từ KKPhim và NguonC, sau đó gộp và deduplicate thông minh."""
     tasks = []
@@ -394,6 +536,56 @@ async def _fetch_and_merge(
     else:
         # Gộp cả 2 nguồn, deduplicate
         merged_items = _merge_and_dedup(kk_mapped, nc_mapped)
+
+    # Strict post-filtering to guarantee no mismatched categories or countries leak through
+    if category_filter:
+        cat_lower = category_filter.lower()
+        if cat_lower in ["phim-bo", "series"]:
+            def is_series_item(m):
+                m_type = (m.get("type") or "").lower()
+                tot_ep = str(m.get("episode_total") or "")
+                tot_clean = re.sub(r'[^0-9]', '', tot_ep)
+                if m_type == "series":
+                    return True
+                if tot_clean and int(tot_clean) > 1:
+                    return True
+                if "tập" in str(m.get("episode_current") or "").lower():
+                    return True
+                return False
+            merged_items = [m for m in merged_items if is_series_item(m)]
+        elif cat_lower in ["phim-le", "single"]:
+            def is_single_item(m):
+                m_type = (m.get("type") or "").lower()
+                tot_ep = str(m.get("episode_total") or "")
+                tot_clean = re.sub(r'[^0-9]', '', tot_ep)
+                if m_type == "single":
+                    return True
+                if tot_clean and int(tot_clean) == 1:
+                    return True
+                return m_type != "series"
+            merged_items = [m for m in merged_items if is_single_item(m)]
+        elif cat_lower in ["hoat-hinh", "hoathinh", "anime"]:
+            merged_items = [
+                m for m in merged_items
+                if (m.get("type") or "").lower() in ["hoathinh", "hoat-hinh"]
+                or "hoạt hình" in (m.get("category") or "").lower()
+                or "anime" in (m.get("category") or "").lower()
+            ]
+
+    if country_filter:
+        c_target = country_filter.lower().strip()
+        def match_country(m):
+            c_slug = (m.get("country_slug") or "").lower()
+            c_name = (m.get("country") or "").lower()
+            if not c_slug and not c_name:
+                return True
+            if c_slug == c_target:
+                return True
+            target_slug_clean = c_target.replace('-', ' ')
+            if target_slug_clean in c_name or c_slug == c_target.replace('-', ''):
+                return True
+            return False
+        merged_items = [m for m in merged_items if match_country(m)]
 
     if grouped:
         merged_items = _group_items(merged_items)
@@ -533,34 +725,50 @@ async def get_movies(
     if year:
         kk_params["year"] = year
 
-    # 1. Quoc gia
-    if country:
+    category_filter = category
+    country_filter = country
+
+    # 1. Nếu có category (phim-bo, phim-le, hoat-hinh)
+    if category in ["phim-bo", "phim-le", "hoat-hinh"]:
+        kk_path = f"/v1/api/danh-sach/{category}"
+        nc_path = f"/films/danh-sach/{category}"
+        if country:
+            kk_params["country"] = country
+        if genre:
+            target_genre = GENRE_SLUG_MAP.get(genre, genre)
+            kk_params["category"] = target_genre
+    # 2. Quốc gia
+    elif country:
         kk_path = f"/v1/api/quoc-gia/{country}"
         nc_path = f"/films/quoc-gia/{country}"
         if genre:
-            kk_params["category"] = genre
-        return await _fetch_and_merge(kk_path, nc_path, kk_params, nc_params, page, limit, source, grouped)
-
-    # 2. The loai
-    if genre:
+            target_genre = GENRE_SLUG_MAP.get(genre, genre)
+            kk_params["category"] = target_genre
+        if category:
+            kk_params["category"] = category
+    # 3. Thể loại
+    elif genre:
         target_genre = GENRE_SLUG_MAP.get(genre, genre)
         kk_path = f"/v1/api/the-loai/{target_genre}"
         nc_path = f"/films/the-loai/{target_genre}"
-        return await _fetch_and_merge(kk_path, nc_path, kk_params, nc_params, page, limit, source, grouped)
-
-    # 3. Danh muc
-    cat = category or "phim-moi-cap-nhat"
-    if cat == "phim-moi-cap-nhat":
-        kk_path = "/danh-sach/phim-moi-cap-nhat"
-        nc_path = "/films/phim-moi-cap-nhat"
-    elif cat in ["phim-le", "phim-bo", "hoat-hinh"]:
-        kk_path = f"/v1/api/danh-sach/{cat}"
-        nc_path = f"/films/danh-sach/{cat}"
+        if country:
+            kk_params["country"] = country
+    # 4. Danh mục mặc định
     else:
-        kk_path = f"/v1/api/danh-sach/{cat}"
-        nc_path = f"/films/danh-sach/{cat}"
+        cat = category or "phim-moi-cap-nhat"
+        if cat == "phim-moi-cap-nhat":
+            kk_path = "/danh-sach/phim-moi-cap-nhat"
+            nc_path = "/films/phim-moi-cap-nhat"
+        else:
+            kk_path = f"/v1/api/danh-sach/{cat}"
+            nc_path = f"/films/danh-sach/{cat}"
 
-    return await _fetch_and_merge(kk_path, nc_path, kk_params, nc_params, page, limit, source, grouped)
+    return await _fetch_and_merge(
+        kk_path, nc_path, kk_params, nc_params,
+        page, limit, source, grouped,
+        category_filter=category_filter,
+        country_filter=country_filter
+    )
 
 
 @router.get("/search")
@@ -571,15 +779,30 @@ async def search_movies(
     source: str = "all",
     grouped: bool = Query(False),
 ):
-    """Tìm kiếm phim tức thời từ cả 2 nguồn KKPhim và NguonC."""
+    """Tìm kiếm phim thông minh từ cả 2 nguồn KKPhim và NguonC."""
+    detected_cat, detected_country, clean_keyword = parse_search_intent(keyword)
+
+    # Nếu câu tìm kiếm là dạng danh mục / quốc gia thuần túy (VD: "phim bộ hàn quốc", "phim lẻ trung quốc")
+    if not clean_keyword and (detected_cat or detected_country):
+        return await get_movies(
+            category=detected_cat,
+            country=detected_country,
+            page=page,
+            limit=limit,
+            source=source,
+            grouped=grouped
+        )
+
+    # Nếu có từ khóa cụ thể (VD: "phim bộ hàn quốc chàng hậu" -> clean_keyword = "chàng hậu")
+    search_term = clean_keyword if clean_keyword else keyword
     tasks = []
     if source in ["all", "kkphim"]:
-        tasks.append(_kkphim_get("/v1/api/tim-kiem", {"keyword": keyword, "page": page, "limit": limit}))
+        tasks.append(_kkphim_get("/v1/api/tim-kiem", {"keyword": search_term, "page": page, "limit": limit}))
     else:
         tasks.append(asyncio.sleep(0, result={}))
 
     if source in ["all", "nguonc"]:
-        tasks.append(_nguonc_get("/films/search", {"keyword": keyword, "page": page}))
+        tasks.append(_nguonc_get("/films/search", {"keyword": search_term, "page": page}))
     else:
         tasks.append(asyncio.sleep(0, result={}))
 
@@ -599,6 +822,39 @@ async def search_movies(
         merged = nc_mapped
     else:
         merged = _merge_and_dedup(kk_mapped, nc_mapped)
+
+    # Lọc kết quả tìm kiếm nếu có ý định thể loại / quốc gia
+    if detected_cat:
+        if detected_cat in ["phim-bo", "series"]:
+            merged = [
+                m for m in merged
+                if m.get("type") == "series"
+                or int(re.sub(r'[^0-9]', '', str(m.get("episode_total") or '0')) or 0) > 1
+                or "tập" in str(m.get("episode_current") or "").lower()
+            ]
+        elif detected_cat in ["phim-le", "single"]:
+            merged = [
+                m for m in merged
+                if m.get("type") == "single"
+                or str(m.get("episode_total")) in ["1", "0", ""]
+            ]
+        elif detected_cat in ["hoat-hinh", "anime"]:
+            merged = [
+                m for m in merged
+                if (m.get("type") or "").lower() in ["hoathinh", "hoat-hinh"]
+                or "hoạt hình" in (m.get("category") or "").lower()
+                or "anime" in (m.get("category") or "").lower()
+            ]
+
+    if detected_country:
+        c_target = detected_country.lower().strip()
+        def match_c(m):
+            c_slug = (m.get("country_slug") or "").lower()
+            c_name = (m.get("country") or "").lower()
+            if not c_slug and not c_name:
+                return True
+            return c_slug == c_target or c_target.replace('-', ' ') in c_name
+        merged = [m for m in merged if match_c(m)]
 
     if grouped:
         merged = _group_items(merged)

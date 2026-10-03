@@ -128,6 +128,40 @@ export const Browse: React.FC = () => {
     setSearchParams(new URLSearchParams());
   };
 
+  const displayItems = React.useMemo(() => {
+    if (!data?.items) return [];
+    let items = data.items;
+
+    // Strict Category filter enforcement:
+    if (slug === 'phim-bo') {
+      items = items.filter(m => m.type === 'series' || (m.totalEpisodes && String(m.totalEpisodes) !== '1'));
+    } else if (slug === 'phim-le') {
+      items = items.filter(m => m.type === 'single' || (m.totalEpisodes && String(m.totalEpisodes) === '1'));
+    } else if (slug === 'hoat-hinh') {
+      items = items.filter(m => m.type === 'hoathinh' || m.type === 'hoat-hinh' || (m.categories || '').toLowerCase().includes('hoạt hình') || (m.categories || '').toLowerCase().includes('anime'));
+    }
+
+    // Strict Country filter enforcement:
+    if (countryFilter) {
+      items = items.filter(m => {
+        if (!m.country && !m.countrySlug) return true;
+        const cSlug = (m.countrySlug || '').toLowerCase();
+        const cName = (m.country || '').toLowerCase();
+        const target = countryFilter.toLowerCase();
+        if (cSlug === target) return true;
+        if (target === 'han-quoc' && (cName.includes('hàn') || cName.includes('korea'))) return true;
+        if (target === 'trung-quoc' && (cName.includes('trung') || cName.includes('china'))) return true;
+        if (target === 'au-my' && (cName.includes('mỹ') || cName.includes('âu') || cName.includes('us') || cName.includes('anh') || cName.includes('pháp'))) return true;
+        if (target === 'nhat-ban' && (cName.includes('nhật') || cName.includes('japan'))) return true;
+        if (target === 'thai-lan' && (cName.includes('thái') || cName.includes('thai'))) return true;
+        if (target === 'viet-nam' && (cName.includes('việt') || cName.includes('vietnam'))) return true;
+        return false;
+      });
+    }
+
+    return items;
+  }, [data?.items, slug, countryFilter]);
+
   return (
     <div className="min-h-screen pt-24 pb-28 lg:pb-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-[1440px] mx-auto w-full">
@@ -242,11 +276,11 @@ export const Browse: React.FC = () => {
 
         {/* Movie Grid */}
         {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3.5 sm:gap-4 md:gap-5 lg:gap-6">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-2.5">
+              <div key={i} className="flex flex-col gap-2.5 w-full min-w-0">
                 <div className="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-2xl" />
-                <div className="h-4 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-3/4" />
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-3/4 mt-1" />
                 <div className="h-3 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-1/2" />
               </div>
             ))}
@@ -257,15 +291,15 @@ export const Browse: React.FC = () => {
             <p className="text-slate-600 dark:text-slate-300 font-semibold">Lỗi tải danh sách phim.</p>
             <Button variant="primary" onClick={() => refetch()}>Thử lại</Button>
           </div>
-        ) : !data?.items || data.items.length === 0 ? (
+        ) : displayItems.length === 0 ? (
           <div className="py-20 text-center flex flex-col items-center gap-3">
             <p className="text-slate-600 dark:text-slate-300 text-lg font-bold">Không tìm thấy phim phù hợp</p>
             <p className="text-slate-400 text-sm">Hãy thử chọn lại tiêu chí tìm kiếm hoặc chuyển đổi nguồn phim.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-6">
-            {data.items.map((movie) => (
-              <MovieCard key={movie.slug} {...movie} className="w-full shrink" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3.5 sm:gap-4 md:gap-5 lg:gap-6">
+            {displayItems.map((movie) => (
+              <MovieCard key={movie.slug} {...movie} inGrid={true} />
             ))}
           </div>
         )}

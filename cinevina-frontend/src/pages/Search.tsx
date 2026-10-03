@@ -106,20 +106,64 @@ export const Search: React.FC = () => {
 
   const { data: results, isLoading } = useSearchMovies(debouncedQuery.trim());
 
-  // Filter results by selected category
+  // Auto-detect category filter from search phrase
+  useEffect(() => {
+    const q = debouncedQuery.toLowerCase();
+    if (q.includes('phim bộ') || q.includes('phim bo') || q.includes('series')) {
+      setSelectedCategory('series');
+    } else if (q.includes('phim lẻ') || q.includes('phim le') || q.includes('movie')) {
+      setSelectedCategory('single');
+    } else if (q.includes('hoạt hình') || q.includes('hoat hinh') || q.includes('anime')) {
+      setSelectedCategory('hoathinh');
+    } else if (q.includes('chiếu rạp') || q.includes('chieu rap')) {
+      setSelectedCategory('cinema');
+    }
+  }, [debouncedQuery]);
+
+  // Filter results by selected category and detected country
   const filteredResults = useMemo(() => {
     if (!results || results.length === 0) return [];
-    if (selectedCategory === 'all') return results;
 
-    return results.filter((m: MovieInfo) => {
+    let list = results;
+
+    // Detect country intent from search query to filter out foreign movies
+    const qLower = debouncedQuery.toLowerCase();
+    let queryCountry = '';
+    if (qLower.includes('hàn quốc') || qLower.includes('han quoc') || qLower.includes('korea')) {
+      queryCountry = 'han-quoc';
+    } else if (qLower.includes('trung quốc') || qLower.includes('trung quoc') || qLower.includes('hoa ngữ')) {
+      queryCountry = 'trung-quoc';
+    } else if (qLower.includes('âu mỹ') || qLower.includes('au my') || qLower.includes('mỹ') || qLower.includes('hollywood')) {
+      queryCountry = 'au-my';
+    } else if (qLower.includes('nhật bản') || qLower.includes('nhat ban') || qLower.includes('japan')) {
+      queryCountry = 'nhat-ban';
+    } else if (qLower.includes('thái lan') || qLower.includes('thai lan') || qLower.includes('thailand')) {
+      queryCountry = 'thai-lan';
+    } else if (qLower.includes('việt nam') || qLower.includes('viet nam')) {
+      queryCountry = 'viet-nam';
+    }
+
+    if (queryCountry) {
+      list = list.filter((m: MovieInfo) => {
+        const slug = (m.countrySlug || '').toLowerCase();
+        const name = (m.country || '').toLowerCase();
+        if (!slug && !name) return true;
+        return slug === queryCountry || name.includes(queryCountry.replace('-', ' '));
+      });
+    }
+
+    if (selectedCategory === 'all') return list;
+
+    return list.filter((m: MovieInfo) => {
       const type = (m.type || '').toLowerCase();
       const cat = (m.categories || '').toLowerCase();
+      const totalEp = Number(m.totalEpisodes) || 0;
 
       switch (selectedCategory) {
         case 'single':
-          return type === 'single';
+          return type === 'single' || totalEp <= 1;
         case 'series':
-          return type === 'series';
+          return type === 'series' || totalEp > 1 || (m.episodeCurrent && m.episodeCurrent.includes('Tập'));
         case 'hoathinh':
           return type === 'hoathinh' || type === 'hoat-hinh' || cat.includes('hoạt hình') || cat.includes('anime');
         case 'cinema':
@@ -128,7 +172,7 @@ export const Search: React.FC = () => {
           return true;
       }
     });
-  }, [results, selectedCategory]);
+  }, [results, selectedCategory, debouncedQuery]);
 
   const clearSearch = () => {
     setInput('');
@@ -291,19 +335,19 @@ export const Search: React.FC = () => {
 
         {/* Results Grid */}
         {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6 mt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3.5 sm:gap-4 md:gap-5 lg:gap-6 mt-4">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-2.5">
+              <div key={i} className="flex flex-col gap-2.5 w-full min-w-0">
                 <div className="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-2xl" />
-                <div className="h-4 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-3/4" />
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-3/4 mt-1" />
                 <div className="h-3 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-1/2" />
               </div>
             ))}
           </div>
         ) : filteredResults.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-6 mt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3.5 sm:gap-4 md:gap-5 lg:gap-6 mt-4">
             {filteredResults.map((movie) => (
-              <MovieCard key={movie.slug || movie.id} {...movie} className="w-full shrink" />
+              <MovieCard key={movie.slug || movie.id} {...movie} inGrid={true} className="w-full" />
             ))}
           </div>
         ) : debouncedQuery.trim().length >= 2 ? (

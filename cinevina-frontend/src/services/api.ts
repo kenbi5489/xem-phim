@@ -69,6 +69,7 @@ export interface MovieInfo {
   tmdbId?: string;
   categories?: string;
   country?: string;
+  countrySlug?: string;
   cast?: string;
   director?: string;
   imdbId?: string;

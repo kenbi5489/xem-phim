@@ -48,6 +48,7 @@ export interface MovieCardProps {
   trailerUrl?: string;
   episodeCurrent?: string;
   totalEpisodes?: string | number;
+  inGrid?: boolean;
 }
 
 export const MovieCard: React.FC<MovieCardProps> = (props) => {
@@ -67,13 +68,16 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
     episodeCurrent,
     totalEpisodes,
     isStreamable = true,
+    inGrid = false,
   } = props;
 
   const { src: imgSrc, handleError } = useImgSrc(posterUrl, thumbUrl);
 
+  const widthClass = inGrid ? "w-full min-w-0 max-w-full" : "w-[135px] sm:w-[155px] md:w-[175px] shrink-0";
+
   if (isLoading) {
     return (
-      <div className={cn("flex flex-col gap-2.5 w-[140px] sm:w-[165px] md:w-[185px] shrink-0", className)}>
+      <div className={cn("flex flex-col gap-2.5", widthClass, className)}>
         <div className="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-2xl" />
         <div className="h-4 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-4/5 mt-1" />
         <div className="h-3 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md w-1/2" />
@@ -99,7 +103,8 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
   return (
     <div
       className={cn(
-        "group relative flex flex-col w-[140px] sm:w-[165px] md:w-[185px] shrink-0 transition-transform duration-300 ease-out hover:-translate-y-1.5 active:scale-[0.98]",
+        "group relative flex flex-col transition-transform duration-300 ease-out hover:-translate-y-1.5 active:scale-[0.98]",
+        widthClass,
         className
       )}
     >
@@ -169,17 +174,17 @@ export const MovieCard: React.FC<MovieCardProps> = (props) => {
       </Link>
 
       {/* Movie Info Below Poster */}
-      <div className="flex flex-col gap-0.5 mt-2.5 px-0.5">
+      <div className="flex flex-col gap-0.5 mt-2.5 px-0.5 w-full min-w-0 overflow-hidden">
         <Link
           to={`/phim/${slug}`}
-          className="text-[13px] sm:text-[14px] font-extrabold text-slate-950 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 line-clamp-1 transition-colors leading-snug"
+          className="text-[13px] sm:text-[14px] font-extrabold text-slate-950 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate block transition-colors leading-snug"
           title={name}
         >
           {name}
         </Link>
-        <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-300 font-semibold">
-          <span className="truncate max-w-[120px]">{originalName || 'Phim'}</span>
-          {year && <span>{year}</span>}
+        <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-300 font-semibold gap-1.5 w-full min-w-0 overflow-hidden">
+          <span className="truncate flex-1 min-w-0">{originalName || 'Phim'}</span>
+          {year && <span className="shrink-0 text-[10px] font-bold text-slate-400">{year}</span>}
         </div>
       </div>
     </div>
