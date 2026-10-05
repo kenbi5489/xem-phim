@@ -516,6 +516,9 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
     isTouchRef.current = true;
     clearTimeout(touchResetTimer.current);
 
+    // Kích hoạt wakeLock qua cử chỉ chạm của người dùng (bắt buộc cho iOS/iPadOS PWA)
+    wakeLock.acquire();
+
     if (e.touches.length === 1) {
       const touch = e.touches[0];
       touchStartRef.current = {
@@ -593,6 +596,9 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
   const handleContainerClick = (e: React.MouseEvent) => {
     // If originated from touch, IGNORE to prevent double toggling ("bật tắt")!
     if (isTouchRef.current) return;
+
+    // Kích hoạt wakeLock
+    wakeLock.acquire();
 
     // Check if clicked an interactive button or slider
     if ((e.target as HTMLElement).closest('button, input, select, a, [data-interactive="true"]')) {
@@ -827,10 +833,23 @@ export const EmbeddedPlayer: React.FC<EmbeddedPlayerProps> = ({
 
                 {/* Embed Floating Helper Toolbar (Placed cleanly at top right) */}
                 <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5 bg-black/70 backdrop-blur-md p-1 rounded-[8px] border border-white/10 shadow-lg">
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 text-emerald-400 text-[11px] font-semibold select-none" title="Chống tắt màn hình tự động đang hoạt động">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      wakeLock.acquire();
+                      setFeedbackMsg({
+                        icon: <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />,
+                        text: 'Chế độ giữ sáng iPad/PWA đang bật'
+                      });
+                      clearTimeout(feedbackTimer.current);
+                      feedbackTimer.current = setTimeout(() => setFeedbackMsg(null), 2500);
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-emerald-400 hover:text-emerald-300 hover:bg-white/10 rounded-[6px] text-[11px] font-semibold transition-colors select-none"
+                    title="Nhấn để kích hoạt lại giữ màn hình sáng (đặc biệt cho iPad PWA)"
+                  >
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="hidden sm:inline">Giữ màn hình sáng</span>
-                  </div>
+                    <span>Giữ màn hình sáng</span>
+                  </button>
 
                   <button
                     onClick={(e) => {

@@ -14,7 +14,7 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'nosleep.mp4'],
       manifest: {
         name: 'ĐỨCCINE',
         short_name: 'ĐỨCCINE',
